@@ -13,11 +13,25 @@ interface VRender {
   height: number
 }
 
-export class Renderer {
+export interface TerminalRenderer {
+  start: (fps?: number) => void
+  stop: () => void
+  dispose: () => void
+}
+
+export interface TerminalContainer {
+  input?: ReadStream
+  output?: WriteStream
+  interact?: Interface
+  fps?: number
+}
+
+export class TerminalRendererImpl implements TerminalRenderer {
   static readonly DEFAULT_FPS: number = 20
 
   private readonly interact: Interface
   private readonly output: WriteStream
+  private readonly defaultFps: number
   private readonly _root: VElement = VRoot(this)
 
   private needsRerender: boolean = true
@@ -28,13 +42,14 @@ export class Renderer {
     return this._root
   }
 
-  constructor(input?: ReadStream, output?: WriteStream, interact?: Interface) {
+  constructor({input, output, interact, fps}: TerminalContainer = {}) {
     input = input ?? process.stdin
     output = output ?? process.stdout
     interact = interact ?? createInterface({ input, output, terminal: true })
 
     this.interact = interact
     this.output = output
+    this.defaultFps = fps ?? TerminalRendererImpl.DEFAULT_FPS
   }
 
   start(fps?: number) {
@@ -46,7 +61,7 @@ export class Renderer {
       if (this.needsRerender) {
         this.rerender()
       }
-    }, 1 / (fps ?? Renderer.DEFAULT_FPS))
+    }, 1 / (fps ?? this.defaultFps))
   }
 
   stop() {
@@ -238,6 +253,9 @@ export class Renderer {
   }
 
   dispose() {
+    if (this.timer !== null) {
+      this.stop()
+    }
     this.interact.close()
   }
 }

@@ -1,10 +1,10 @@
-import { Renderer } from 'cli/renderer'
+import { TerminalRendererImpl } from 'cli/renderer'
 
 export type VNode = VText | VElement
 
 interface VNodeCommon {
   parent: VElement | null
-  renderer: Renderer | null
+  renderer: TerminalRendererImpl | null
 }
 
 export interface VText extends VNodeCommon {
@@ -204,7 +204,7 @@ export module VElement {
   }
 }
 
-export function VRoot(renderer: Renderer): VElement {
+export function VRoot(renderer: TerminalRendererImpl): VElement {
   return {
     tag: 'div',
     props: {},

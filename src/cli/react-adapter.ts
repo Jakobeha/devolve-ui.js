@@ -1,20 +1,10 @@
 // Derived from the example in https://github.com/solidjs/solid/tree/main/packages/solid/universal/README.md
 import { createRenderer } from 'solid-js/universal'
 import { VElement, VNode, VText } from 'cli/vdom'
+import { TerminalContainer, TerminalRenderer, TerminalRendererImpl } from 'cli/renderer'
+import { Renderer } from 'universal'
 
-export const {
-  render,
-  effect,
-  memo,
-  createComponent,
-  createElement,
-  createTextNode,
-  insertNode,
-  insert,
-  spread,
-  setProp,
-  mergeProps
-} = createRenderer<VNode>({
+export const renderer: Renderer<VNode> = createRenderer<VNode>({
   createElement(tag) {
     return VElement(tag)
   },
@@ -48,3 +38,18 @@ export const {
     return VNode.getNextSibling(node)!
   }
 })
+
+export function render(template: () => VNode, container?: TerminalContainer): TerminalRenderer {
+  const renderer = new TerminalRendererImpl(container)
+  renderer.start()
+  return renderer
+}
+
+export const {
+  effect,
+  createComponent,
+  memo,
+  insert,
+  spread,
+  mergeProps
+} = renderer

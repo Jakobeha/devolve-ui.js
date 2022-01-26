@@ -6,7 +6,9 @@
   "module": "out/src/index.js",
   "types": "out/types/index.d.ts",
   "exports": {
-    ".": "./out/src/index.js"
+    ".": "./out/src/index.js",
+    "./web": "./out/src/web/index.js",
+    "./cli": "./out/src/cli/index.js"
   },
   "scripts": {
     "typegen": "tsc",
