@@ -1,6 +1,13 @@
 import { TerminalRendererImpl } from 'cli/renderer'
+import { BoxAttrs } from 'universal'
 
 export type VNode = VText | VElement
+export type VJSX =
+  VNode |
+  null |
+  undefined |
+  VJSX[] |
+  (() => VJSX)
 
 interface VNodeCommon {
   parent: VElement | null
@@ -11,27 +18,28 @@ export interface VText extends VNodeCommon {
   text: string
 }
 
-export type VTag = 'div'
+export type VTag = 'span' | 'div'
 
-export interface VProps {
-  display?: 'flex' | 'none'
-  flexDirection?: 'row' | 'column'
-  width?: number
-  height?: number
-  marginLeft?: number
-  marginRight?: number
-  marginTop?: number
-  marginBottom?: number
-  paddingLeft?: number
-  paddingRight?: number
-  paddingTop?: number
-  paddingBottom?: number
-}
+export interface VProps extends BoxAttrs {}
 
 export interface VElement extends VNodeCommon {
   tag: VTag
   props: VProps
   children: VNode[]
+}
+
+export module VJSX {
+  export function collapse(jsx: VJSX): VNode[] {
+    if (Array.isArray(jsx)) {
+      return jsx.flatMap(collapse)
+    } else if (typeof jsx === 'function') {
+      return collapse(jsx())
+    } else if (jsx === null || jsx === undefined) {
+      return []
+    } else {
+      return [jsx]
+    }
+  }
 }
 
 export module VNode {
@@ -183,9 +191,16 @@ export function VElement(tag: string): VElement {
 }
 
 export module VElement {
-  export const TAGS: Set<VTag> = new Set(['div'])
+  export const TAGS: Set<VTag> = new Set(['span', 'div'])
   export const PROPERTIES: Record<VTag, Set<keyof VProps>> = {
+    span: new Set([
+      'className',
+      'visible'
+    ]),
     div: new Set([
+      'className',
+      'visible',
+      'direction',
       'width',
       'height',
       'marginLeft',

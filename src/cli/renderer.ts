@@ -3,7 +3,6 @@ import { ReadStream, WriteStream } from 'tty'
 import * as process from 'process'
 import { VElement, VNode, VRoot } from 'cli/vdom'
 import stringWidth from 'string-width'
-import isText = VNode.isText
 
 type Timer = NodeJS.Timer
 
@@ -106,19 +105,23 @@ export class TerminalRendererImpl implements TerminalRenderer {
   }
 
   private renderNode(node: VNode): VRender {
-    if (isText(node)) {
-      const lines = node.text.split('\n')
-      const width = lines.reduce((max, line) => Math.max(max, stringWidth(line)), 0)
-      resizeLines(lines, width)
-      return {
-        lines,
-        width,
-        height: lines.length
+    if (VNode.isText(node)) {
+      return this.renderText(node.text)
+    } else if (node.tag === 'span') {
+      const {visible} = node.props
+      if (!visible) {
+        return {
+          lines: [],
+          width: 0,
+          height: 0
+        }
       }
-    } else {
+
+      return this.renderText(this.renderSpanChildren(node.children).join(''))
+    } else if (node.tag === 'div') {
       const {
-        display,
-        flexDirection,
+        visible,
+        direction,
         width,
         height,
         marginLeft,
@@ -130,7 +133,7 @@ export class TerminalRendererImpl implements TerminalRenderer {
         paddingRight,
         paddingBottom
       } = node.props
-      if (display === 'none') {
+      if (!visible) {
         return {
           lines: [],
           width: 0,
@@ -139,7 +142,7 @@ export class TerminalRendererImpl implements TerminalRenderer {
       }
 
       // Render children
-      const children = this.renderChildren(node.children, flexDirection === 'column')
+      const children = this.renderDivChildren(node.children, direction === 'column')
       const lines = children.lines
 
       // Add padding
@@ -213,10 +216,45 @@ export class TerminalRendererImpl implements TerminalRenderer {
         width: width ?? children.width,
         height: height ?? children.height
       }
+    } else {
+      throw new Error(`Unhandled tag: ${node.tag}`)
     }
   }
 
-  private renderChildren(children: VNode[], renderColumn: boolean): VRender {
+  private renderText(text: string): VRender {
+    const lines = text.split('\n')
+    const width = lines.reduce((max, line) => Math.max(max, stringWidth(line)), 0)
+    resizeLines(lines, width)
+    return {
+      lines,
+      width,
+      height: lines.length
+    }
+  }
+
+  private renderSpanChildren(children: VNode[]): string[] {
+    const result = []
+    for (const child of children) {
+      if (VNode.isText(child)) {
+        result.push(child.text)
+      } else if (child.tag === 'span') {
+        const {visible} = child.props
+        if (visible) {
+          result.push(...this.renderSpanChildren(child.children))
+        }
+      } else if (child.tag === 'div') {
+        const {visible} = child.props
+        if (visible) {
+          result.push(this.renderNode(child).lines.join('\n'))
+        }
+      } else {
+        throw new Error(`Unhandled tag: ${child.tag}`)
+      }
+    }
+    return result
+  }
+
+  private renderDivChildren(children: VNode[], renderColumn: boolean): VRender {
     if (renderColumn) {
       const lines: Array<string> = []
       let width = 0
