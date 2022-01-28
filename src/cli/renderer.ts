@@ -1,90 +1,65 @@
 import { createInterface, Interface } from 'readline'
 import { ReadStream, WriteStream } from 'tty'
 import * as process from 'process'
-import { VElement, VNode, VRoot } from 'cli/vdom'
+import { VNode } from 'universal/vdom'
 import stringWidth from 'string-width'
-
-type Timer = NodeJS.Timer
+import { CoreAssetCacher, CoreRenderOptions, RendererImpl } from 'universal/renderer'
+import { Strings } from 'misc'
+import terminalImage from 'terminal-image'
+import overlay = Strings.overlay
 
 interface VRender {
-  lines: Array<string>
+  lines: string[]
   width: number
   height: number
 }
 
-export interface TerminalRenderer {
-  start: (fps?: number) => void
-  stop: () => void
-  dispose: () => void
-}
-
-export interface TerminalContainer {
+export interface TerminalRenderOptions extends CoreRenderOptions {
   input?: ReadStream
   output?: WriteStream
   interact?: Interface
-  fps?: number
 }
 
-export class TerminalRendererImpl implements TerminalRenderer {
-  static readonly DEFAULT_FPS: number = 20
-
-  private readonly interact: Interface
-  private readonly output: WriteStream
-  private readonly defaultFps: number
-  private readonly _root: VElement = VRoot(this)
-
-  private needsRerender: boolean = true
-  private linesOutput: number = 0
-  private timer: Timer | null = null
-
-  get root(): VElement {
-    return this._root
+class AssetCacher extends CoreAssetCacher {
+  static async image(path: string, width?: number, height?: number): Promise<string[]> {
+    try {
+      return (await terminalImage.file(path, { width, height })).split('\n')
+    } catch (exception) {
+      // @ts-expect-error
+      if (exception.code !== 'ENOENT') {
+        throw exception
+      }
+      return ['?']
+    }
   }
 
-  constructor({input, output, interact, fps}: TerminalContainer = {}) {
+  getImage(path: string, width?: number, height?: number): [string[] | null, (didResolve: () => void) => void] {
+    return this.getAsync(
+      `${path}?width=${width}&height=${height}`,
+        path => AssetCacher.image(path, width, height)
+    )
+  }
+}
+
+export class TerminalRendererImpl extends RendererImpl<VRender, AssetCacher> {
+  private readonly interact: Interface
+  private readonly output: WriteStream
+
+  private linesOutput: number = 0
+
+  constructor(opts: TerminalRenderOptions = {}) {
+    super(new AssetCacher(), opts)
+    let {input, output, interact} = opts
+
     input = input ?? process.stdin
     output = output ?? process.stdout
     interact = interact ?? createInterface({ input, output, terminal: true })
 
     this.interact = interact
     this.output = output
-    this.defaultFps = fps ?? TerminalRendererImpl.DEFAULT_FPS
   }
 
-  start(fps?: number) {
-    if (this.timer !== null) {
-      throw new Error('Renderer is already running')
-    }
-
-    this.timer = setInterval(() => {
-      if (this.needsRerender) {
-        this.rerender()
-      }
-    }, 1 / (fps ?? this.defaultFps))
-  }
-
-  stop() {
-    if (this.timer === null) {
-      throw new Error('Renderer is not running')
-    }
-
-    clearInterval(this.timer)
-    this.timer = null
-  }
-
-  setNeedsRerender() {
-    this.needsRerender = true
-  }
-
-  private rerender() {
-    if (!this.needsRerender) return
-
-    this.needsRerender = false
-    this.clear()
-    this.render()
-  }
-
-  private clear() {
+  protected override clear() {
     if (this.linesOutput !== 0) {
       this.output.moveCursor(0, -this.linesOutput)
       this.output.clearScreenDown()
@@ -92,11 +67,7 @@ export class TerminalRendererImpl implements TerminalRenderer {
     }
   }
 
-  private render() {
-    this.writeRender(this.renderNode(this.root))
-  }
-
-  private writeRender(render: VRender) {
+  protected override writeRender(render: VRender) {
     for (const line of render.lines) {
       this.output.write(line)
       this.output.write('\n')
@@ -104,21 +75,10 @@ export class TerminalRendererImpl implements TerminalRenderer {
     this.linesOutput += render.lines.length
   }
 
-  private renderNode(node: VNode): VRender {
+  protected override renderNode(node: VNode): VRender {
     if (VNode.isText(node)) {
       return this.renderText(node.text)
-    } else if (node.tag === 'span') {
-      const {visible} = node.props
-      if (!visible) {
-        return {
-          lines: [],
-          width: 0,
-          height: 0
-        }
-      }
-
-      return this.renderText(this.renderSpanChildren(node.children).join(''))
-    } else if (node.tag === 'div') {
+    } else if (node.tag === 'box') {
       const {
         visible,
         direction,
@@ -142,7 +102,7 @@ export class TerminalRendererImpl implements TerminalRenderer {
       }
 
       // Render children
-      const children = this.renderDivChildren(node.children, direction === 'column')
+      const children = this.renderBoxChildren(node.children, direction)
       const lines = children.lines
 
       // Add padding
@@ -213,8 +173,42 @@ export class TerminalRendererImpl implements TerminalRenderer {
 
       return {
         lines,
-        width: width ?? children.width,
-        height: height ?? children.height
+        width: (width ?? (children.width + (paddingLeft ?? 0) + (paddingRight ?? 0))) + (marginLeft ?? 0) + (marginRight ?? 0),
+        height: (height ?? (children.height + (paddingTop ?? 0) + (paddingBottom ?? 0))) + (marginTop ?? 0) + (marginBottom ?? 0)
+      }
+    } else if (node.tag === 'image') {
+      const {
+        visible,
+        path,
+        width,
+        height,
+      } = node.props
+      if (!visible) {
+        return {
+          lines: [],
+          width: 0,
+          height: 0
+        }
+      }
+
+      const image = this.renderImage(path ?? '')
+      if (width !== undefined) {
+        resizeLines(image.lines, width)
+      }
+      if (height !== undefined) {
+        if (image.height > height) {
+          image.lines.splice(height, image.height - height)
+        } else {
+          for (let y = image.height; y < height; y++) {
+            image.lines.push(' '.repeat(image.width))
+          }
+        }
+      }
+
+      return {
+        lines: image.lines,
+        width: width ?? image.width,
+        height: height ?? image.height
       }
     } else {
       throw new Error(`Unhandled tag: ${node.tag}`)
@@ -232,30 +226,8 @@ export class TerminalRendererImpl implements TerminalRenderer {
     }
   }
 
-  private renderSpanChildren(children: VNode[]): string[] {
-    const result = []
-    for (const child of children) {
-      if (VNode.isText(child)) {
-        result.push(child.text)
-      } else if (child.tag === 'span') {
-        const {visible} = child.props
-        if (visible) {
-          result.push(...this.renderSpanChildren(child.children))
-        }
-      } else if (child.tag === 'div') {
-        const {visible} = child.props
-        if (visible) {
-          result.push(this.renderNode(child).lines.join('\n'))
-        }
-      } else {
-        throw new Error(`Unhandled tag: ${child.tag}`)
-      }
-    }
-    return result
-  }
-
-  private renderDivChildren(children: VNode[], renderColumn: boolean): VRender {
-    if (renderColumn) {
+  private renderBoxChildren(children: VNode[], renderDirection?: 'horizontal' | 'vertical' | null): VRender {
+    if (renderDirection === 'vertical') {
       const lines: Array<string> = []
       let width = 0
       let height = 0
@@ -267,33 +239,53 @@ export class TerminalRendererImpl implements TerminalRenderer {
       }
       resizeLines(lines, width)
       return {lines, width, height}
-    } else {
+    } else if (renderDirection === 'horizontal') {
       const lines: Array<string> = []
       let width = 0
       let height = 0
       for (const child of children) {
         const render = this.renderNode(child)
         while (lines.length < render.lines.length) {
-          lines.push(''.repeat(width))
+          lines.push(' '.repeat(width))
         }
         for (let y = 0; y < render.lines.length; y++) {
           let line = lines[y]
           const renderedLine = render.lines[y]
           line += renderedLine
         }
-        lines.push(...render.lines)
         width += render.width
         height = Math.max(height, render.height)
         resizeLines(lines, width)
       }
       return {lines, width, height}
+    } else {
+      const childRenders = children.map(child => this.renderNode(child))
+      return {
+        lines: overlay(...childRenders.map(render => render.lines)),
+        width: Math.max(...childRenders.map(render => render.width)),
+        height: Math.max(...childRenders.map(render => render.height))
+      }
     }
   }
 
-  dispose() {
-    if (this.timer !== null) {
-      this.stop()
+  private renderImage(path: string, width?: number, height?: number): VRender {
+    const [image, resolveCallback] = this.assets.getImage(path, width, height)
+    if (image === undefined) {
+      throw new Error(`Image not found: ${path}`)
+    } else if (image === null) {
+      resolveCallback(() => this.setNeedsRerender())
+      return this.renderText('Loading...')
+    } else {
+      return {
+        lines: image,
+        width: Math.max(...image.map(stringWidth)),
+        height: image.length
+      }
     }
+  }
+
+  override dispose() {
+    super.dispose()
     this.interact.close()
   }
 }

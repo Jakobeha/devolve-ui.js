@@ -1,63 +1,116 @@
-import { JSX } from 'solid-js'
+import { VJSX, VNode } from 'universal/vdom'
+import { BoxAttrs, Elements, ImageAttrs, MatchCase } from 'types'
 
-export interface PrimitiveAttrs {
-  className?: string
-  visible?: boolean
-}
+export const elements: Elements<VJSX, VNode> = {
+  Box: (props: { children: VJSX } & BoxAttrs): VNode => {
+    let children = VJSX.collapse(props.children)
+    delete props.children
 
-export interface TextAttrs extends PrimitiveAttrs {}
+    return {
+      tag: 'box',
+      props,
+      children,
+      parent: null,
+      renderer: null
+    }
+  },
+  Image: (props: { children: VJSX } & ImageAttrs): VNode => {
+    let children = VJSX.collapse(props.children)
+    delete props.children
 
-export interface BoxAttrs extends PrimitiveAttrs{
-  direction?: 'row' | 'column'
-  width?: number
-  height?: number
-  marginLeft?: number
-  marginRight?: number
-  marginTop?: number
-  marginBottom?: number
-  paddingLeft?: number
-  paddingRight?: number
-  paddingTop?: number
-  paddingBottom?: number
-}
-
-export interface Primitives<JSXType, NodeType extends JSXType = JSXType> {
-  Text: (props: { children: JSXType } & TextAttrs) => NodeType
-  Box: (props: { children: JSXType } & BoxAttrs) => NodeType
-  Newline: () => NodeType
-}
-
-export interface ControlFlow<JSXType> {
-  For: <T>(props: {
+    return {
+      tag: 'image',
+      props,
+      children,
+      parent: null,
+      renderer: null
+    }
+  },
+  For: <T>({ each, fallback, children }: {
     each: readonly T[] | undefined | null
-    fallback?: JSXType
-    children: (item: T, index: () => number) => JSXType
-  }) => JSXType
-  Index: <T>(props: {
+    fallback?: VJSX
+    children: (item: T, index: () => number) => VJSX
+  }): VJSX => {
+    if (each === undefined || each === null) {
+      return fallback
+    } else {
+      return () => {
+        if (each.length === 0) {
+          return fallback
+        } else {
+          return VJSX.collapse(each.map((item, index) => children(item, () => index)))
+        }
+      }
+    }
+  },
+  Index: <T>({ each, fallback, children }: {
     each: readonly T[] | undefined | null
-    fallback?: JSXType
-    children: (item: () => T, index: number) => JSXType
-  }) => JSXType
-  Show: <T>(props: {
+    fallback?: VJSX
+    children: (item: () => T, index: number) => VJSX
+  }): VJSX => {
+    if (each === undefined || each === null) {
+      return fallback
+    } else {
+      return () => {
+        if (each.length === 0) {
+          return fallback
+        } else {
+          return VJSX.collapse(each.map((item, index) => children(() => item, index)))
+        }
+      }
+    }
+  },
+  Show: <T>({ when, fallback, children }: {
     when: T | undefined | null | false
-    fallback?: JSXType
-    children: JSXType | ((item: NonNullable<T>) => JSXType)
-  }) => JSXType
+    fallback?: VJSX
+    children: VJSX | ((item: NonNullable<T>) => VJSX)
+  }): VJSX => {
+    if (when === undefined || when === null || when === false) {
+      return fallback
+    } else {
+      return () => VJSX.collapse(
+        typeof children === 'function' ? children(when as NonNullable<T>) : children
+      )
+    }
+  },
   Switch: (props: {
-    fallback?: JSXType
-    children: MatchCase<JSXType, any> | MatchCase<JSXType, any>[]
-  }) => JSXType
-  Match: <T>(props: MatchCase<JSXType, T>) => MatchCase<JSXType, T>
-  ErrorBoundary: (props: {
-    fallback: JSXType | ((err: any, reset: () => void) => JSXType)
-    children: JSXType
-  }) => JSXType
+    fallback?: VJSX
+    children: MatchCase<VJSX, any> | MatchCase<VJSX, any>[]
+  }): VJSX => {
+    const cases = Array.isArray(props.children) ? props.children : [props.children]
+    const fallback = props.fallback
+
+    return () => {
+      for (const case_ of cases) {
+        if (case_.when !== undefined && case_.when !== null && case_.when !== false) {
+          return VJSX.collapse(typeof case_.children === 'function' ? case_.children(case_.when) : case_.children)
+        }
+      }
+      return fallback
+    }
+  },
+  Match: <T>(props: MatchCase<VJSX, T>): MatchCase<VJSX, T> => props,
+  ErrorBoundary: ({ fallback, children }: {
+    fallback: VJSX | ((err: any, reset: () => void) => VJSX)
+    children: VJSX
+  }): VJSX => {
+    return () => {
+      try {
+        return VJSX.collapse(children)
+      } catch (err) {
+        return typeof fallback === 'function' ? fallback(err, () => {}) : fallback
+      }
+    }
+  }
 }
 
-export interface MatchCase<JSXType, T>{
-  when: T | undefined | null | false
-  children: JSXType | ((item: NonNullable<T>) => JSXType)
-}
-
-export type Elements<JSXType, NodeType extends JSXType = JSXType> =
-  Primitives<JSXType, NodeType> & ControlFlow<JSXType>
+export const {
+  Box,
+  Image,
+  For,
+  Index,
+  Show,
+  Switch,
+  Match,
+  ErrorBoundary
+} = elements

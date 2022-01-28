@@ -1,55 +1,26 @@
-import {
-  BoxAttrs,
-  elements as cliElements,
-  PrimitiveAttrs,
-  render as renderCli,
-  renderer as cliRenderer,
-  VNode
-} from 'cli'
-import { elements as webElements, JSX, render as renderWeb, renderer as webRenderer } from 'web'
-import { Elements, Renderer } from 'universal'
+import { VNode } from 'universal'
+import { Renderer } from 'universal/renderer'
+import { Platform, PLATFORM } from 'universal/platform'
+import { TerminalRendererImpl, TerminalRenderOptions } from 'cli/renderer'
+import { BrowserRendererImpl, BrowserRenderOptions } from 'web/renderer'
 
+export * from 'types'
 export * from 'universal'
 
-export type Platform = 'cli' | 'browser'
+type RenderOptions =
+  TerminalRenderOptions &
+  BrowserRenderOptions &
+  { platform?: Platform }
 
-declare const NODE_OPAQUE_HACK: unique symbol
-export type PlatformNode = {
-  opaque: typeof NODE_OPAQUE_HACK
-}
-
-export const platform: Platform = typeof window === 'undefined' ? 'cli' : 'browser'
-
-export const renderer: Renderer<PlatformNode> =
-  (platform === 'cli' ? cliRenderer : webRenderer) as unknown as Renderer<PlatformNode>
-
-export const elements: Elements<PlatformNode> =
-  (platform === 'cli' ? cliElements : webElements) as unknown as Elements<PlatformNode>
-
-export const {
-  effect,
-  memo,
-  createComponent,
-  insert,
-  spread,
-  mergeProps
-} = renderer
-
-export const {
-  Text,
-  Box,
-  Newline,
-  For,
-  Index,
-  Show,
-  Switch,
-  Match
-} = elements
-
-export function render(node: () => PlatformNode) {
-  if (platform === 'cli') {
-    return renderCli(node as unknown as () => VNode)
-  } else {
-    return renderWeb(node as unknown as () => JSX.Element, document.body)
+export function render(template: () => VNode, opts?: RenderOptions): Renderer {
+  const platform = opts?.platform ?? PLATFORM
+  const renderer =
+    platform === 'web' ? new BrowserRendererImpl(opts) :
+      platform === 'cli' ? new TerminalRendererImpl(opts) :
+        undefined
+  if (renderer === undefined) {
+    throw new Error(`Unsupported platform: ${platform}`)
   }
+  renderer.start()
+  return renderer
 }

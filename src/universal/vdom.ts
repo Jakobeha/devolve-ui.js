@@ -1,5 +1,5 @@
-import { TerminalRendererImpl } from 'cli/renderer'
-import { BoxAttrs } from 'universal'
+import { RendererImpl } from 'universal/renderer'
+import { BoxAttrs, ImageAttrs } from 'types'
 
 export type VNode = VText | VElement
 export type VJSX =
@@ -11,19 +11,19 @@ export type VJSX =
 
 interface VNodeCommon {
   parent: VElement | null
-  renderer: TerminalRendererImpl | null
+  renderer: RendererImpl<any, any> | null
 }
 
 export interface VText extends VNodeCommon {
   text: string
 }
 
-export type VTag = 'span' | 'div'
+export type VTag = 'box' | 'image'
 
-export interface VProps extends BoxAttrs {}
+export interface VProps extends BoxAttrs, ImageAttrs {}
 
-export interface VElement extends VNodeCommon {
-  tag: VTag
+export interface VElement<Tag extends VTag = VTag> extends VNodeCommon {
+  tag: Tag
   props: VProps
   children: VNode[]
 }
@@ -58,7 +58,7 @@ export module VNode {
 
     delete newNode.text
     Object.assign(newNode, {
-      tag: 'div',
+      tag: 'box',
       props: {},
       children: [textChild]
     } as VElement)
@@ -80,7 +80,7 @@ export module VNode {
       throw new Error('node is not a VText (TODO: implement this by replacing object props so it\'s a VText?)')
     }
 
-    node.renderer?.setNeedsRerender()
+    node.renderer?.setNeedsRerender(node)
   }
 
   export function setProperty(node: VNode, name: string, value: any) {
@@ -90,7 +90,7 @@ export module VNode {
       throw new Error(`property doesn't exist on ${VNode.type(node)} v-node: ${name}`)
     }
 
-    node.renderer?.setNeedsRerender()
+    node.renderer?.setNeedsRerender(node)
   }
 
   export function insertChild(parent: VNode, child: VNode, before?: VNode) {
@@ -114,7 +114,7 @@ export module VNode {
       parent.children.splice(beforeIndex, 0, child)
     }
 
-    parent.renderer?.setNeedsRerender()
+    parent.renderer?.setNeedsRerender({ parent, child, action: 'insert' })
   }
 
   export function removeChild(parent: VNode, child: VNode) {
@@ -135,7 +135,7 @@ export module VNode {
     }
     parent.children.splice(index, 1)
 
-    parent.renderer?.setNeedsRerender()
+    parent.renderer?.setNeedsRerender({ parent, child, action: 'remove' })
   }
 
   export function getParent(node: VNode): VElement {
@@ -191,16 +191,12 @@ export function VElement(tag: string): VElement {
 }
 
 export module VElement {
-  export const TAGS: Set<VTag> = new Set(['span', 'div'])
+  export const TAGS: Set<VTag> = new Set(['box', 'image'])
   export const PROPERTIES: Record<VTag, Set<keyof VProps>> = {
-    span: new Set([
+    box: new Set([
       'className',
-      'visible'
-    ]),
-    div: new Set([
-      'className',
-      'visible',
       'direction',
+      'visible',
       'width',
       'height',
       'marginLeft',
@@ -211,6 +207,13 @@ export module VElement {
       'paddingRight',
       'paddingTop',
       'paddingBottom'
+    ]),
+    image: new Set([
+      'className',
+      'visible',
+      'path',
+      'width',
+      'height'
     ])
   }
 
@@ -219,9 +222,9 @@ export module VElement {
   }
 }
 
-export function VRoot(renderer: TerminalRendererImpl): VElement {
+export function VRoot(renderer: RendererImpl<any, any>): VElement {
   return {
-    tag: 'div',
+    tag: 'box',
     props: {},
     children: [],
     parent: null,
