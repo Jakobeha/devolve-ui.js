@@ -2,12 +2,12 @@ import { VBox, VImage, VJSX, VNode, VText } from 'core/vdom'
 import { BoxAttrs, Elements, ImageAttrs, MatchCase } from 'node-agnostic'
 
 export const elements: Elements<VJSX, VNode> = {
-  Text: (props: { children: string[] }): VNode => VText(props.children.join('')),
-  Box: (props: { children: VJSX } & BoxAttrs): VNode => {
-    const children = VJSX.collapse(props.children)
-    delete props.children
+  Text: (props: {}, children: string | string[]): VNode =>
+    VText(typeof children === 'string' ? children : children.join('')),
+  Box: (props: BoxAttrs, children: VJSX): VNode => {
+    children = VJSX.collapse(children)
 
-    return VBox(children, props)
+    return VBox(children as VNode[], props)
   },
   Image: (props: { path: string } & ImageAttrs): VNode => {
     const path = props.path
@@ -16,22 +16,20 @@ export const elements: Elements<VJSX, VNode> = {
 
     return VImage(path, props)
   },
-  For: <T>({ each, fallback, children }: {
+  For: <T>({ each, fallback }: {
     each: readonly T[] | undefined | null | false
     fallback?: VJSX
-    children: (item: T, index: number) => VJSX
-  }): VJSX => {
+  }, children: (item: T, index: number) => VJSX): VJSX => {
     if (each === undefined || each === null || each === false || each.length === 0) {
       return fallback
     } else {
       return VJSX.collapse(each.map((item, index) => children(item, index)))
     }
   },
-  Show: <T>({ when, fallback, children }: {
+  Show: <T>({ when, fallback }: {
     when: T | undefined | null | false
     fallback?: VJSX
-    children: VJSX | ((item: NonNullable<T>) => VJSX)
-  }): VJSX => {
+  }, children: VJSX | ((item: NonNullable<T>) => VJSX)): VJSX => {
     if (when === undefined || when === null || when === false) {
       return fallback
     } else {
@@ -40,9 +38,8 @@ export const elements: Elements<VJSX, VNode> = {
   },
   Switch: (props: {
     fallback?: VJSX
-    children: MatchCase<VJSX, any> | Array<MatchCase<VJSX, any>>
-  }): VJSX => {
-    const cases = Array.isArray(props.children) ? props.children : [props.children]
+  }, children: MatchCase<VJSX, any> | Array<MatchCase<VJSX, any>>): VJSX => {
+    const cases = Array.isArray(children) ? children : [children]
     const fallback = props.fallback
 
     for (const case_ of cases) {
@@ -53,10 +50,9 @@ export const elements: Elements<VJSX, VNode> = {
     return fallback
   },
   Match: <T>(props: MatchCase<VJSX, T>): MatchCase<VJSX, T> => props,
-  ErrorBoundary: ({ fallback, children }: {
+  ErrorBoundary: ({ fallback }: {
     fallback: VJSX | ((err: any) => VJSX)
-    children: VJSX
-  }): VJSX => {
+  }, children: VJSX): VJSX => {
     try {
       return VJSX.collapse(children)
     } catch (err) {
@@ -66,6 +62,7 @@ export const elements: Elements<VJSX, VNode> = {
 }
 
 export const {
+  Text,
   Box,
   Image,
   For,
@@ -75,10 +72,10 @@ export const {
   ErrorBoundary
 } = elements
 
-export function HBox (props: { children: VJSX } & Omit<BoxAttrs, 'direction'>): VNode {
-  return Box({ ...props, direction: 'horizontal' })
+export function HBox (props: Omit<BoxAttrs, 'direction'>, children: VJSX): VNode {
+  return Box({ ...props, direction: 'horizontal' }, children)
 }
 
-export function YBox (props: { children: VJSX } & Omit<BoxAttrs, 'direction'>): VNode {
-  return Box({ ...props, direction: 'vertical' })
+export function YBox (props: Omit<BoxAttrs, 'direction'>, children: VJSX): VNode {
+  return Box({ ...props, direction: 'vertical' }, children)
 }
