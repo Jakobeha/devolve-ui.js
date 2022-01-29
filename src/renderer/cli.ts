@@ -1,11 +1,12 @@
 import { createInterface, Interface } from 'readline'
 import { ReadStream, WriteStream } from 'tty'
 import * as process from 'process'
-import { VNode } from 'universal/vdom'
+import { VImage, VNode } from 'core/vdom'
 import stringWidth from 'string-width'
-import { CoreAssetCacher, CoreRenderOptions, RendererImpl } from 'universal/renderer'
+import { CoreRenderOptions } from 'core/renderer'
 import { Strings } from 'misc'
 import terminalImage from 'terminal-image'
+import { CoreAssetCacher, RendererImpl } from 'renderer/common'
 import overlay = Strings.overlay
 
 interface VRender {
@@ -47,8 +48,8 @@ export class TerminalRendererImpl extends RendererImpl<VRender, AssetCacher> {
 
   private linesOutput: number = 0
 
-  constructor(opts: TerminalRenderOptions = {}) {
-    super(new AssetCacher(), opts)
+  constructor(root: () => VNode, opts: TerminalRenderOptions = {}) {
+    super(new AssetCacher(), root, opts)
     let {input, output, interact} = opts
 
     input = input ?? process.stdin
@@ -75,10 +76,10 @@ export class TerminalRendererImpl extends RendererImpl<VRender, AssetCacher> {
     this.linesOutput += render.lines.length
   }
 
-  protected override renderNode(node: VNode): VRender {
+  protected override renderNodeImpl(node: VNode): VRender {
     if (VNode.isText(node)) {
       return this.renderText(node.text)
-    } else if (node.tag === 'box') {
+    } else if (VNode.isBox(node)) {
       const {
         visible,
         direction,
@@ -92,7 +93,7 @@ export class TerminalRendererImpl extends RendererImpl<VRender, AssetCacher> {
         paddingTop,
         paddingRight,
         paddingBottom
-      } = node.props
+      } = node.box
       if (!visible) {
         return {
           lines: [],
@@ -176,13 +177,12 @@ export class TerminalRendererImpl extends RendererImpl<VRender, AssetCacher> {
         width: (width ?? (children.width + (paddingLeft ?? 0) + (paddingRight ?? 0))) + (marginLeft ?? 0) + (marginRight ?? 0),
         height: (height ?? (children.height + (paddingTop ?? 0) + (paddingBottom ?? 0))) + (marginTop ?? 0) + (marginBottom ?? 0)
       }
-    } else if (node.tag === 'image') {
+    } else if (VNode.isImage(node)) {
       const {
         visible,
-        path,
         width,
         height,
-      } = node.props
+      } = node.image
       if (!visible) {
         return {
           lines: [],
@@ -191,7 +191,7 @@ export class TerminalRendererImpl extends RendererImpl<VRender, AssetCacher> {
         }
       }
 
-      const image = this.renderImage(path ?? '')
+      const image = this.renderImage(node)
       if (width !== undefined) {
         resizeLines(image.lines, width)
       }
@@ -211,7 +211,7 @@ export class TerminalRendererImpl extends RendererImpl<VRender, AssetCacher> {
         height: height ?? image.height
       }
     } else {
-      throw new Error(`Unhandled tag: ${node.tag}`)
+      throw new Error('Unhandled node type')
     }
   }
 
@@ -232,7 +232,7 @@ export class TerminalRendererImpl extends RendererImpl<VRender, AssetCacher> {
       let width = 0
       let height = 0
       for (const child of children) {
-        const render = this.renderNode(child)
+        const render = this.renderNodeImpl(child)
         lines.push(...render.lines)
         width = Math.max(width, render.width)
         height += render.height
@@ -244,7 +244,7 @@ export class TerminalRendererImpl extends RendererImpl<VRender, AssetCacher> {
       let width = 0
       let height = 0
       for (const child of children) {
-        const render = this.renderNode(child)
+        const render = this.renderNodeImpl(child)
         while (lines.length < render.lines.length) {
           lines.push(' '.repeat(width))
         }
@@ -259,7 +259,7 @@ export class TerminalRendererImpl extends RendererImpl<VRender, AssetCacher> {
       }
       return {lines, width, height}
     } else {
-      const childRenders = children.map(child => this.renderNode(child))
+      const childRenders = children.map(child => this.renderNodeImpl(child))
       return {
         lines: overlay(...childRenders.map(render => render.lines)),
         width: Math.max(...childRenders.map(render => render.width)),
@@ -268,12 +268,13 @@ export class TerminalRendererImpl extends RendererImpl<VRender, AssetCacher> {
     }
   }
 
-  private renderImage(path: string, width?: number, height?: number): VRender {
+  private renderImage(node: VImage, width?: number, height?: number): VRender {
+    const path = node.path
     const [image, resolveCallback] = this.assets.getImage(path, width, height)
     if (image === undefined) {
       throw new Error(`Image not found: ${path}`)
     } else if (image === null) {
-      resolveCallback(() => this.setNeedsRerender())
+      resolveCallback(() => this.setNeedsRerender(node))
       return this.renderText('Loading...')
     } else {
       return {

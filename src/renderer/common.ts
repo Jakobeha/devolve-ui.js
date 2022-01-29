@@ -1,23 +1,10 @@
-import { VElement, VNode, VRoot } from 'universal/vdom'
+import { VNode } from 'core/vdom'
+import { CoreRenderOptions, Renderer } from 'core/renderer'
+import { VRoot } from 'core/component'
 
 type Timer = NodeJS.Timer
 
-export interface Renderer {
-  start: (fps?: number) => void
-  stop: () => void
-  setNeedsRerender: () => void
-  dispose: () => void
-}
-
-export interface CoreRenderOptions {
-  fps?: number
-}
-
-export type RenderDiff = VNode | {
-  parent: VNode
-  child: VNode
-  action: 'insert' | 'remove'
-}
+export type RenderDiff = VNode
 
 export abstract class CoreAssetCacher {
   private assets: { [key: string]: any } = {}
@@ -51,17 +38,15 @@ export abstract class RendererImpl<VRender, VAssetCacher extends CoreAssetCacher
   static readonly DEFAULT_FPS: number = 20
 
   private readonly defaultFps: number
-  private readonly _root: VElement = VRoot(this)
+  private root: VNode
   protected readonly assets: VAssetCacher
 
-  private needsRerender: boolean = true
+  private readonly cachedRenders: Map<VNode, VRender> = new Map<VNode, VRender>()
+  private needsRerender: boolean = false
   private timer: Timer | null = null
 
-  get root(): VElement {
-    return this._root
-  }
-
-  constructor(assetCacher: VAssetCacher, {fps}: CoreRenderOptions) {
+  protected constructor(assetCacher: VAssetCacher, root: () => VNode, {fps}: CoreRenderOptions) {
+    this.root = VRoot(root, this)
     this.defaultFps = fps ?? RendererImpl.DEFAULT_FPS
     this.assets = assetCacher
   }
@@ -87,28 +72,41 @@ export abstract class RendererImpl<VRender, VAssetCacher extends CoreAssetCacher
     this.timer = null
   }
 
-  setNeedsRerender(_diff?: RenderDiff) {
-    // TODO: Cache if the diff contains an important node
+  setNeedsRerender(diff: RenderDiff) {
+    let node: VNode | null = diff
+    while (node !== null) {
+      this.cachedRenders.delete(diff)
+      node = node.parent
+    }
     this.needsRerender = true
   }
 
-  private rerender() {
-    if (!this.needsRerender) return
+  reroot(root: () => VNode) {
+    this.root = VRoot(root, this)
+    this.cachedRenders.clear()
+    this.needsRerender = true
+  }
 
-    this.needsRerender = false
+  rerender() {
     this.clear()
-    this.render()
+    this.writeRender(this.renderNode(this.root))
   }
 
   protected abstract clear(): void
 
-  private render() {
-    this.writeRender(this.renderNode(this.root))
-  }
-
   protected abstract writeRender(render: VRender): void
 
-  protected abstract renderNode(node: VNode): VRender
+  protected renderNode(node: VNode): VRender {
+    if (this.cachedRenders.has(node)) {
+      return this.cachedRenders.get(node)!
+    } else {
+      const render = this.renderNodeImpl(node)
+      this.cachedRenders.set(node, render)
+      return render
+    }
+  }
+
+  protected abstract renderNodeImpl(node: VNode): VRender
 
   dispose() {
     if (this.timer !== null) {

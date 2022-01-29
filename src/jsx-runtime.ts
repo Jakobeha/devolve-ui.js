@@ -1,6 +1,6 @@
 // noinspection JSUnusedLocalSymbols
 
-import { VJSX } from 'universal/vdom'
+import { VJSX } from 'core/vdom'
 
 export namespace JSX {
   type Element = VJSX

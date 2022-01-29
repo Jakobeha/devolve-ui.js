@@ -1,22 +1,22 @@
-import { VNode } from 'universal'
-import { Renderer } from 'universal/renderer'
-import { Platform, PLATFORM } from 'universal/platform'
-import { TerminalRendererImpl, TerminalRenderOptions } from 'cli/renderer'
-import { BrowserRendererImpl, BrowserRenderOptions } from 'web/renderer'
+import { VNode } from 'core'
+import { Renderer } from 'core/renderer'
+import { Platform, PLATFORM } from 'core/platform'
+import { TerminalRendererImpl, TerminalRenderOptions } from 'renderer/cli'
+import { BrowserRendererImpl, BrowserRenderOptions } from 'renderer/web'
 
-export * from 'types'
-export * from 'universal'
+export * from 'node-agnostic'
+export * from 'core'
 
 type RenderOptions =
   TerminalRenderOptions &
   BrowserRenderOptions &
   { platform?: Platform }
 
-export function render(template: () => VNode, opts?: RenderOptions): Renderer {
+export function mount(root: () => VNode, opts?: RenderOptions): Renderer {
   const platform = opts?.platform ?? PLATFORM
   const renderer =
-    platform === 'web' ? new BrowserRendererImpl(opts) :
-      platform === 'cli' ? new TerminalRendererImpl(opts) :
+    platform === 'web' ? new BrowserRendererImpl(root, opts) :
+      platform === 'cli' ? new TerminalRendererImpl(root, opts) :
         undefined
   if (renderer === undefined) {
     throw new Error(`Unsupported platform: ${platform}`)
