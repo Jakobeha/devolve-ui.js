@@ -1,9 +1,11 @@
-import { getVComponent, VComponent } from 'core/vdom'
+import { getVComponent, VComponent } from 'core/component'
 
-export function useState<T>(initialState: T): [T, (newState: T) => void] {
+export function useState<T> (initialState: T): [T, (newState: T) => void] {
   const component = getVComponent()
-  let index = component.nextStateIndex++
+  const index = component.nextStateIndex++
   let state: T
+  // Um this is a boolean
+  // eslint-disable-next-line @typescript-eslint/strict-boolean-expressions
   if (component.isBeingConstructed) {
     if (component.state.length !== index) {
       throw new Error('sanity check failed')
@@ -23,8 +25,9 @@ export function useState<T>(initialState: T): [T, (newState: T) => void] {
   ]
 }
 
-export function useEffect(effect: () => void | Promise<void>) {
+export function useEffect (effect: () => void | Promise<void>): void {
   const component = getVComponent()
+  // eslint-disable-next-line @typescript-eslint/strict-boolean-expressions
   if (component.isBeingConstructed) {
     component.onChange.push(effect)
   }

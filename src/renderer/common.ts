@@ -7,7 +7,7 @@ type Timer = NodeJS.Timer
 export type RenderDiff = VNode
 
 export abstract class CoreAssetCacher {
-  private assets: { [key: string]: any } = {}
+  private readonly assets: Map<string, any> = new Map()
 
   protected get<T>(path: string, construct: (path: string) => T): T {
     if (this.assets.has(path)) {
@@ -25,7 +25,7 @@ export abstract class CoreAssetCacher {
     } else {
       this.assets.set(path, null)
       return [null, (didFind: () => void) => {
-        construct(path).then(image => {
+        void construct(path).then(image => {
           this.assets.set(path, image)
           didFind()
         })
@@ -45,13 +45,13 @@ export abstract class RendererImpl<VRender, VAssetCacher extends CoreAssetCacher
   private needsRerender: boolean = false
   private timer: Timer | null = null
 
-  protected constructor(assetCacher: VAssetCacher, root: () => VNode, {fps}: CoreRenderOptions) {
+  protected constructor (assetCacher: VAssetCacher, root: () => VNode, { fps }: CoreRenderOptions) {
     this.root = VRoot(root, this)
     this.defaultFps = fps ?? RendererImpl.DEFAULT_FPS
     this.assets = assetCacher
   }
 
-  start(fps?: number) {
+  start (fps?: number): void {
     if (this.timer !== null) {
       throw new Error('Renderer is already running')
     }
@@ -63,7 +63,7 @@ export abstract class RendererImpl<VRender, VAssetCacher extends CoreAssetCacher
     }, 1 / (fps ?? this.defaultFps))
   }
 
-  stop() {
+  stop (): void {
     if (this.timer === null) {
       throw new Error('Renderer is not running')
     }
@@ -72,7 +72,7 @@ export abstract class RendererImpl<VRender, VAssetCacher extends CoreAssetCacher
     this.timer = null
   }
 
-  setNeedsRerender(diff: RenderDiff) {
+  setNeedsRerender (diff: RenderDiff): void {
     let node: VNode | null = diff
     while (node !== null) {
       this.cachedRenders.delete(diff)
@@ -81,22 +81,22 @@ export abstract class RendererImpl<VRender, VAssetCacher extends CoreAssetCacher
     this.needsRerender = true
   }
 
-  reroot(root: () => VNode) {
+  reroot (root: () => VNode): void {
     this.root = VRoot(root, this)
     this.cachedRenders.clear()
     this.needsRerender = true
   }
 
-  rerender() {
+  rerender (): void {
     this.clear()
     this.writeRender(this.renderNode(this.root))
   }
 
-  protected abstract clear(): void
+  protected abstract clear (): void
 
-  protected abstract writeRender(render: VRender): void
+  protected abstract writeRender (render: VRender): void
 
-  protected renderNode(node: VNode): VRender {
+  protected renderNode (node: VNode): VRender {
     if (this.cachedRenders.has(node)) {
       return this.cachedRenders.get(node)!
     } else {
@@ -106,9 +106,9 @@ export abstract class RendererImpl<VRender, VAssetCacher extends CoreAssetCacher
     }
   }
 
-  protected abstract renderNodeImpl(node: VNode): VRender
+  protected abstract renderNodeImpl (node: VNode): VRender
 
-  dispose() {
+  dispose (): void {
     if (this.timer !== null) {
       this.stop()
     }

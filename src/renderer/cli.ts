@@ -22,7 +22,7 @@ export interface TerminalRenderOptions extends CoreRenderOptions {
 }
 
 class AssetCacher extends CoreAssetCacher {
-  static async image(path: string, width?: number, height?: number): Promise<string[]> {
+  static async image (path: string, width?: number, height?: number): Promise<string[]> {
     try {
       return (await terminalImage.file(path, { width, height })).split('\n')
     } catch (exception) {
@@ -34,10 +34,10 @@ class AssetCacher extends CoreAssetCacher {
     }
   }
 
-  getImage(path: string, width?: number, height?: number): [string[] | null, (didResolve: () => void) => void] {
+  getImage (path: string, width?: number, height?: number): [string[] | null, (didResolve: () => void) => void] {
     return this.getAsync(
-      `${path}?width=${width}&height=${height}`,
-        path => AssetCacher.image(path, width, height)
+      `${path}?width=${width ?? 'auto'}&height=${height ?? 'auto'}`,
+      async path => await AssetCacher.image(path, width, height)
     )
   }
 }
@@ -48,9 +48,9 @@ export class TerminalRendererImpl extends RendererImpl<VRender, AssetCacher> {
 
   private linesOutput: number = 0
 
-  constructor(root: () => VNode, opts: TerminalRenderOptions = {}) {
+  constructor (root: () => VNode, opts: TerminalRenderOptions = {}) {
     super(new AssetCacher(), root, opts)
-    let {input, output, interact} = opts
+    let { input, output, interact } = opts
 
     input = input ?? process.stdin
     output = output ?? process.stdout
@@ -60,7 +60,7 @@ export class TerminalRendererImpl extends RendererImpl<VRender, AssetCacher> {
     this.output = output
   }
 
-  protected override clear() {
+  protected override clear (): void {
     if (this.linesOutput !== 0) {
       this.output.moveCursor(0, -this.linesOutput)
       this.output.clearScreenDown()
@@ -68,7 +68,7 @@ export class TerminalRendererImpl extends RendererImpl<VRender, AssetCacher> {
     }
   }
 
-  protected override writeRender(render: VRender) {
+  protected override writeRender (render: VRender): void {
     for (const line of render.lines) {
       this.output.write(line)
       this.output.write('\n')
@@ -76,7 +76,7 @@ export class TerminalRendererImpl extends RendererImpl<VRender, AssetCacher> {
     this.linesOutput += render.lines.length
   }
 
-  protected override renderNodeImpl(node: VNode): VRender {
+  protected override renderNodeImpl (node: VNode): VRender {
     if (VNode.isText(node)) {
       return this.renderText(node.text)
     } else if (VNode.isBox(node)) {
@@ -94,7 +94,7 @@ export class TerminalRendererImpl extends RendererImpl<VRender, AssetCacher> {
         paddingRight,
         paddingBottom
       } = node.box
-      if (!visible) {
+      if (visible === false) {
         return {
           lines: [],
           width: 0,
@@ -181,9 +181,9 @@ export class TerminalRendererImpl extends RendererImpl<VRender, AssetCacher> {
       const {
         visible,
         width,
-        height,
+        height
       } = node.image
-      if (!visible) {
+      if (visible === false) {
         return {
           lines: [],
           width: 0,
@@ -215,7 +215,7 @@ export class TerminalRendererImpl extends RendererImpl<VRender, AssetCacher> {
     }
   }
 
-  private renderText(text: string): VRender {
+  private renderText (text: string): VRender {
     const lines = text.split('\n')
     const width = lines.reduce((max, line) => Math.max(max, stringWidth(line)), 0)
     resizeLines(lines, width)
@@ -226,9 +226,9 @@ export class TerminalRendererImpl extends RendererImpl<VRender, AssetCacher> {
     }
   }
 
-  private renderBoxChildren(children: VNode[], renderDirection?: 'horizontal' | 'vertical' | null): VRender {
+  private renderBoxChildren (children: VNode[], renderDirection?: 'horizontal' | 'vertical' | null): VRender {
     if (renderDirection === 'vertical') {
-      const lines: Array<string> = []
+      const lines: string[] = []
       let width = 0
       let height = 0
       for (const child of children) {
@@ -238,9 +238,9 @@ export class TerminalRendererImpl extends RendererImpl<VRender, AssetCacher> {
         height += render.height
       }
       resizeLines(lines, width)
-      return {lines, width, height}
+      return { lines, width, height }
     } else if (renderDirection === 'horizontal') {
-      const lines: Array<string> = []
+      const lines: string[] = []
       let width = 0
       let height = 0
       for (const child of children) {
@@ -249,15 +249,15 @@ export class TerminalRendererImpl extends RendererImpl<VRender, AssetCacher> {
           lines.push(' '.repeat(width))
         }
         for (let y = 0; y < render.lines.length; y++) {
-          let line = lines[y]
+          const line = lines[y]
           const renderedLine = render.lines[y]
-          line += renderedLine
+          lines[y] = line + renderedLine
         }
         width += render.width
         height = Math.max(height, render.height)
         resizeLines(lines, width)
       }
-      return {lines, width, height}
+      return { lines, width, height }
     } else {
       const childRenders = children.map(child => this.renderNodeImpl(child))
       return {
@@ -268,7 +268,7 @@ export class TerminalRendererImpl extends RendererImpl<VRender, AssetCacher> {
     }
   }
 
-  private renderImage(node: VImage, width?: number, height?: number): VRender {
+  private renderImage (node: VImage, width?: number, height?: number): VRender {
     const path = node.path
     const [image, resolveCallback] = this.assets.getImage(path, width, height)
     if (image === undefined) {
@@ -285,13 +285,13 @@ export class TerminalRendererImpl extends RendererImpl<VRender, AssetCacher> {
     }
   }
 
-  override dispose() {
+  override dispose (): void {
     super.dispose()
     this.interact.close()
   }
 }
 
-function resizeLines(lines: string[], width: number) {
+function resizeLines (lines: string[], width: number): void {
   for (let y = 0; y < lines.length; y++) {
     const line = lines[y]
     const difference = width - stringWidth(line)

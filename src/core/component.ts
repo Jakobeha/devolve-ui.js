@@ -1,7 +1,7 @@
 import { RendererImpl } from 'renderer/common'
 import { VNode } from 'core/vdom'
 
-export function VRoot<T extends VNode>(construct: () => T, renderer: RendererImpl<any, any>): T {
+export function VRoot<T extends VNode> (construct: () => T, renderer: RendererImpl<any, any>): T {
   VRENDERER = renderer
   try {
     return construct()
@@ -10,7 +10,7 @@ export function VRoot<T extends VNode>(construct: () => T, renderer: RendererImp
   }
 }
 
-export function VComponent<T extends VNode>(construct: () => T): T {
+export function VComponent<T extends VNode> (construct: () => T): T {
   const vcomponent: VComponent = {
     node: {},
     renderer: getVRenderer(),
@@ -26,7 +26,7 @@ export function VComponent<T extends VNode>(construct: () => T): T {
     Object.assign(vcomponent.node, constructed)
     vcomponent.isBeingConstructed = false
     VComponent.runObservers(vcomponent)
-    return constructed as T
+    return constructed
   } catch (e) {
     VComponent.reset(vcomponent)
     throw e
@@ -35,14 +35,14 @@ export function VComponent<T extends VNode>(construct: () => T): T {
   }
 }
 
-export function getVRenderer(): RendererImpl<any, any> {
+export function getVRenderer (): RendererImpl<any, any> {
   if (VRENDERER === null) {
     throw new Error('Current renderer is not set')
   }
   return VRENDERER
 }
 
-export function getVComponent(): VComponent {
+export function getVComponent (): VComponent {
   if (VCOMPONENT_STACK.length === 0) {
     throw new Error('Components are not set')
   }
@@ -53,16 +53,17 @@ export interface VComponent {
   readonly node: Partial<VNode>
   readonly renderer: RendererImpl<any, any>
   readonly state: any[]
-  readonly onChange: (() => void | Promise<void>)[]
+  readonly onChange: Array<() => void | Promise<void>>
   readonly construct: () => VNode
   isBeingConstructed: boolean
   nextStateIndex: number
 }
 
 export module VComponent {
-  export function reset(vcomponent: VComponent) {
+  export function reset (vcomponent: VComponent): void {
     for (const prop in vcomponent.node) {
       // @ts-expect-error
+      // eslint-disable-next-line @typescript-eslint/no-dynamic-delete
       delete vcomponent.node[prop]
     }
     vcomponent.state.splice(0, vcomponent.nextStateIndex)
@@ -70,16 +71,16 @@ export module VComponent {
     vcomponent.isBeingConstructed = true
   }
 
-  export function update(vcomponent: VComponent) {
+  export function update (vcomponent: VComponent): void {
     vcomponent.nextStateIndex = 0
     VNode.convertInto(vcomponent.node, vcomponent.construct())
     vcomponent.renderer.setNeedsRerender(vcomponent.node)
     runObservers(vcomponent)
   }
 
-  export function runObservers(vcomponent: VComponent) {
+  export function runObservers (vcomponent: VComponent): void {
     for (const onChange of vcomponent.onChange) {
-      onChange()
+      void onChange()
     }
   }
 }

@@ -12,12 +12,14 @@ type RenderOptions =
   BrowserRenderOptions &
   { platform?: Platform }
 
-export function mount(root: () => VNode, opts?: RenderOptions): Renderer {
+export function mount (root: () => VNode, opts?: RenderOptions): Renderer {
   const platform = opts?.platform ?? PLATFORM
   const renderer =
-    platform === 'web' ? new BrowserRendererImpl(root, opts) :
-      platform === 'cli' ? new TerminalRendererImpl(root, opts) :
-        undefined
+    platform === 'web'
+      ? new BrowserRendererImpl(root, opts)
+      : platform === 'cli'
+        ? new TerminalRendererImpl(root, opts)
+        : undefined
   if (renderer === undefined) {
     throw new Error(`Unsupported platform: ${platform}`)
   }

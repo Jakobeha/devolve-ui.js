@@ -18,12 +18,12 @@ export interface BoxAttrs extends PrimitiveAttrs{
 }
 
 export interface ImageAttrs extends PrimitiveAttrs {
-  width?: number,
+  width?: number
   height?: number
 }
 
 export interface Primitives<JSXType, NodeType extends JSXType = JSXType> {
-  Text: (props: { children: string[] }) => NodeType,
+  Text: (props: { children: string[] }) => NodeType
   Box: (props: { children: JSXType } & BoxAttrs) => NodeType
   Image: (props: { path: string } & ImageAttrs) => NodeType
 }
@@ -41,7 +41,7 @@ export interface ControlFlow<JSXType> {
   }) => JSXType
   Switch: (props: {
     fallback?: JSXType
-    children: MatchCase<JSXType, any> | MatchCase<JSXType, any>[]
+    children: MatchCase<JSXType, any> | Array<MatchCase<JSXType, any>>
   }) => JSXType
   Match: <T>(props: MatchCase<JSXType, T>) => MatchCase<JSXType, T>
   ErrorBoundary: (props: {

@@ -4,7 +4,7 @@ import { BoxAttrs, Elements, ImageAttrs, MatchCase } from 'node-agnostic'
 export const elements: Elements<VJSX, VNode> = {
   Text: (props: { children: string[] }): VNode => VText(props.children.join('')),
   Box: (props: { children: VJSX } & BoxAttrs): VNode => {
-    let children = VJSX.collapse(props.children)
+    const children = VJSX.collapse(props.children)
     delete props.children
 
     return VBox(children, props)
@@ -40,7 +40,7 @@ export const elements: Elements<VJSX, VNode> = {
   },
   Switch: (props: {
     fallback?: VJSX
-    children: MatchCase<VJSX, any> | MatchCase<VJSX, any>[]
+    children: MatchCase<VJSX, any> | Array<MatchCase<VJSX, any>>
   }): VJSX => {
     const cases = Array.isArray(props.children) ? props.children : [props.children]
     const fallback = props.fallback
@@ -75,10 +75,10 @@ export const {
   ErrorBoundary
 } = elements
 
-export function HBox(props: { children: VJSX } & Omit<BoxAttrs, 'direction'>): VNode {
-  return Box( { ...props, direction: 'horizontal' })
+export function HBox (props: { children: VJSX } & Omit<BoxAttrs, 'direction'>): VNode {
+  return Box({ ...props, direction: 'horizontal' })
 }
 
-export function YBox(props: { children: VJSX } & Omit<BoxAttrs, 'direction'>): VNode {
-  return Box( { ...props, direction: 'vertical' })
+export function YBox (props: { children: VJSX } & Omit<BoxAttrs, 'direction'>): VNode {
+  return Box({ ...props, direction: 'vertical' })
 }

@@ -16,7 +16,7 @@ export interface BrowserRenderOptions extends CoreRenderOptions, PIXI.IApplicati
 }
 
 class AssetCacher extends CoreAssetCacher {
-  getImage(path: string): PIXI.Texture {
+  getImage (path: string): PIXI.Texture {
     return this.get(path, PIXI.Texture.from)
   }
 }
@@ -28,7 +28,7 @@ export class BrowserRendererImpl extends RendererImpl<VRender, AssetCacher> {
 
   private readonly em: number
 
-  constructor(root: () => VNode, opts: BrowserRenderOptions = {}) {
+  constructor (root: () => VNode, opts: BrowserRenderOptions = {}) {
     super(new AssetCacher(), root, opts)
 
     const container = opts.container ?? document.body
@@ -38,22 +38,22 @@ export class BrowserRendererImpl extends RendererImpl<VRender, AssetCacher> {
       backgroundColor: 0xffffff,
       antialias: true,
       resolution: 1,
-      ...opts,
+      ...opts
     })
     this.em = opts.em ?? BrowserRendererImpl.EM
   }
 
-  protected override clear() {
+  protected override clear (): void {
     this.canvas.stage.removeChildren()
   }
 
-  protected override writeRender(render: VRender) {
+  protected override writeRender (render: VRender): void {
     if (render.pixi !== null) {
       this.canvas.stage.addChild(render.pixi)
     }
   }
 
-  protected override renderNodeImpl(node: VNode): VRender {
+  protected override renderNodeImpl (node: VNode): VRender {
     if (VNode.isText(node)) {
       return this.renderText(node.text)
     } else if (VNode.isBox(node)) {
@@ -71,7 +71,7 @@ export class BrowserRendererImpl extends RendererImpl<VRender, AssetCacher> {
         paddingRight,
         paddingBottom
       } = node.box
-      if (!visible) {
+      if (visible === false) {
         return {
           pixi: null,
           width: 0,
@@ -122,9 +122,9 @@ export class BrowserRendererImpl extends RendererImpl<VRender, AssetCacher> {
       const {
         visible,
         width,
-        height,
+        height
       } = node.image
-      if (!visible) {
+      if (visible === false) {
         return {
           pixi: null,
           width: 0,
@@ -146,11 +146,11 @@ export class BrowserRendererImpl extends RendererImpl<VRender, AssetCacher> {
         height: height ?? image.height
       }
     } else {
-      throw new Error(`Unhandled node type`)
+      throw new Error('Unhandled node type')
     }
   }
 
-  private renderText(text: string): VRender {
+  private renderText (text: string): VRender {
     const lines = text.split('\n')
     const width = lines.reduce((max, line) => Math.max(max, stringWidth(line)), 0)
     const pixi = new PIXI.Text(text, {
@@ -166,7 +166,7 @@ export class BrowserRendererImpl extends RendererImpl<VRender, AssetCacher> {
     }
   }
 
-  private renderDivChildren(children: VNode[], renderDirection?: 'horizontal' | 'vertical' | null): VRender & { pixi: PIXI.Container } {
+  private renderDivChildren (children: VNode[], renderDirection?: 'horizontal' | 'vertical' | null): VRender & { pixi: PIXI.Container } {
     const container = new PIXI.Container()
     let width = 0
     let height = 0
@@ -207,24 +207,24 @@ export class BrowserRendererImpl extends RendererImpl<VRender, AssetCacher> {
     }
   }
 
-  private renderImage(path: string): PIXI.Sprite {
+  private renderImage (path: string): PIXI.Sprite {
     const image = new PIXI.Sprite(this.assets.getImage(path))
     // noinspection JSDeprecatedSymbols IntelliJ bug
     image.anchor.set(0, 0)
     return image
   }
 
-  override start(fps?: number): void {
+  override start (fps?: number): void {
     super.start(fps)
     this.canvas.start()
   }
 
-  override stop(): void {
+  override stop (): void {
     super.stop()
     this.canvas.stop()
   }
 
-  override dispose() {
+  override dispose (): void {
     super.dispose()
     this.canvas.destroy()
   }

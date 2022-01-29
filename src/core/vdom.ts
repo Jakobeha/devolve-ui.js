@@ -26,7 +26,7 @@ export interface VImage extends VNodeCommon {
 }
 
 export module VJSX {
-  export function collapse(jsx: VJSX): VNode[] {
+  export function collapse (jsx: VJSX): VNode[] {
     if (Array.isArray(jsx)) {
       return jsx.flatMap(collapse)
     } else if (jsx === null || jsx === undefined) {
@@ -38,31 +38,32 @@ export module VJSX {
 }
 
 export module VNode {
-  export function isText(node: VNode): node is VText {
+  export function isText (node: VNode): node is VText {
     return 'text' in node
   }
 
-  export function isBox(node: VNode): node is VBox {
+  export function isBox (node: VNode): node is VBox {
     return 'box' in node
   }
 
-  export function isImage(node: VNode): node is VImage {
+  export function isImage (node: VNode): node is VImage {
     return 'image' in node
   }
 
-  export function convertInto<T extends VNode>(target: Partial<VNode>, newData: T): asserts target is T {
+  export function convertInto<T extends VNode> (target: Partial<VNode>, newData: T): asserts target is T {
     for (const prop in target) {
       if (prop in newData) {
         // @ts-expect-error
         target[prop] = newData[prop]
       } else if (prop !== 'renderer') {
         // @ts-expect-error
+        // eslint-disable-next-line @typescript-eslint/no-dynamic-delete
         delete target[prop]
       }
     }
   }
 
-  export function type(node: VNode): string {
+  export function type (node: VNode): string {
     if (isText(node)) {
       return 'text'
     } else if (isBox(node)) {
@@ -75,7 +76,7 @@ export module VNode {
   }
 }
 
-export function VText(text: string): VText {
+export function VText (text: string): VText {
   return { text, parent: null }
 }
 
@@ -83,11 +84,11 @@ export module VText {
 
 }
 
-export function VBox(children: VNode[], props: BoxAttrs = {}): VBox {
+export function VBox (children: VNode[], props: BoxAttrs = {}): VBox {
   const box = {
     box: props,
     children,
-    parent: null,
+    parent: null
   }
   for (const child of children) {
     if (child.parent !== null) {
@@ -98,7 +99,7 @@ export function VBox(children: VNode[], props: BoxAttrs = {}): VBox {
   return box
 }
 
-export function VImage(path: string, props: BoxAttrs = {}): VImage {
+export function VImage (path: string, props: BoxAttrs = {}): VImage {
   return {
     image: props,
     path,
