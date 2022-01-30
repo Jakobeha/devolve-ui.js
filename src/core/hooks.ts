@@ -25,10 +25,10 @@ export function useState<T> (initialState: T): [T, (newState: T) => void] {
   ]
 }
 
-export function useEffect (effect: () => void | Promise<void>, deps?: any[], compareDeps?: (lhs: any, rhs: any) => boolean): void {
+export function useEffect (effect: () => void | Promise<void>, deps: any[] = [], compareDeps?: (lhs: any, rhs: any) => boolean): void {
   // TODO: Let effects return callbacks to dispose, and implement these callbacks in renderer.useInput overloads
   const component = getVComponent()
-  if (deps !== undefined) {
+  if (deps.length > 0) {
     const [memo, setMemo] = useState(deps)
     // eslint-disable-next-line @typescript-eslint/strict-boolean-expressions
     if (component.isBeingConstructed) {
@@ -57,7 +57,10 @@ export function useEffect (effect: () => void | Promise<void>, deps?: any[], com
   } else {
     // eslint-disable-next-line @typescript-eslint/strict-boolean-expressions
     if (component.isBeingConstructed) {
-      component.onChange.push(effect)
+      const index = component.onChange.push(() => {
+        component.onChange[index] = null
+        void effect()
+      })
     }
   }
 }

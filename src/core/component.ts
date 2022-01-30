@@ -53,7 +53,7 @@ export interface VComponent {
   readonly node: Partial<VNode>
   readonly renderer: RendererImpl<any, any>
   readonly state: any[]
-  readonly onChange: Array<() => void | Promise<void>>
+  readonly onChange: Array<(() => void | Promise<void>) | null>
   readonly construct: () => VNode
   isBeingConstructed: boolean
   nextStateIndex: number
@@ -80,7 +80,7 @@ export module VComponent {
 
   export function runObservers (vcomponent: VComponent): void {
     for (const onChange of vcomponent.onChange) {
-      void onChange()
+      void onChange?.()
     }
   }
 }
