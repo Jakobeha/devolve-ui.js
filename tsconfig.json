@@ -17,6 +17,7 @@
     "declaration": true,
     "declarationDir": "./out/types",
     "declarationMap": true,
-    "composite": true
+    "composite": true,
+    "isolatedModules": true
   }
 }
