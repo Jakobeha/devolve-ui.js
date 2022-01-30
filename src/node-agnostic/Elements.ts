@@ -22,6 +22,10 @@ export interface ImageAttrs extends PrimitiveAttrs {
   height?: number
 }
 
+export interface TextAttrs extends PrimitiveAttrs {
+  transform?: (text: string) => string
+}
+
 export interface Primitives<JSXType, NodeType extends JSXType = JSXType> {
   Text: (props: {}, children: string | string[]) => NodeType
   Box: (props: BoxAttrs, children: JSXType) => NodeType

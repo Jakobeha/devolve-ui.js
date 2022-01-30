@@ -1,4 +1,4 @@
-import { getVComponent, VComponent } from 'core/component'
+import { getVComponent, getVRenderer, VComponent } from 'core/component'
 
 export function useState<T> (initialState: T): [T, (newState: T) => void] {
   const component = getVComponent()
@@ -26,6 +26,7 @@ export function useState<T> (initialState: T): [T, (newState: T) => void] {
 }
 
 export function useEffect (effect: () => void | Promise<void>, deps?: any[], compareDeps?: (lhs: any, rhs: any) => boolean): void {
+  // TODO: Let effects return callbacks to dispose, and implement these callbacks in renderer.useInput overloads
   const component = getVComponent()
   if (deps !== undefined) {
     const [memo, setMemo] = useState(deps)
@@ -59,4 +60,9 @@ export function useEffect (effect: () => void | Promise<void>, deps?: any[], com
       component.onChange.push(effect)
     }
   }
+}
+
+export function useInput (handler: (input: string, key: KeyboardEvent) => void): void {
+  const renderer = getVRenderer()
+  useEffect(() => renderer.useInput(handler))
 }

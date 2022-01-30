@@ -1,4 +1,4 @@
-import { createInterface, Interface } from 'readline'
+import { createInterface, emitKeypressEvents, Interface } from 'readline'
 import { ReadStream, WriteStream } from 'tty'
 import * as process from 'process'
 import { VImage, VNode } from 'core/vdom'
@@ -44,6 +44,7 @@ class AssetCacher extends CoreAssetCacher {
 
 export class TerminalRendererImpl extends RendererImpl<VRender, AssetCacher> {
   private readonly interact: Interface
+  private readonly input: ReadStream
   private readonly output: WriteStream
 
   private linesOutput: number = 0
@@ -57,7 +58,12 @@ export class TerminalRendererImpl extends RendererImpl<VRender, AssetCacher> {
     interact = interact ?? createInterface({ input, output, terminal: true })
 
     this.interact = interact
+    this.input = input
     this.output = output
+
+    this.input.setRawMode(true)
+    this.input.setEncoding('utf8')
+    emitKeypressEvents(this.input)
   }
 
   protected override clear (): void {
@@ -283,6 +289,10 @@ export class TerminalRendererImpl extends RendererImpl<VRender, AssetCacher> {
         height: image.length
       }
     }
+  }
+
+  override useInput (handler: (key: string, event: KeyboardEvent) => void): void {
+    this.input.addListener('keypress', handler)
   }
 
   override dispose (): void {

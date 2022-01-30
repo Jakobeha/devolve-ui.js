@@ -92,6 +92,8 @@ export abstract class RendererImpl<VRender, VAssetCacher extends CoreAssetCacher
     this.writeRender(this.renderNode(this.root))
   }
 
+  abstract useInput (handler: (key: string, event: KeyboardEvent) => void): void
+
   protected abstract clear (): void
 
   protected abstract writeRender (render: VRender): void
