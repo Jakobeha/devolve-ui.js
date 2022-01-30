@@ -25,7 +25,7 @@ export function useState<T> (initialState: T): [T, (newState: T) => void] {
   ]
 }
 
-export function useEffect (effect: () => void | Promise<void>, deps: any[] = [], compareDeps?: (lhs: any, rhs: any) => boolean): void {
+export function useEffect (effect: () => void | Promise<void>, deps: any[], compareDeps?: (lhs: any, rhs: any) => boolean): void {
   // TODO: Let effects return callbacks to dispose, and implement these callbacks in renderer.useInput overloads
   const component = getVComponent()
   if (deps.length > 0) {
