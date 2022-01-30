@@ -3,10 +3,14 @@
   "version": "0.1.0",
   "description": "write one reactive UI for browser and terminal",
   "type": "module",
-  "module": "out/src/index.js",
+  "main": "out/src/index.js",
+  "module": "out/src/index-esm.js",
   "types": "out/types/index.d.ts",
   "exports": {
-    ".": "./out/src/index.js",
+    ".": {
+      "import": "./out/src/index-esm.js",
+      "require": "./out/src/index-cjs.js"
+    },
     "./web": "./out/src/web/index.js",
     "./cli": "./out/src/cli/index.js"
   },
