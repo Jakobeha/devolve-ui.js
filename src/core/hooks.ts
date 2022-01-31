@@ -31,7 +31,8 @@ function _useState<T> (initialState: T, doUpdate: boolean): [T, (newState: T) =>
   ]
 }
 
-export function useEffect (effect: () => undefined | (() => void) | Promise<void>, deps: any[], compareDeps?: (lhs: any, rhs: any) => boolean): void {
+// eslint-disable-next-line @typescript-eslint/no-invalid-void-type
+export function useEffect (effect: () => void | (() => void) | Promise<void>, deps: any[], compareDeps?: (lhs: any, rhs: any) => boolean): void {
   const component = getVComponent()
   if (deps.length > 0) {
     const [memo, setMemo] = _useState(deps, false)

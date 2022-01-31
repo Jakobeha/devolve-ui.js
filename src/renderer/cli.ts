@@ -50,7 +50,8 @@ export class TerminalRendererImpl extends RendererImpl<VRender, AssetCacher> {
   private linesOutput: number = 0
 
   constructor (root: () => VNode, opts: TerminalRenderOptions = {}) {
-    super(new AssetCacher(), root, opts)
+    super(new AssetCacher(), opts)
+
     let { input, output, interact } = opts
 
     input = input ?? process.stdin
@@ -64,6 +65,8 @@ export class TerminalRendererImpl extends RendererImpl<VRender, AssetCacher> {
     this.input.setRawMode(true)
     this.input.setEncoding('utf8')
     emitKeypressEvents(this.input)
+
+    this.finishInit(root)
   }
 
   protected override clear (): void {

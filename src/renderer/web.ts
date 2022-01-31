@@ -29,7 +29,7 @@ export class BrowserRendererImpl extends RendererImpl<VRender, AssetCacher> {
   private readonly em: number
 
   constructor (root: () => VNode, opts: BrowserRenderOptions = {}) {
-    super(new AssetCacher(), root, opts)
+    super(new AssetCacher(), opts)
 
     const container = opts.container ?? document.body
     this.canvas = new PIXI.Application({
@@ -41,6 +41,8 @@ export class BrowserRendererImpl extends RendererImpl<VRender, AssetCacher> {
       ...opts
     })
     this.em = opts.em ?? BrowserRendererImpl.EM
+
+    this.finishInit(root)
   }
 
   protected override clear (): void {

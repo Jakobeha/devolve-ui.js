@@ -38,7 +38,7 @@ export abstract class RendererImpl<VRender, VAssetCacher extends CoreAssetCacher
   static readonly DEFAULT_FPS: number = 20
 
   private readonly defaultFps: number
-  private root: VNode
+  private root: VNode | null = null
   rootComponent: VComponent | null = null
   protected readonly assets: VAssetCacher
 
@@ -46,10 +46,13 @@ export abstract class RendererImpl<VRender, VAssetCacher extends CoreAssetCacher
   private needsRerender: boolean = false
   private timer: Timer | null = null
 
-  protected constructor (assetCacher: VAssetCacher, root: () => VNode, { fps }: CoreRenderOptions) {
-    this.root = VRoot(root, this)
+  protected constructor (assetCacher: VAssetCacher, { fps }: CoreRenderOptions) {
     this.defaultFps = fps ?? RendererImpl.DEFAULT_FPS
     this.assets = assetCacher
+  }
+
+  protected finishInit (root: () => VNode): void {
+    this.root = VRoot(root, this)
   }
 
   start (fps?: number): void {
@@ -94,7 +97,7 @@ export abstract class RendererImpl<VRender, VAssetCacher extends CoreAssetCacher
   rerender (): void {
     this.needsRerender = false
     this.clear()
-    this.writeRender(this.renderNode(this.root))
+    this.writeRender(this.renderNode(this.root!))
   }
 
   abstract useInput (handler: (key: string, event: KeyboardEvent) => void): () => void
