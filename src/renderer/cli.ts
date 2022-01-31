@@ -291,8 +291,11 @@ export class TerminalRendererImpl extends RendererImpl<VRender, AssetCacher> {
     }
   }
 
-  override useInput (handler: (key: string, event: KeyboardEvent) => void): void {
+  override useInput (handler: (key: string, event: KeyboardEvent) => void): () => void {
     this.input.addListener('keypress', handler)
+    return () => {
+      this.input.removeListener('keypress', handler)
+    }
   }
 
   override dispose (): void {

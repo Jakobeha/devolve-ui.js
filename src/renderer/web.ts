@@ -214,11 +214,14 @@ export class BrowserRendererImpl extends RendererImpl<VRender, AssetCacher> {
     return image
   }
 
-  override useInput (handler: (key: string, event: KeyboardEvent) => void): void {
+  override useInput (handler: (key: string, event: KeyboardEvent) => void): () => void {
     function listener (key: KeyboardEvent): void {
       handler(key.key, key)
     }
     document.body.addEventListener('keypress', listener)
+    return () => {
+      document.body.removeEventListener('keypress', listener)
+    }
   }
 
   override start (fps?: number): void {

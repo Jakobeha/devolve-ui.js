@@ -16,16 +16,35 @@ export function VComponent<T extends VNode> (construct: () => T): T {
     renderer: getVRenderer(),
     state: [],
     onChange: [],
+    onDestroy: [],
+    children: [],
     construct,
     isBeingConstructed: true,
+    updateRightAfterConstruct: false,
     nextStateIndex: 0
   }
+
+  if (VCOMPONENT_STACK.length === 0) {
+    if (VRENDERER!.rootComponent !== null) {
+      throw new Error('there can only be one root component')
+    }
+    VRENDERER!.rootComponent = vcomponent
+  } else {
+    const parent = VCOMPONENT_STACK[VCOMPONENT_STACK.length - 1]
+    parent.children.push(vcomponent)
+  }
+
   VCOMPONENT_STACK.push(vcomponent)
   try {
     const constructed = construct()
     Object.assign(vcomponent.node, constructed)
     vcomponent.isBeingConstructed = false
-    VComponent.runObservers(vcomponent)
+    if (vcomponent.updateRightAfterConstruct) {
+      VComponent.update(vcomponent)
+      vcomponent.updateRightAfterConstruct = false
+    } else {
+      VComponent.runObservers(vcomponent)
+    }
     return constructed
   } catch (e) {
     VComponent.reset(vcomponent)
@@ -54,8 +73,11 @@ export interface VComponent {
   readonly renderer: RendererImpl<any, any>
   readonly state: any[]
   readonly onChange: Array<(() => void | Promise<void>) | null>
+  readonly onDestroy: Array<(() => void | Promise<void>) | null>
+  readonly children: VComponent[]
   readonly construct: () => VNode
   isBeingConstructed: boolean
+  updateRightAfterConstruct: boolean
   nextStateIndex: number
 }
 
@@ -72,15 +94,43 @@ export module VComponent {
   }
 
   export function update (vcomponent: VComponent): void {
-    vcomponent.nextStateIndex = 0
-    VNode.convertInto(vcomponent.node, vcomponent.construct())
-    vcomponent.renderer.setNeedsRerender(vcomponent.node)
-    runObservers(vcomponent)
+    if (vcomponent.isBeingConstructed) {
+      vcomponent.updateRightAfterConstruct = true
+    } else {
+      runDestroys(vcomponent)
+      vcomponent.nextStateIndex = 0
+
+      const prevRenderer = VRENDERER
+      VRENDERER = vcomponent.renderer
+      VCOMPONENT_STACK.push(vcomponent)
+      try {
+        VNode.convertInto(vcomponent.node, vcomponent.construct())
+      } finally {
+        VCOMPONENT_STACK.pop()
+        VRENDERER = prevRenderer
+      }
+
+      if (!vcomponent.updateRightAfterConstruct) {
+        vcomponent.renderer.setNeedsRerender(vcomponent.node)
+      }
+
+      runObservers(vcomponent)
+    }
   }
 
   export function runObservers (vcomponent: VComponent): void {
     for (const onChange of vcomponent.onChange) {
       void onChange?.()
+    }
+  }
+
+  export function runDestroys (vcomponent: VComponent): void {
+    for (const onDestroy of vcomponent.onDestroy) {
+      void onDestroy?.()
+    }
+    vcomponent.onDestroy.splice(0, vcomponent.onDestroy.length)
+    for (const child of vcomponent.children) {
+      runDestroys(child)
     }
   }
 }

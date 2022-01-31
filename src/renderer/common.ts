@@ -1,6 +1,6 @@
 import { VNode } from 'core/vdom'
 import { CoreRenderOptions, Renderer } from 'core/renderer'
-import { VRoot } from 'core/component'
+import { VComponent, VRoot } from 'core/component'
 
 type Timer = NodeJS.Timer
 
@@ -39,6 +39,7 @@ export abstract class RendererImpl<VRender, VAssetCacher extends CoreAssetCacher
 
   private readonly defaultFps: number
   private root: VNode
+  rootComponent: VComponent | null = null
   protected readonly assets: VAssetCacher
 
   private readonly cachedRenders: Map<VNode, VRender> = new Map<VNode, VRender>()
@@ -82,17 +83,21 @@ export abstract class RendererImpl<VRender, VAssetCacher extends CoreAssetCacher
   }
 
   reroot (root: () => VNode): void {
+    VComponent.runDestroys(this.rootComponent!)
+    this.rootComponent = null
+
     this.root = VRoot(root, this)
     this.cachedRenders.clear()
     this.needsRerender = true
   }
 
   rerender (): void {
+    this.needsRerender = false
     this.clear()
     this.writeRender(this.renderNode(this.root))
   }
 
-  abstract useInput (handler: (key: string, event: KeyboardEvent) => void): void
+  abstract useInput (handler: (key: string, event: KeyboardEvent) => void): () => void
 
   protected abstract clear (): void
 
@@ -114,5 +119,8 @@ export abstract class RendererImpl<VRender, VAssetCacher extends CoreAssetCacher
     if (this.timer !== null) {
       this.stop()
     }
+
+    VComponent.runDestroys(this.rootComponent!)
+    this.rootComponent = null
   }
 }

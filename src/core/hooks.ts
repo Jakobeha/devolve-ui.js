@@ -1,6 +1,10 @@
 import { getVComponent, getVRenderer, VComponent } from 'core/component'
 
 export function useState<T> (initialState: T): [T, (newState: T) => void] {
+  return _useState(initialState, true)
+}
+
+function _useState<T> (initialState: T, doUpdate: boolean): [T, (newState: T) => void] {
   const component = getVComponent()
   const index = component.nextStateIndex++
   let state: T
@@ -8,7 +12,7 @@ export function useState<T> (initialState: T): [T, (newState: T) => void] {
   // eslint-disable-next-line @typescript-eslint/strict-boolean-expressions
   if (component.isBeingConstructed) {
     if (component.state.length !== index) {
-      throw new Error('sanity check failed')
+      throw new Error(`sanity check failed: state length (${component.state.length}) !== index (${index})`)
     }
     component.state.push(initialState)
     state = initialState
@@ -20,16 +24,17 @@ export function useState<T> (initialState: T): [T, (newState: T) => void] {
     state,
     (newState: T) => {
       component.state[index] = newState
-      VComponent.update(component)
+      if (doUpdate) {
+        VComponent.update(component)
+      }
     }
   ]
 }
 
-export function useEffect (effect: () => void | Promise<void>, deps: any[], compareDeps?: (lhs: any, rhs: any) => boolean): void {
-  // TODO: Let effects return callbacks to dispose, and implement these callbacks in renderer.useInput overloads
+export function useEffect (effect: () => undefined | (() => void) | Promise<void>, deps: any[], compareDeps?: (lhs: any, rhs: any) => boolean): void {
   const component = getVComponent()
   if (deps.length > 0) {
-    const [memo, setMemo] = useState(deps)
+    const [memo, setMemo] = _useState(deps, false)
     // eslint-disable-next-line @typescript-eslint/strict-boolean-expressions
     if (component.isBeingConstructed) {
       compareDeps = compareDeps ?? ((lhs, rhs) => lhs === rhs)
@@ -48,7 +53,10 @@ export function useEffect (effect: () => void | Promise<void>, deps: any[], comp
         }
         if (doEffect) {
           memoNow = [...memo]
-          void effect()
+          const result = effect()
+          if (typeof result === 'function') {
+            component.onDestroy.push(result)
+          }
         }
       })
     } else {
@@ -59,7 +67,10 @@ export function useEffect (effect: () => void | Promise<void>, deps: any[], comp
     if (component.isBeingConstructed) {
       const index = component.onChange.push(() => {
         component.onChange[index] = null
-        void effect()
+        const result = effect()
+        if (typeof result === 'function') {
+          component.onDestroy.push(result)
+        }
       })
     }
   }
@@ -67,5 +78,5 @@ export function useEffect (effect: () => void | Promise<void>, deps: any[], comp
 
 export function useInput (handler: (input: string, key: KeyboardEvent) => void): void {
   const renderer = getVRenderer()
-  useEffect(() => renderer.useInput(handler))
+  useEffect(() => renderer.useInput(handler), [])
 }
