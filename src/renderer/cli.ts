@@ -141,9 +141,11 @@ export class TerminalRendererImpl extends RendererImpl<VRender, AssetCacher> {
       if (width !== undefined) {
         if (children.width > width) {
           for (let y = 0; y < children.height; y++) {
-            const line = lines[y]
-            const width = stringWidth(line)
-            lines[y] = line.slice(0, width)
+            let line = lines[y]
+            while (stringWidth(line) > width) {
+              line = line.substring(0, line.length - 1)
+            }
+            lines[y] = line
           }
         } else if (children.width < width) {
           resizeLines(lines, width)

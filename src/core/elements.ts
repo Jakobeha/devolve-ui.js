@@ -1,10 +1,15 @@
 import { VBox, VImage, VJSX, VNode, VText } from 'core/vdom'
-import { BoxAttrs, Elements, ImageAttrs, MatchCase } from 'node-agnostic'
+import { BoxAttrs, Elements, ImageAttrs, MatchCase, TextAttrs } from 'node-agnostic'
 
 export const elements: Elements<VJSX, VNode> = {
-  Text: (props: {}, children: string | string[]): VNode =>
-    VText(typeof children === 'string' ? children : children.join('')),
-  Box: (props: BoxAttrs, children: VJSX): VNode => {
+  Text: ({ transform }: TextAttrs, ...children: string[]): VNode => {
+    let text = children.join('')
+    if (transform !== undefined) {
+      text = transform(text)
+    }
+    return VText(text)
+  },
+  Box: (props: BoxAttrs, ...children: VJSX[]): VNode => {
     children = VJSX.collapse(children)
 
     return VBox(children as VNode[], props)
@@ -29,16 +34,20 @@ export const elements: Elements<VJSX, VNode> = {
   Show: <T>({ when, fallback }: {
     when: T | undefined | null | false
     fallback?: VJSX
-  }, children: VJSX | ((item: NonNullable<T>) => VJSX)): VJSX => {
+  }, ...children: VJSX[] | [(item: NonNullable<T>) => VJSX]): VJSX => {
     if (when === undefined || when === null || when === false) {
       return fallback
     } else {
-      return VJSX.collapse(typeof children === 'function' ? children(when as NonNullable<T>) : children)
+      return VJSX.collapse(
+        children.length === 1 && typeof children[0] === 'function'
+          ? children[0](when as NonNullable<T>)
+          : children as VJSX[]
+      )
     }
   },
   Switch: (props: {
     fallback?: VJSX
-  }, children: MatchCase<VJSX, any> | Array<MatchCase<VJSX, any>>): VJSX => {
+  }, ...children: Array<MatchCase<VJSX, any>>): VJSX => {
     const cases = Array.isArray(children) ? children : [children]
     const fallback = props.fallback
 
@@ -72,10 +81,10 @@ export const {
   ErrorBoundary
 } = elements
 
-export function HBox (props: Omit<BoxAttrs, 'direction'>, children: VJSX): VNode {
-  return Box({ ...props, direction: 'horizontal' }, children)
+export function HBox (props: Omit<BoxAttrs, 'direction'>, ...children: VJSX[]): VNode {
+  return Box({ ...props, direction: 'horizontal' }, ...children)
 }
 
-export function YBox (props: Omit<BoxAttrs, 'direction'>, children: VJSX): VNode {
-  return Box({ ...props, direction: 'vertical' }, children)
+export function YBox (props: Omit<BoxAttrs, 'direction'>, ...children: VJSX[]): VNode {
+  return Box({ ...props, direction: 'vertical' }, ...children)
 }

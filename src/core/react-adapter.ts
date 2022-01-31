@@ -6,17 +6,22 @@ import { Box, HBox, Image, Text, YBox } from 'core/elements'
 function createElement (
   element: undefined,
   props: {},
-  children: VJSX | VJSX[],
+  ...children: VJSX[]
 ): VNode[]
-function createElement <T extends VNode, Props, Children> (
-  element: keyof JSX.IntrinsicElements | ((props: Props, children?: Children) => T),
-  props: Props,
-  children: Children
+function createElement (
+  element: keyof JSX.IntrinsicElements,
+  props: any,
+  ...children: VJSX[]
 ): VNode
-function createElement <T extends VNode, Props, Children> (
-  element: undefined | keyof JSX.IntrinsicElements | ((props: Props, children?: Children) => T),
+function createElement <T extends VNode, Props, Children extends any[]> (
+  element: (props: Props & { children?: Children}) => T,
   props: Props,
-  children: Children | VJSX | VJSX[]
+  ...children: Children
+): VNode
+function createElement <T extends VNode, Props, Children extends any[]> (
+  element: undefined | keyof JSX.IntrinsicElements | ((props: Props & { children?: Children}) => T),
+  props: Props,
+  ...children: Children | VJSX[]
 ): VNode | VNode[] {
   // idk why jsx generates this code
   if (props === null || props === undefined) {
@@ -27,9 +32,9 @@ function createElement <T extends VNode, Props, Children> (
   if (element === undefined) {
     return VJSX.collapse(children as VJSX[])
   } else if (typeof element === 'string') {
-    return getIntrinsicFunction(element)(props, children)
+    return getIntrinsicFunction(element)(props, ...children)
   } else {
-    return VComponent(() => element(props, children as Children))
+    return VComponent(() => element({ ...props, children: children as Children }))
   }
 }
 

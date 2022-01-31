@@ -39,15 +39,15 @@ export module VJSX {
 
 export module VNode {
   export function isText (node: VNode): node is VText {
-    return 'text' in node
+    return 'text' in node && node.text !== undefined
   }
 
   export function isBox (node: VNode): node is VBox {
-    return 'box' in node
+    return 'box' in node && node.box !== undefined
   }
 
   export function isImage (node: VNode): node is VImage {
-    return 'image' in node
+    return 'image' in node && node.image !== undefined
   }
 
   export function convertInto<T extends VNode> (target: Partial<VNode>, newData: T): asserts target is T {
