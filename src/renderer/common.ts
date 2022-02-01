@@ -1,6 +1,7 @@
 import { VNode } from 'core/vdom'
 import { CoreRenderOptions, Renderer } from 'core/renderer'
 import { VComponent, VRoot } from 'core/component'
+import { Key } from 'misc'
 
 type Timer = NodeJS.Timer
 
@@ -53,6 +54,9 @@ export abstract class RendererImpl<VRender, VAssetCacher extends CoreAssetCacher
 
   protected finishInit (root: () => VNode): void {
     this.root = VRoot(root, this)
+    if (this.rootComponent?.node !== this.root) {
+      throw new Error('sanity check failed: root component node does not match root node')
+    }
   }
 
   start (fps?: number): void {
@@ -100,7 +104,7 @@ export abstract class RendererImpl<VRender, VAssetCacher extends CoreAssetCacher
     this.writeRender(this.renderNode(this.root!))
   }
 
-  abstract useInput (handler: (key: string, event: KeyboardEvent) => void): () => void
+  abstract useInput (handler: (key: Key) => void): () => void
 
   protected abstract clear (): void
 

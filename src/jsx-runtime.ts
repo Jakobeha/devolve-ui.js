@@ -1,7 +1,7 @@
 // noinspection JSUnusedLocalSymbols
 
 import { VJSX } from 'core'
-import { BoxAttrs, ImageAttrs, TextAttrs } from 'node-agnostic'
+import { BoxAttrs, ImageAttrs, MatchCase, TextAttrs } from 'node-agnostic'
 
 /* eslint-disable @typescript-eslint/no-unused-vars */
 /* eslint-disable @typescript-eslint/no-empty-interface */
@@ -13,6 +13,21 @@ export namespace JSX {
     box: BoxAttrs
     text: TextAttrs
     image: ImageAttrs
+    for: {
+      each: readonly any[] | undefined | null
+      fallback?: VJSX
+    }
+    show: {
+      when: any
+      fallback?: VJSX
+    }
+    switch: {
+      fallback?: VJSX
+    }
+    match: MatchCase<VJSX, any>
+    errorBoundary: {
+      fallback: VJSX | ((err: any) => VJSX)
+    }
   }
 }
 /* eslint-enable @typescript-eslint/no-empty-interface */

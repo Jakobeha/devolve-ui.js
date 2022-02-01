@@ -4,7 +4,7 @@ import * as process from 'process'
 import { VImage, VNode } from 'core/vdom'
 import stringWidth from 'string-width'
 import { CoreRenderOptions } from 'core/renderer'
-import { Strings } from 'misc'
+import { Key, Strings } from 'misc'
 import terminalImage from 'terminal-image'
 import { CoreAssetCacher, RendererImpl } from 'renderer/common'
 import overlay = Strings.overlay
@@ -296,10 +296,13 @@ export class TerminalRendererImpl extends RendererImpl<VRender, AssetCacher> {
     }
   }
 
-  override useInput (handler: (key: string, event: KeyboardEvent) => void): () => void {
-    this.input.addListener('keypress', handler)
+  override useInput (handler: (key: Key) => void): () => void {
+    function listener (_: string, key: Key): void {
+      handler(key)
+    }
+    this.input.addListener('keypress', listener)
     return () => {
-      this.input.removeListener('keypress', handler)
+      this.input.removeListener('keypress', listener)
     }
   }
 

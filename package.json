@@ -12,7 +12,8 @@
       "require": "./out/src/index-cjs.js"
     },
     "./web": "./out/src/web/index.js",
-    "./cli": "./out/src/cli/index.js"
+    "./cli": "./out/src/cli/index.js",
+    "./misc": "./out/src/misc/index.js"
   },
   "scripts": {
     "typegen": "tsc",

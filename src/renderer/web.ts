@@ -3,6 +3,7 @@ import { VNode } from 'core/vdom'
 import stringWidth from 'string-width'
 import { CoreRenderOptions } from 'core/renderer'
 import { CoreAssetCacher, RendererImpl } from 'renderer/common'
+import { Key } from 'misc'
 
 interface VRender {
   pixi: PIXI.DisplayObject | null
@@ -216,9 +217,9 @@ export class BrowserRendererImpl extends RendererImpl<VRender, AssetCacher> {
     return image
   }
 
-  override useInput (handler: (key: string, event: KeyboardEvent) => void): () => void {
+  override useInput (handler: (key: Key) => void): () => void {
     function listener (key: KeyboardEvent): void {
-      handler(key.key, key)
+      handler(Key.fromKeyboardEvent(key))
     }
     document.body.addEventListener('keypress', listener)
     return () => {

@@ -1,7 +1,8 @@
 import { VJSX, VNode } from 'core/vdom'
 import { VComponent } from 'core/component'
 import { JSX } from 'jsx-runtime'
-import { Box, HBox, Image, Text, YBox } from 'core/elements'
+import { elements, HBox, YBox } from 'core/elements'
+import { Strings } from 'misc'
 
 function createElement (
   element: undefined,
@@ -46,17 +47,17 @@ globalThis.React = React
 
 function getIntrinsicFunction (element: keyof JSX.IntrinsicElements): (props: any, children?: any) => VNode {
   switch (element) {
-    case 'box':
-      return Box
     case 'hbox':
       return HBox
     case 'vbox':
       return YBox
-    case 'image':
-      return Image
-    case 'text':
-      return Text
-    default:
-      throw new Error(`Unknown element: ${element as string}`)
+    default: {
+      const intrinsic = Object.entries(elements).find(([name, _]) => Strings.uncapitalize(name) === element)?.[1]
+      if (intrinsic !== undefined) {
+        return intrinsic
+      } else {
+        throw new Error(`Unknown element: ${element as string}`)
+      }
+    }
   }
 }

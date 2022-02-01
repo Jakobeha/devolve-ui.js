@@ -1,4 +1,5 @@
 import { getVComponent, getVRenderer, VComponent } from 'core/component'
+import { Key } from 'misc'
 
 export function useState<T> (initialState: T): [T, (newState: T) => void] {
   return _useState(initialState, true)
@@ -40,16 +41,20 @@ export function useEffect (effect: () => void | (() => void) | Promise<void>, de
     if (component.isBeingConstructed) {
       compareDeps = compareDeps ?? ((lhs, rhs) => lhs === rhs)
 
-      let memoNow = [...memo]
+      let memoNow: any[] | null = null
       component.onChange.push(() => {
-        if (memo.length !== memoNow.length) {
-          throw new Error('sanity check failed, you can\'t change the number of dependencies')
-        }
         let doEffect = false
-        for (let i = 0; i < memo.length; i++) {
-          if (!compareDeps!(memo[i], memoNow[i])) {
-            doEffect = true
-            break
+        if (memoNow === null) {
+          doEffect = true
+        } else {
+          if (memo.length !== memoNow.length) {
+            throw new Error('sanity check failed, you can\'t change the number of dependencies')
+          }
+          for (let i = 0; i < memo.length; i++) {
+            if (!compareDeps!(memo[i], memoNow[i])) {
+              doEffect = true
+              break
+            }
           }
         }
         if (doEffect) {
@@ -77,7 +82,26 @@ export function useEffect (effect: () => void | (() => void) | Promise<void>, de
   }
 }
 
-export function useInput (handler: (input: string, key: KeyboardEvent) => void): void {
+export function useLazy <T> (lazy: T | Promise<T>, loading: T): T {
+  if (lazy instanceof Promise) {
+    const [resolved, setResolved] = useState({ value: loading, isLoading: true })
+    if (!resolved.isLoading) {
+      return resolved.value
+    }
+
+    void lazy.then(value => {
+      setResolved({ value, isLoading: false })
+    })
+
+    return loading
+  } else {
+    // Still need to fill in the state
+    void useState({ value: lazy, isLoading: false })
+    return lazy
+  }
+}
+
+export function useInput (handler: (key: Key) => void): void {
   const renderer = getVRenderer()
   useEffect(() => renderer.useInput(handler), [])
 }

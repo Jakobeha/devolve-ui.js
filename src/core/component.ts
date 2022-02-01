@@ -37,15 +37,21 @@ export function VComponent<T extends VNode> (construct: () => T): T {
   VCOMPONENT_STACK.push(vcomponent)
   try {
     const constructed = construct()
-    Object.assign(vcomponent.node, constructed)
-    vcomponent.isBeingConstructed = false
-    if (vcomponent.updateRightAfterConstruct) {
-      VComponent.update(vcomponent)
-      vcomponent.updateRightAfterConstruct = false
+    // noinspection SuspiciousTypeOfGuard
+    if (constructed === undefined || constructed === null || typeof constructed === 'function' || constructed instanceof Array) {
+      // noinspection ExceptionCaughtLocallyJS
+      throw new Error('JSX components can only be nodes (not fragments, functions, null, or undefined)')
     } else {
-      VComponent.runObservers(vcomponent)
+      Object.assign(vcomponent.node, constructed)
+      vcomponent.isBeingConstructed = false
+      if (vcomponent.updateRightAfterConstruct) {
+        VComponent.update(vcomponent)
+        vcomponent.updateRightAfterConstruct = false
+      } else {
+        VComponent.runObservers(vcomponent)
+      }
+      return vcomponent.node as T
     }
-    return constructed
   } catch (e) {
     VComponent.reset(vcomponent)
     throw e
