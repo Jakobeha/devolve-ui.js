@@ -84,6 +84,13 @@ export function useEffect (effect: () => void | (() => void) | Promise<void>, de
 
 export function useLazy <T> (lazy: T | Promise<T>, loading: T): T {
   if (lazy instanceof Promise) {
+    // Try immediate resolve
+    void lazy.then(resolved => {
+      lazy = resolved
+    })
+  }
+
+  if (lazy instanceof Promise) {
     const [resolved, setResolved] = useState({ value: loading, isLoading: true })
     if (!resolved.isLoading) {
       return resolved.value
