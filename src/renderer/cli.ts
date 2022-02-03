@@ -316,12 +316,30 @@ export class TerminalRendererImpl extends RendererImpl<VRender, AssetCacher> {
   }
 
   override useInput (handler: (key: Key) => void): () => void {
-    function listener (_: string, key: Key): void {
-      handler(key)
+    function listener (chunk: string | Buffer): void {
+      if (chunk instanceof Buffer) {
+        chunk = chunk.toString()
+      }
+      for (const key of chunk) {
+        handler({
+          name: key,
+          shift: key === key.toUpperCase(),
+          ctrl: false,
+          meta: false
+        })
+      }
     }
-    this.input.addListener('keypress', listener)
+    function listener2 (keyStr: string, key: Key): void {
+      if (key.name !== undefined) {
+        // key.name is undefined on data input
+        handler(key)
+      }
+    }
+    this.input.addListener('data', listener)
+    this.input.addListener('keypress', listener2)
     return () => {
-      this.input.removeListener('keypress', listener)
+      this.input.removeListener('keypress', listener2)
+      this.input.removeListener('data', listener)
     }
   }
 
