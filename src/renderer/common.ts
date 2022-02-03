@@ -95,7 +95,7 @@ export abstract class RendererImpl<VRender, VAssetCacher extends CoreAssetCacher
   setNeedsRerender (diff: RenderDiff): void {
     let node: VNode | null = diff
     while (node !== null) {
-      this.cachedRenders.delete(diff)
+      this.cachedRenders.delete(node)
       node = node.parent
     }
     this.needsRerender = true
