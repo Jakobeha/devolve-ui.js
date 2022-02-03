@@ -5,6 +5,7 @@ export interface PrimitiveAttrs {
 
 export interface BoxAttrs extends PrimitiveAttrs{
   direction?: 'horizontal' | 'vertical' | null
+  gap?: number
   width?: number
   height?: number
   marginLeft?: number

@@ -92,6 +92,7 @@ export class TerminalRendererImpl extends RendererImpl<VRender, AssetCacher> {
       const {
         visible,
         direction,
+        gap,
         width,
         height,
         marginLeft,
@@ -112,7 +113,7 @@ export class TerminalRendererImpl extends RendererImpl<VRender, AssetCacher> {
       }
 
       // Render children
-      const children = this.renderBoxChildren(node.children, direction)
+      const children = this.renderBoxChildren(node.children, direction, gap)
       const lines = children.lines
 
       // Add padding
@@ -237,12 +238,19 @@ export class TerminalRendererImpl extends RendererImpl<VRender, AssetCacher> {
     }
   }
 
-  private renderBoxChildren (children: VNode[], renderDirection?: 'horizontal' | 'vertical' | null): VRender {
+  private renderBoxChildren (children: VNode[], renderDirection?: 'horizontal' | 'vertical' | null, gap?: number): VRender {
     if (renderDirection === 'vertical') {
       const lines: string[] = []
       let width = 0
       let height = 0
+      let isFirst = true
       for (const child of children) {
+        if (gap !== undefined && !isFirst) {
+          for (let y = 0; y < gap; y++) {
+            lines.push(' '.repeat(width))
+          }
+        }
+        isFirst = false
         const render = this.renderNodeImpl(child)
         lines.push(...render.lines)
         width = Math.max(width, render.width)
@@ -254,7 +262,15 @@ export class TerminalRendererImpl extends RendererImpl<VRender, AssetCacher> {
       const lines: string[] = []
       let width = 0
       let height = 0
+      let isFirst = true
       for (const child of children) {
+        if (gap !== undefined && !isFirst) {
+          width += gap
+          for (let y = 0; y < lines.length; y++) {
+            lines[y] = lines[y] + ' '.repeat(gap)
+          }
+        }
+        isFirst = false
         const render = this.renderNodeImpl(child)
         while (lines.length < render.lines.length) {
           lines.push(' '.repeat(width))
@@ -270,11 +286,14 @@ export class TerminalRendererImpl extends RendererImpl<VRender, AssetCacher> {
       }
       return { lines, width, height }
     } else {
+      if (gap !== undefined) {
+        throw new Error('Gap is not supported for overlay (default) direction')
+      }
       const childRenders = children.map(child => this.renderNodeImpl(child))
       return {
         lines: overlay(...childRenders.map(render => render.lines)),
-        width: Math.max(...childRenders.map(render => render.width)),
-        height: Math.max(...childRenders.map(render => render.height))
+        width: Math.max(0, ...childRenders.map(render => render.width)),
+        height: Math.max(0, ...childRenders.map(render => render.height))
       }
     }
   }

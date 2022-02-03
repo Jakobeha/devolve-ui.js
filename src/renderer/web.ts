@@ -63,6 +63,7 @@ export class BrowserRendererImpl extends RendererImpl<VRender, AssetCacher> {
       const {
         visible,
         direction,
+        gap,
         width,
         height,
         marginLeft,
@@ -83,7 +84,7 @@ export class BrowserRendererImpl extends RendererImpl<VRender, AssetCacher> {
       }
 
       // Render children
-      const children = this.renderDivChildren(node.children, direction)
+      const children = this.renderDivChildren(node.children, direction, gap)
       const pixi = children.pixi
 
       // Add padding
@@ -169,12 +170,17 @@ export class BrowserRendererImpl extends RendererImpl<VRender, AssetCacher> {
     }
   }
 
-  private renderDivChildren (children: VNode[], renderDirection?: 'horizontal' | 'vertical' | null): VRender & { pixi: PIXI.Container } {
+  private renderDivChildren (children: VNode[], renderDirection?: 'horizontal' | 'vertical' | null, gap?: number): VRender & { pixi: PIXI.Container } {
     const container = new PIXI.Container()
     let width = 0
     let height = 0
     if (renderDirection === 'vertical') {
+      let isFirst = true
       for (const child of children) {
+        if (gap !== undefined && !isFirst) {
+          width += gap * this.em
+        }
+        isFirst = false
         const render = this.renderNodeImpl(child)
         if (render.pixi !== null) {
           render.pixi.y = height
@@ -184,7 +190,12 @@ export class BrowserRendererImpl extends RendererImpl<VRender, AssetCacher> {
         height += render.height
       }
     } else if (renderDirection === 'horizontal') {
+      let isFirst = true
       for (const child of children) {
+        if (gap !== undefined && !isFirst) {
+          height += gap * this.em
+        }
+        isFirst = false
         const render = this.renderNodeImpl(child)
         if (render.pixi !== null) {
           render.pixi.x = width
@@ -194,6 +205,10 @@ export class BrowserRendererImpl extends RendererImpl<VRender, AssetCacher> {
         height = Math.max(height, render.height)
       }
     } else {
+      if (gap !== undefined) {
+        throw new Error('Gap is not supported for overlay (default) direction')
+      }
+
       for (const child of children) {
         const render = this.renderNodeImpl(child)
         if (render.pixi !== null) {
