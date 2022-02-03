@@ -52,13 +52,21 @@ export module VNode {
 
   export function convertInto<T extends VNode> (target: Partial<VNode>, newData: T): asserts target is T {
     for (const prop in target) {
-      if (prop in newData) {
-        // @ts-expect-error
-        target[prop] = newData[prop]
-      } else if (prop !== 'renderer') {
-        // @ts-expect-error
-        // eslint-disable-next-line @typescript-eslint/no-dynamic-delete
-        delete target[prop]
+      if (prop !== 'parent' && prop !== 'renderer') {
+        if (prop in newData) {
+          // @ts-expect-error
+          target[prop] = newData[prop]
+          if (prop === 'children') {
+            const children = (target as VBox)[prop]
+            for (const child of children) {
+              child.parent = target as VBox
+            }
+          }
+        } else {
+          // @ts-expect-error
+          // eslint-disable-next-line @typescript-eslint/no-dynamic-delete
+          delete target[prop]
+        }
       }
     }
   }
