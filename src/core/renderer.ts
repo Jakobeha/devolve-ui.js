@@ -2,8 +2,8 @@ import { VNode } from 'core/vdom'
 
 export interface Renderer {
   reroot: (root: () => VNode) => void
-  start: (fps?: number) => void
-  stop: () => void
+  show: () => void
+  hide: () => void
   dispose: () => void
 }
 

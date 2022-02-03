@@ -46,6 +46,7 @@ export abstract class RendererImpl<VRender, VAssetCacher extends CoreAssetCacher
   private readonly cachedRenders: Map<VNode, VRender> = new Map<VNode, VRender>()
   private needsRerender: boolean = false
   private timer: Timer | null = null
+  private isVisible: boolean = true
 
   protected constructor (assetCacher: VAssetCacher, { fps }: CoreRenderOptions) {
     this.defaultFps = fps ?? RendererImpl.DEFAULT_FPS
@@ -80,6 +81,17 @@ export abstract class RendererImpl<VRender, VAssetCacher extends CoreAssetCacher
     this.timer = null
   }
 
+  show (): void {
+    this.isVisible = true
+    this.start()
+  }
+
+  hide (): void {
+    this.stop()
+    this.clear()
+    this.isVisible = false
+  }
+
   setNeedsRerender (diff: RenderDiff): void {
     let node: VNode | null = diff
     while (node !== null) {
@@ -99,9 +111,11 @@ export abstract class RendererImpl<VRender, VAssetCacher extends CoreAssetCacher
   }
 
   rerender (): void {
-    this.needsRerender = false
-    this.clear()
-    this.writeRender(this.renderNode(this.root!))
+    if (this.isVisible) {
+      this.needsRerender = false
+      this.clear()
+      this.writeRender(this.renderNode(this.root!))
+    }
   }
 
   abstract useInput (handler: (key: Key) => void): () => void
