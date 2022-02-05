@@ -13,7 +13,7 @@
     },
     "./web": "./out/src/web/index.js",
     "./cli": "./out/src/cli/index.js",
-    "./misc": "./out/src/misc/index.js"
+    "./jsx-runtime": "./out/src/jsx-runtime.js"
   },
   "scripts": {
     "typegen": "tsc",
