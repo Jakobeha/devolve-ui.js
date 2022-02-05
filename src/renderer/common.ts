@@ -1,7 +1,7 @@
 import { VNode } from 'core/vdom'
 import { CoreRenderOptions, Renderer } from 'core/renderer'
 import { VComponent, VRoot } from 'core/component'
-import { Key } from 'misc'
+import { Key } from '@raycenity/misc-ts'
 
 type Timer = NodeJS.Timer
 

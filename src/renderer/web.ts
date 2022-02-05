@@ -3,7 +3,7 @@ import { VNode } from 'core/vdom'
 import stringWidth from 'string-width'
 import { CoreRenderOptions } from 'core/renderer'
 import { CoreAssetCacher, RendererImpl } from 'renderer/common'
-import { Key } from 'misc'
+import { Key } from '@raycenity/misc-ts'
 
 interface VRender {
   pixi: PIXI.DisplayObject | null

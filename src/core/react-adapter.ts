@@ -2,7 +2,7 @@ import { VJSX, VNode } from 'core/vdom'
 import { VComponent } from 'core/component'
 import { JSX } from 'jsx-runtime'
 import { elements, HBox, YBox } from 'core/elements'
-import { Strings } from 'misc'
+import { Strings } from '@raycenity/misc-ts'
 
 function createElement (
   element: undefined,

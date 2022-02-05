@@ -54,6 +54,7 @@
     "typescript": "^4.5.4"
   },
   "dependencies": {
+    "@raycenity/misc-ts": "link:../misc-ts",
     "string-width": "^5.0.1"
   },
   "optionalDependencies": {

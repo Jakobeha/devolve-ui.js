@@ -1,5 +1,5 @@
 import { getVComponent, getVRenderer, VComponent } from 'core/component'
-import { Key } from 'misc'
+import { Key } from '@raycenity/misc-ts'
 
 export function useState<T> (initialState: T): [T, (newState: T) => void] {
   return _useState(initialState, true)

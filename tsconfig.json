@@ -10,7 +10,8 @@
     "baseUrl": "./",
     "rootDir": "src",
     "paths": {
-      "*": ["./src/*"]
+      "*": ["./src/*"],
+      "@raycenity/misc-ts": ["../misc-ts/out/types/index.d.ts"]
     },
     "skipLibCheck": true,
     "emitDeclarationOnly": true,
@@ -19,5 +20,8 @@
     "declarationMap": true,
     "composite": true,
     "isolatedModules": true
-  }
+  },
+  "references": [
+    { "path": "../misc-ts" }
+  ]
 }
