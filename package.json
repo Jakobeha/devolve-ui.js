@@ -6,32 +6,6 @@
   "main": "out/src/index-cjs.js",
   "module": "out/src/index.js",
   "types": "out/types/index.d.ts",
-  "exports": {
-    ".": {
-      "types": "./out/types/index.d.ts",
-      "import": "./out/src/index-esm.js",
-      "require": "./out/src/index.js",
-      "default": "./out/src/index-esm.js"
-    },
-    "./chalk": {
-      "types": "./out/types/facades/chalk.d.ts",
-      "import": "./out/src/facades/chalk.js",
-      "require": "./out/src/facades/chalk-cjs.js",
-      "default": "./out/src/facades/chalk.js"
-    },
-    "./terminal-image": {
-      "types": "./out/types/facades/terminal-image.d.ts",
-      "import": "./out/src/facades/terminal-image.js",
-      "require": "./out/src/facades/terminal-image-cjs.js",
-      "default": "./out/src/facades/terminal-image.js"
-    },
-    "./terminal": {
-      "types": "./out/types/facades/terminal.d.ts",
-      "import": "./out/src/facades/terminal.js",
-      "require": "./out/src/facades/terminal-cjs.js",
-      "default": "./out/src/facades/terminal.js"
-    }
-  },
   "scripts": {
     "typegen": "tsc",
     "typegen-watch": "tsc --watch",
@@ -66,17 +40,14 @@
     "esbuild": "^0.14.9",
     "eslint": "^5.0.0 || ^6.0.0 || ^7.0.0",
     "husky": "^7.0.4",
+    "npm-run-all": "^4.1.5",
     "pixi.js": "^6.2.2",
     "ts-standard": "^11.0.0",
     "typescript": "^4.5.4"
   },
   "dependencies": {
     "@raycenity/misc-ts": "link:../misc-ts",
-    "npm-run-all": "^4.1.5",
+    "@raycenity/terminal-image-min": "link:../terminal-image-min",
     "string-width": "^5.0.1"
-  },
-  "optionalDependencies": {
-    "chalk": "^5.0.0",
-    "terminal-image": "^2.0.0"
   }
 }

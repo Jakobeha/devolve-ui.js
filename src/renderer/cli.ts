@@ -5,7 +5,7 @@ import { VImage, VNode } from 'core/vdom'
 import stringWidth from 'string-width'
 import { CoreRenderOptions } from 'core/renderer'
 import { Key, Strings } from '@raycenity/misc-ts'
-import terminalImage from 'terminal-image'
+import { terminalImage } from '@raycenity/terminal-image-min'
 import { CoreAssetCacher, RendererImpl } from 'renderer/common'
 import overlay = Strings.overlay
 
