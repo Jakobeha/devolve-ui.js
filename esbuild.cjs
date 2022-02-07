@@ -44,17 +44,6 @@ traverse('src').then(entryPoints => {
   }).catch(() => {
     console.error('ES-modules unminified build failed')
   })
-
-  // ES-modules minified
-  esbuild.build({
-    entryPoints,
-    sourcemap: true,
-    minify: true,
-    format: 'esm',
-    outdir: 'out/src-min'
-  }).catch(err => {
-    console.error('ES-modules minified build failed', err)
-  })
 }).catch(err => {
   console.error('Traversing source files failed', err)
 })
