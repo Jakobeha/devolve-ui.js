@@ -10,9 +10,7 @@
     "baseUrl": "./",
     "rootDir": "src",
     "paths": {
-      "*": ["./src/*"],
-      "@raycenity/misc-ts": ["../misc-ts/out/types/index.d.ts"],
-      "@raycenity/terminal-image-min": ["../terminal-image-min/out/types/index.d.ts"]
+      "*": ["./src/*"]
     },
     "skipLibCheck": true,
     "emitDeclarationOnly": true,

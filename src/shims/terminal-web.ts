@@ -1,5 +1,5 @@
 import { TerminalInterface } from 'shims/terminal'
-import { Key } from '../../../misc-ts'
+import { Key } from '@raycenity/misc-ts'
 
 export function createTerminalInterface (): TerminalInterface {
   const terminalDiv = document.getElementById('terminal') ?? document.createElement('div')
