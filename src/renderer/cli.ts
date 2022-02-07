@@ -309,7 +309,7 @@ export class TerminalRendererImpl extends RendererImpl<VRender, AssetCacher> {
     } else {
       return {
         lines: image,
-        width: Math.max(...image.map(stringWidth)),
+        width: Math.max(...image.map(line => stringWidth(line))),
         height: image.length
       }
     }

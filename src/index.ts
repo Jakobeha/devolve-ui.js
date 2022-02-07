@@ -1,3 +1,6 @@
 export * from 'node-agnostic'
 export * from 'core'
-export * from 'render-cjs'
+export * from 'render-esm'
+export * from 'facades/chalk'
+export * from 'facades/terminal-image'
+export * from 'facades/terminal'
