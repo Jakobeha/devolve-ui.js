@@ -11,7 +11,8 @@
     "rootDir": "src",
     "paths": {
       "*": ["./src/*"],
-      "@raycenity/misc-ts": ["../misc-ts/out/types/index.d.ts"]
+      "@raycenity/misc-ts": ["../misc-ts/out/types/index.d.ts"],
+      "@raycenity/terminal-image-min": ["../terminal-image-min/out/types/index.d.ts"]
     },
     "skipLibCheck": true,
     "emitDeclarationOnly": true,
@@ -22,6 +23,7 @@
     "isolatedModules": true
   },
   "references": [
-    { "path": "../misc-ts" }
+    { "path": "../misc-ts" },
+    { "path": "../terminal-image-min" }
   ]
 }
