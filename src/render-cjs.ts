@@ -7,21 +7,21 @@ type RenderOptions =
   TerminalRenderOptions &
   BrowserRenderOptions
 
-function throw_ (error: Error): never {
-  throw error
-}
-
 let PlatformRendererImpl: new (root: () => VNode, opts?: RenderOptions) => RendererImpl<any, any>
 /* eslint-disable no-useless-catch */
 /* eslint-disable @typescript-eslint/restrict-template-expressions */
 /* eslint-disable @typescript-eslint/no-var-requires */
 try {
-  PlatformRendererImpl =
-    PLATFORM === 'web'
-      ? require('renderer/web').BrowserRendererImpl
-      : PLATFORM === 'cli'
-        ? require('renderer/cli').TerminalRendererImpl
-        : throw_(new Error(`Unsupported platform: ${PLATFORM}`))
+  if (PLATFORM === 'web') {
+    PlatformRendererImpl = require('renderer/web').BrowserRendererImpl
+  } else if (PLATFORM === 'cli') {
+    const cliModule = require('renderer/cli')
+    cliModule.initModule({ readline: require('readline') })
+    PlatformRendererImpl = cliModule.TerminalRendererImpl
+  } else {
+    // noinspection ExceptionCaughtLocallyJS
+    throw new Error(`Unsupported platform: ${PLATFORM}`)
+  }
 } catch (error) {
   // Try block is needed to suppress esbuild warning
   throw error

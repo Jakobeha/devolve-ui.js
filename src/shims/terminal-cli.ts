@@ -1,7 +1,11 @@
 import { TerminalInterface } from 'shims/terminal'
-import * as readline from 'readline'
-import * as process from 'process'
 import { Key } from '@raycenity/misc-ts'
+
+let readline: typeof import('readline')
+
+export function initModule (imports: { readline: typeof import('readline') }): void {
+  readline = imports.readline
+}
 
 export function createTerminalInterface (): TerminalInterface {
   // Allow keypress events

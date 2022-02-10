@@ -12,7 +12,10 @@ const PlatformRendererImpl: new (root: () => VNode, opts?: RenderOptions) => Ren
   PLATFORM === 'web'
     ? import('renderer/web').then(module => module.BrowserRendererImpl)
     : PLATFORM === 'cli'
-      ? import('renderer/cli').then(module => module.TerminalRendererImpl)
+      ? Promise.all([import('renderer/cli'), import('readline')]).then(([module, readline]) => {
+        module.initModule({ readline })
+        return module.TerminalRendererImpl
+      })
       : Promise.reject(new Error(`Unsupported platform: ${PLATFORM}`))
 )
 /* eslint-enable @typescript-eslint/restrict-template-expressions */

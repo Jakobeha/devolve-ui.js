@@ -1,6 +1,5 @@
-import { createInterface, emitKeypressEvents, Interface } from 'readline'
-import { ReadStream, WriteStream } from 'tty'
-import * as process from 'process'
+import type { Interface } from 'readline'
+import type { ReadStream, WriteStream } from 'tty'
 import { VImage, VNode } from 'core/vdom'
 import stringWidth from 'string-width'
 import { CoreRenderOptions } from 'core/renderer'
@@ -8,6 +7,12 @@ import { Key, Strings } from '@raycenity/misc-ts'
 import { terminalImage } from '@raycenity/terminal-image-min'
 import { CoreAssetCacher, RendererImpl } from 'renderer/common'
 import overlay = Strings.overlay
+
+let readline: typeof import('readline')
+
+export function initModule (imports: { readline: typeof import('readline') }): void {
+  readline = imports.readline
+}
 
 interface VRender {
   lines: string[]
@@ -56,7 +61,7 @@ export class TerminalRendererImpl extends RendererImpl<VRender, AssetCacher> {
 
     input = input ?? process.stdin
     output = output ?? process.stdout
-    interact = interact ?? createInterface({ input, output, terminal: true })
+    interact = interact ?? readline.createInterface({ input, output, terminal: true })
 
     this.interact = interact
     this.input = input
@@ -64,7 +69,7 @@ export class TerminalRendererImpl extends RendererImpl<VRender, AssetCacher> {
 
     this.input.setRawMode(true)
     this.input.setEncoding('utf8')
-    emitKeypressEvents(this.input)
+    readline.emitKeypressEvents(this.input)
 
     this.finishInit(root)
   }

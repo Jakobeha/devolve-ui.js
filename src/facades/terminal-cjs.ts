@@ -1,21 +1,21 @@
 import { PLATFORM } from 'core'
 import type { TerminalInterface } from 'shims/terminal'
 
-function throw_ (error: Error): never {
-  throw error
-}
-
 export let createTerminalInterface: () => TerminalInterface
 /* eslint-disable no-useless-catch */
 /* eslint-disable @typescript-eslint/restrict-template-expressions */
 /* eslint-disable @typescript-eslint/no-var-requires */
 try {
-  createTerminalInterface =
-    PLATFORM === 'web'
-      ? require('shims/terminal-web').createTerminalInterface
-      : PLATFORM === 'cli'
-        ? require('shims/terminal-cli').createTerminalInterface
-        : throw_(new Error(`Unsupported platform: ${PLATFORM}`))
+  if (PLATFORM === 'web') {
+    createTerminalInterface = require('shims/terminal-web').createTerminalInterface
+  } else if (PLATFORM === 'cli') {
+    const module = require('shims/terminal-cli')
+    module.initModule({ readline: require('readline') })
+    createTerminalInterface = module.createTerminalInterface
+  } else {
+    // noinspection ExceptionCaughtLocallyJS
+    throw new Error(`Unsupported platform: ${PLATFORM}`)
+  }
 } catch (error) {
   // Try block is needed to suppress esbuild warning
   throw error
