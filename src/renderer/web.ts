@@ -27,7 +27,7 @@ class AssetCacher extends CoreAssetCacher {
 }
 
 export class BrowserRendererImpl extends RendererImpl<VRender, AssetCacher> {
-  static readonly EM: number = 16
+  static readonly EM: number = 24
 
   private readonly canvas: Application
 
@@ -46,6 +46,7 @@ export class BrowserRendererImpl extends RendererImpl<VRender, AssetCacher> {
       ...opts
     })
     this.em = opts.em ?? BrowserRendererImpl.EM
+    container.appendChild(this.canvas.view)
 
     this.finishInit(root)
   }
@@ -160,7 +161,8 @@ export class BrowserRendererImpl extends RendererImpl<VRender, AssetCacher> {
 
   private renderText (text: string): VRender {
     const lines = text.split('\n')
-    const width = lines.reduce((max, line) => Math.max(max, stringWidth(line)), 0)
+    const width = lines.reduce((max, line) => Math.max(max, stringWidth(line)), 0) * (this.em / 2)
+    // TODO: Process terminal escapes
     const pixi = new PIXI.Text(text, {
       fontFamily: 'monospace',
       fontSize: this.em,
@@ -170,7 +172,7 @@ export class BrowserRendererImpl extends RendererImpl<VRender, AssetCacher> {
     return {
       pixi,
       width,
-      height: lines.length
+      height: lines.length * this.em
     }
   }
 
@@ -182,7 +184,7 @@ export class BrowserRendererImpl extends RendererImpl<VRender, AssetCacher> {
       let isFirst = true
       for (const child of children) {
         if (gap !== undefined && !isFirst) {
-          width += gap * this.em
+          height += gap * this.em
         }
         isFirst = false
         const render = this.renderNodeImpl(child)
@@ -197,7 +199,7 @@ export class BrowserRendererImpl extends RendererImpl<VRender, AssetCacher> {
       let isFirst = true
       for (const child of children) {
         if (gap !== undefined && !isFirst) {
-          height += gap * this.em
+          width += gap * (this.em / 2)
         }
         isFirst = false
         const render = this.renderNodeImpl(child)
