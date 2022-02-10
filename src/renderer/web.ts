@@ -1,23 +1,27 @@
-import * as PIXI from 'pixi.js'
 import { VNode } from 'core/vdom'
 import stringWidth from 'string-width'
 import { CoreRenderOptions } from 'core/renderer'
 import { CoreAssetCacher, RendererImpl } from 'renderer/common'
 import { Key } from '@raycenity/misc-ts'
+import type { Application, Container, DisplayObject, IApplicationOptions, Sprite, Texture } from 'pixi.js'
+
+declare global {
+  const PIXI: typeof import('pixi.js')
+}
 
 interface VRender {
-  pixi: PIXI.DisplayObject | null
+  pixi: DisplayObject | null
   width: number
   height: number
 }
 
-export interface BrowserRenderOptions extends CoreRenderOptions, PIXI.IApplicationOptions {
+export interface BrowserRenderOptions extends CoreRenderOptions, IApplicationOptions {
   container?: HTMLElement
   em?: number
 }
 
 class AssetCacher extends CoreAssetCacher {
-  getImage (path: string): PIXI.Texture {
+  getImage (path: string): Texture {
     return this.get(path, PIXI.Texture.from)
   }
 }
@@ -25,7 +29,7 @@ class AssetCacher extends CoreAssetCacher {
 export class BrowserRendererImpl extends RendererImpl<VRender, AssetCacher> {
   static readonly EM: number = 16
 
-  private readonly canvas: PIXI.Application
+  private readonly canvas: Application
 
   private readonly em: number
 
@@ -170,7 +174,7 @@ export class BrowserRendererImpl extends RendererImpl<VRender, AssetCacher> {
     }
   }
 
-  private renderDivChildren (children: VNode[], renderDirection?: 'horizontal' | 'vertical' | null, gap?: number): VRender & { pixi: PIXI.Container } {
+  private renderDivChildren (children: VNode[], renderDirection?: 'horizontal' | 'vertical' | null, gap?: number): VRender & { pixi: Container } {
     const container = new PIXI.Container()
     let width = 0
     let height = 0
@@ -225,7 +229,7 @@ export class BrowserRendererImpl extends RendererImpl<VRender, AssetCacher> {
     }
   }
 
-  private renderImage (path: string): PIXI.Sprite {
+  private renderImage (path: string): Sprite {
     const image = new PIXI.Sprite(this.assets.getImage(path))
     // noinspection JSDeprecatedSymbols IntelliJ bug
     image.anchor.set(0, 0)
