@@ -25,3 +25,9 @@ export function render (root: () => VNode, opts?: RenderOptions): Renderer {
   renderer.start()
   return renderer
 }
+
+export function renderOnce (root: () => VNode, opts?: RenderOptions): void {
+  const renderer = new PlatformRendererImpl(root, opts)
+  renderer.rerender()
+  renderer.dispose()
+}

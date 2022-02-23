@@ -1,7 +1,6 @@
 import type { Interface } from 'readline'
 import type { ReadStream, WriteStream } from 'tty'
 import { VImage, VNode } from 'core/vdom'
-import stringWidth from 'string-width'
 import { CoreRenderOptions } from 'core/renderer'
 import { Key, Strings } from '@raycenity/misc-ts'
 import { terminalImage } from '@raycenity/terminal-image-min'
@@ -148,7 +147,7 @@ export class TerminalRendererImpl extends RendererImpl<VRender, AssetCacher> {
         if (children.width > width) {
           for (let y = 0; y < children.height; y++) {
             let line = lines[y]
-            while (stringWidth(line) > width) {
+            while (Strings.width(line) > width) {
               line = line.substring(0, line.length - 1)
             }
             lines[y] = line
@@ -234,7 +233,7 @@ export class TerminalRendererImpl extends RendererImpl<VRender, AssetCacher> {
 
   private renderText (text: string): VRender {
     const lines = text.split('\n')
-    const width = lines.reduce((max, line) => Math.max(max, stringWidth(line)), 0)
+    const width = lines.reduce((max, line) => Math.max(max, Strings.width(line)), 0)
     resizeLines(lines, width)
     return {
       lines,
@@ -314,7 +313,7 @@ export class TerminalRendererImpl extends RendererImpl<VRender, AssetCacher> {
     } else {
       return {
         lines: image,
-        width: Math.max(...image.map(line => stringWidth(line))),
+        width: Math.max(...image.map(line => Strings.width(line))),
         height: image.length
       }
     }
@@ -357,7 +356,7 @@ export class TerminalRendererImpl extends RendererImpl<VRender, AssetCacher> {
 function resizeLines (lines: string[], width: number): void {
   for (let y = 0; y < lines.length; y++) {
     const line = lines[y]
-    const difference = width - stringWidth(line)
+    const difference = width - Strings.width(line)
     if (difference > 0) {
       lines[y] = line + ' '.repeat(difference)
     }

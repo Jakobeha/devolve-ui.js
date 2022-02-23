@@ -48,6 +48,6 @@
   "dependencies": {
     "@raycenity/misc-ts": "link:../misc-ts",
     "@raycenity/terminal-image-min": "link:../terminal-image-min",
-    "string-width": "^5.0.1"
+    "node-ansiparser": "^2.2.0"
   }
 }
