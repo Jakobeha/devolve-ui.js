@@ -1,18 +1,69 @@
 [![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
 
-# devolve-ui: fast JSX-based UI for browser (pixi.js) and terminal
+# devolve-ui: super simple reactive graphics for browser *and* terminal
 
-**Live demos: standalone @ WIP, with CGE @ [https://cge.raycenity.net/examples/](https://cge.raycenity.net/examples/)**
+devolve-ui is a super simple graphics library for games, canvas-based websites, TUIs, and JavaScript applications, which can deploy to both browser *and* terminal.
 
-Devolve-ui is a minimal UI and graphics engine for writing UI that works both in browser and on a terminal as a TUI. You can extend the browser UI with the full power of pixi.js to add effects that aren't rendered in the terminal. The terminal enables you to do fast debugging and testing, and also provides another build target.
+**Live demos: standalone @ [demos/index.html](demos/index.html), with CGE @ [https://cge.raycenity.net/demos/](https://cge.raycenity.net/demos/)**
 
-Projects built with devolve-ui automatically run both on browser and node, with the platform detected at runtime and any platform-specific imports done dynamically. If you need to use platform-specific functionality, do so through one of the devolve-ui wrappers and provide a fallback for the other platform.
+```tsx
+// demos/readme.tsx
+import { DevolveUI, useState, useTimeout } from '@raycenity/devolve-ui'
 
-The goal of devolve-ui is to make writing UI much easier and faster to debug. The idea is that the core functionality of UI is very simple, and we separate that from the extra effects, animations, etc. devolve-ui also encourages loose coupling since effects are modular instead of being "mixed in" with the actual core UI.
+const App = ({ name }) => {
+  const [counter, setCounter] = useState(0)
+  useTimeout(() => {
+    setCounter(counter() + 1)
+  }, 1000)
 
-Another use case of devolve-ui is that its applications can be run almost anywhere. Most devices have either a web-browser and a terminal. Futhermore the terminal UI might be a lot faster because it does not have to render extra effects.
+  return (
+    <vbox sublayout={{ padding: 1, gap: 1 }}>
+      <hbox sublayout={{ paddingX: 1, align: 'justify' }}>
+        <text>Hello {name}</text>
+        <text>{counter} seconds</text>
+      </hbox>
+      <graphic src='dog.png' bounds={Bounds({ width: '100%', height: 'auto' })} />
+    </vbox>
+  )
+}
 
-Devolve-ui allows you to write graphics using JSX and react-like hooks. It also provides a simple API for creating browser-specific effects and animations (WIP).
+new DevolveUI(<App name='devolve-ui' />).start()
+
+// Works in node or browser (with additional pixi.js script)
+```
+
+## Cross-platform
+
+devolve-ui is *cross-platform* (isomorphic): a devolve-ui application may run in both web browsers and terminals (via node.js). When the application is run in the terminal, graphics are much simpler and certain effects and animations are removed, hence the name "devolve"-ui.
+
+When a devolve-ui application is run in the web browser, it uses pixi.js for rendering.
+
+## Super simple
+
+devolve-ui uses JSX and React-style **components**: you write your UI declaratively and use hooks (useState, useEffect, useLazy, useInput) for local state and side-effects. Your UI is literally a function which takes the global state, and returns a render your application.
+
+devolve-ui components return **nodes**, which make up the "virtual DOM" or "HTML" of your scene. Unlike real HTML there are 3 kinds of nodes: box, text, and graphic. Boxes contain children and define your layout, text contains styled (e.g. bold, colored) text, and graphics are solid backgrounds, gradients, images, videos, and custom pixi elements.
+
+Every devolve-ui node has **bounds**, which define its position, size, and z-position (nodes with higher z-positions are rendered on top of nodes with lower z-positions). You create bounds using the function `Bounds`, e.g. `Bounds({ left: '32em', centerY: '50%', width: '250px' })`. The bounds system is very flexibld, so you can define custom layouts (see the section in [Implementation](#Bounds)).
+
+### Implementation
+
+devolve-ui has minimal dependencies and is lightweight relative to React. It is open source so you can [read the code  m yourself](https://github.com/Jakobeha/devolve-ui/tree/master/src)
+
+#### Rendering
+
+A component is essentially a function which takes the component's props and children and returns a node.
+
+When the scene re-renders, devolve-ui calls each component function to reconstruct the nodes, reusing child components by matching them via their keys and function names, and preserving each component's state through hooks (which  are bound to the component).
+
+Next, devolve-ui calculates each node's absolute bounding box by calling its `bounds`, using the parent node or scene's bounding box and sublayout. devolve-ui uses the position and x-position to determine the order it renders the nodes, and uses the size to affect how the node itself renders (wrapping text, scaling graphics).
+
+Finally, devolve-ui draws each node onto the scene: in Terminal devolve-ui clears the display buffer and prints each node, in pixi.js it removes all DisplayObjects from the scene and re-adds them.
+
+#### Bounds
+
+Internally, every `bounds` value is actually by a function which takes the parent node's bounding
+box and sublayout, and returns the node's absolute bounding box. This means that nodes can have absolute positions or z-positions regardless of their parents,  offsets and sizes which are percentages of the parents' size, margins, padding, gaps, and even completely custom layouts. In practice, you always create bounds using the `Bounds` function.
 
 ## Installing
 

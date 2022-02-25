@@ -1,6 +1,4 @@
-export * from 'core/elements'
+export * from 'core/vdom'
 export * from 'core/hooks'
 export * from 'core/platform'
-export * from 'core/react-adapter'
 export * from 'core/renderer'
-export type { VNode, VJSX, VBox, VText, VImage } from 'core/vdom'

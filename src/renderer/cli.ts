@@ -1,11 +1,10 @@
 import type { Interface } from 'readline'
 import type { ReadStream, WriteStream } from 'tty'
-import { VImage, VNode } from 'core/vdom'
+import { BoundingBox, LCHColor, VNode } from 'core/vdom'
 import { CoreRenderOptions } from 'core/renderer'
 import { Key, Strings } from '@raycenity/misc-ts'
 import { terminalImage } from '@raycenity/terminal-image-min'
-import { CoreAssetCacher, RendererImpl } from 'renderer/common'
-import overlay = Strings.overlay
+import { CoreAssetCacher, RendererImpl, VRenderBatch } from 'renderer/common'
 
 let readline: typeof import('readline')
 
@@ -13,11 +12,7 @@ export function initModule (imports: { readline: typeof import('readline') }): v
   readline = imports.readline
 }
 
-interface VRender {
-  lines: string[]
-  width: number
-  height: number
-}
+type VRender = (string | null)[][]
 
 export interface TerminalRenderOptions extends CoreRenderOptions {
   input?: ReadStream
@@ -81,242 +76,136 @@ export class TerminalRendererImpl extends RendererImpl<VRender, AssetCacher> {
     }
   }
 
-  protected override writeRender (render: VRender): void {
-    for (const line of render.lines) {
-      this.output.write(line)
+  protected override writeRender (render: VRenderBatch<VRender>): void {
+    const lines = VRender.collapse(render)
+    for (const line of lines) {
+      for (const char of line) {
+        this.output.write(char)
+      }
       this.output.write('\n')
     }
-    this.linesOutput += render.lines.length
+    this.linesOutput += lines.length
   }
 
-  protected override renderNodeImpl (node: VNode): VRender {
-    if (VNode.isText(node)) {
-      return this.renderText(node.text)
-    } else if (VNode.isBox(node)) {
-      const {
-        visible,
-        direction,
-        gap,
-        width,
-        height,
-        marginLeft,
-        marginTop,
-        marginRight,
-        marginBottom,
-        paddingLeft,
-        paddingTop,
-        paddingRight,
-        paddingBottom
-      } = node.box
-      if (visible === false) {
-        return {
-          lines: [],
-          width: 0,
-          height: 0
-        }
-      }
-
-      // Render children
-      const children = this.renderBoxChildren(node.children, direction, gap)
-      const lines = children.lines
-
-      // Add padding
-      if (paddingLeft !== undefined) {
-        for (let y = 0; y < lines.length; y++) {
-          lines[y] = ' '.repeat(paddingLeft) + lines[y]
-        }
-      }
-      if (paddingTop !== undefined) {
-        for (let y = 0; y < paddingTop; y++) {
-          lines.unshift(' '.repeat(children.width))
-        }
-      }
-      if (paddingRight !== undefined) {
-        for (let y = 0; y < lines.length; y++) {
-          lines[y] = lines[y] + ' '.repeat(paddingRight)
-        }
-      }
-      if (paddingBottom !== undefined) {
-        for (let y = 0; y < paddingBottom; y++) {
-          lines.push(' '.repeat(children.width))
-        }
-      }
-
-      // Add empty space or clip to get correct size
-      if (width !== undefined) {
-        if (children.width > width) {
-          for (let y = 0; y < children.height; y++) {
-            let line = lines[y]
-            while (Strings.width(line) > width) {
-              line = line.substring(0, line.length - 1)
-            }
-            lines[y] = line
-          }
-        } else if (children.width < width) {
-          resizeLines(lines, width)
-        }
-      }
-      if (height !== undefined) {
-        if (children.height > height) {
-          lines.splice(height, children.height - height)
-        } else {
-          for (let y = children.height; y < height; y++) {
-            lines.push(' '.repeat(width ?? children.width))
-          }
-        }
-      }
-
-      // Add margin
-      if (marginRight !== undefined) {
-        for (let y = 0; y < lines.length; y++) {
-          lines[y] = lines[y] + ' '.repeat(marginRight)
-        }
-      }
-      if (marginBottom !== undefined) {
-        for (let y = 0; y < marginBottom; y++) {
-          lines.push(' '.repeat(width ?? children.width))
-        }
-      }
-      if (marginLeft !== undefined) {
-        for (let y = 0; y < lines.length; y++) {
-          lines[y] = ' '.repeat(marginLeft) + lines[y]
-        }
-      }
-      if (marginTop !== undefined) {
-        for (let y = 0; y < marginTop; y++) {
-          lines.unshift(' '.repeat(width ?? children.width))
-        }
-      }
-
-      return {
-        lines,
-        width: (width ?? (children.width + (paddingLeft ?? 0) + (paddingRight ?? 0))) + (marginLeft ?? 0) + (marginRight ?? 0),
-        height: (height ?? (children.height + (paddingTop ?? 0) + (paddingBottom ?? 0))) + (marginTop ?? 0) + (marginBottom ?? 0)
-      }
-    } else if (VNode.isImage(node)) {
-      const {
-        visible,
-        width,
-        height
-      } = node.image
-      if (visible === false) {
-        return {
-          lines: [],
-          width: 0,
-          height: 0
-        }
-      }
-
-      const image = this.renderImage(node)
-      if (width !== undefined) {
-        resizeLines(image.lines, width)
-      }
-      if (height !== undefined) {
-        if (image.height > height) {
-          image.lines.splice(height, image.height - height)
-        } else {
-          for (let y = image.height; y < height; y++) {
-            image.lines.push(' '.repeat(image.width))
-          }
-        }
-      }
-
-      return {
-        lines: image.lines,
-        width: width ?? image.width,
-        height: height ?? image.height
-      }
-    } else {
-      throw new Error('Unhandled node type')
-    }
-  }
-
-  private renderText (text: string): VRender {
-    const lines = text.split('\n')
-    const width = lines.reduce((max, line) => Math.max(max, Strings.width(line)), 0)
-    resizeLines(lines, width)
+  protected override getRootBoundingBox (): BoundingBox {
     return {
-      lines,
-      width,
-      height: lines.length
-    }
+      x: 0,
+      y: 0,
+      z: 0,
+      anchorX: 0,
+      anchorY: 0,
+      width: this.output.columns,
+      height: this.output.rows
+   }
   }
 
-  private renderBoxChildren (children: VNode[], renderDirection?: 'horizontal' | 'vertical' | null, gap?: number): VRender {
-    if (renderDirection === 'vertical') {
-      const lines: string[] = []
-      let width = 0
-      let height = 0
-      let isFirst = true
-      for (const child of children) {
-        if (gap !== undefined && !isFirst) {
-          for (let y = 0; y < gap; y++) {
-            lines.push(' '.repeat(width))
+  protected override renderText (bounds: BoundingBox, wrap: 'word' | 'char' | 'clip' | undefined, text: string | string[]): VRender {
+    const width = bounds.width ?? Infinity
+    const height = bounds.height ?? Infinity
+    const input = Array.isArray(text) ? text : text.split('\n')
+
+    const result: VRender = []
+    // all lines start with an empty character, for zero-width characters to be outside on overlap
+    let nextOutLine: string[] = ['']
+    let nextOutLineWidth = 0
+    outer: for (const line of input) {
+      const chars = [...line]
+      let nextWord: string[] = []
+      let nextWordWidth = 0
+      for (const char of chars) {
+        const charWidth = Strings.width(char)
+        if (wrap === 'word' && /^\w$/.test(char)) {
+          // add to word
+          // width will never be 0
+          nextWord.push(char)
+          for (let i = 1; i < charWidth; i++) {
+            nextWord.push('')
+          }
+          nextWordWidth += charWidth
+        } else {
+          if (nextWord.length > 0) {
+            // wrap line if necessary and add word
+            if (nextOutLineWidth + nextWordWidth > width) {
+              // nextWord.length > 0 implies wrap === 'word'
+              // so wrap line
+              if (result.length === height) {
+                // no more room
+                break outer
+              }
+              result.push(nextOutLine)
+              nextOutLine = []
+              nextOutLineWidth = 0
+            }
+
+            // add word
+            nextOutLine.push(...nextWord)
+            nextOutLineWidth += nextWordWidth
+            nextWord = []
+            nextWordWidth = 0
+          }
+
+          if (charWidth === 0) {
+            // zero-width char, so we add it to the last character so it's outside on overlap
+            nextOutLine[nextOutLine.length - 1] += char
+          } else {
+            // wrap if necessary and add char
+            if (nextOutLineWidth + charWidth > width) {
+              switch (wrap) {
+                case 'word':
+                case 'char':
+                  if (result.length === height) {
+                    // no more room
+                    break outer
+                  }
+                  result.push(nextOutLine)
+                  nextOutLine = []
+                  nextOutLineWidth = 0
+                  break
+                case 'clip':
+                  // This breaks out of the switch and contiues the for loop, avoiding nextOutLine.push(char); ...
+                  // (don't think too hard about it)
+                  continue
+                case undefined:
+                  console.warn('text extended past width but wrap is undefined')
+                  break
+              }
+            }
+
+            // add char
+            nextOutLine.push(char)
+            for (let i = 1; i < charWidth; i++) {
+              nextOutLine.push('')
+            }
+            nextOutLineWidth += charWidth
           }
         }
-        isFirst = false
-        const render = this.renderNodeImpl(child)
-        lines.push(...render.lines)
-        width = Math.max(width, render.width)
-        height += render.height
-      }
-      resizeLines(lines, width)
-      return { lines, width, height }
-    } else if (renderDirection === 'horizontal') {
-      const lines: string[] = []
-      let width = 0
-      let height = 0
-      let isFirst = true
-      for (const child of children) {
-        if (gap !== undefined && !isFirst) {
-          width += gap
-          for (let y = 0; y < lines.length; y++) {
-            lines[y] = lines[y] + ' '.repeat(gap)
-          }
-        }
-        isFirst = false
-        const render = this.renderNodeImpl(child)
-        while (lines.length < render.lines.length) {
-          lines.push(' '.repeat(width))
-        }
-        for (let y = 0; y < render.lines.length; y++) {
-          const line = lines[y]
-          const renderedLine = render.lines[y]
-          lines[y] = line + renderedLine
-        }
-        width += render.width
-        height = Math.max(height, render.height)
-        resizeLines(lines, width)
-      }
-      return { lines, width, height }
-    } else {
-      if (gap !== undefined) {
-        throw new Error('Gap is not supported for overlay (default) direction')
-      }
-      const childRenders = children.map(child => this.renderNodeImpl(child))
-      return {
-        lines: overlay(...childRenders.map(render => render.lines)),
-        width: Math.max(0, ...childRenders.map(render => render.width)),
-        height: Math.max(0, ...childRenders.map(render => render.height))
       }
     }
+
+    VRender.translate(bounds, result)
+    return result
   }
 
-  private renderImage (node: VImage, width?: number, height?: number): VRender {
-    const path = node.path
-    const [image, resolveCallback] = this.assets.getImage(path, width, height)
+  protected override renderSolidColor (bounds: BoundingBox, color: LCHColor): VRender {
+    // TODO
+    return []
+  }
+
+  protected override renderImage (bounds: BoundingBox, src: string, node: VNode): VRender {
+    const [image, resolveCallback] = this.assets.getImage(src, bounds.width, bounds.height)
     if (image === undefined) {
-      throw new Error(`Image not found: ${path}`)
+      throw new Error(`Could not get image for some unknown reason: ${src}`)
     } else if (image === null) {
       resolveCallback(() => this.setNeedsRerender(node))
-      return this.renderText('Loading...')
+      return this.renderText(bounds, 'clip', '...')
     } else {
-      return {
-        lines: image,
-        width: Math.max(...image.map(line => Strings.width(line))),
-        height: image.length
-      }
+      return this.renderText(bounds, 'clip', image)
     }
+  }
+
+  protected override renderVectorImage (bounds: BoundingBox, src: string): VRender {
+    // Don't render these in terminal
+    return []
   }
 
   override useInput (handler: (key: Key) => void): () => void {
@@ -353,12 +242,61 @@ export class TerminalRendererImpl extends RendererImpl<VRender, AssetCacher> {
   }
 }
 
-function resizeLines (lines: string[], width: number): void {
-  for (let y = 0; y < lines.length; y++) {
-    const line = lines[y]
-    const difference = width - Strings.width(line)
-    if (difference > 0) {
-      lines[y] = line + ' '.repeat(difference)
+module VRender {
+  export function translate (bounds: BoundingBox, vrender: VRender): void {
+    const width = bounds.width ?? getWidth(vrender)
+    const height = bounds.height ?? getHeight(vrender)
+
+    const xOffset = Math.round(bounds.x + (bounds.anchorX * width))
+    const yOffset = Math.round(bounds.y + (bounds.anchorY * height))
+
+    for (const line of vrender) {
+      if (line.length > 0) {
+        line[0] = ' ' + line[0]
+        for (let x = 1; x < xOffset; x++) {
+          line.unshift(' ')
+        }
+        line.unshift('')
+      }
     }
+    for (let y = 0; y < yOffset; y++) {
+      vrender.unshift([])
+    }
+  }
+
+  export function collapse (textMatrix: Record<number, VRender>): string[][] {
+    const width = Math.max(...Object.values(textMatrix).map(getWidth))
+    const height = Math.max(...Object.values(textMatrix).map(getHeight))
+    const matrixSorted = Object.entries(textMatrix).sort(([lhs], [rhs]) => Number(lhs) - Number(rhs)).map(([, lines]) => lines)
+
+    const result: (string | null)[][] = Array(height).fill(Array(width).fill(null))
+    for (const lines of matrixSorted) {
+      for (let y = 0; y < lines.length; y++) {
+        const line = lines[y]
+        const resultLine = result[y]
+        for (let x = 0; x < line.length; x++) {
+          if (resultLine[x] === null) {
+            resultLine[x] = line[x]
+          }
+        }
+      }
+    }
+    for (let y = 0; y < result.length; y++) {
+      const line = result[y]
+      for (let x = 0; x < line.length; x++) {
+        if (line[x] === null) {
+          line[x] = ' '
+        }
+      }
+    }
+    return result as string[][]
+  }
+
+  function getWidth (vrender: VRender): number {
+    return Math.max(...vrender.map(line => line.map(char => char === null ? 1 : Strings.width(char)).reduce((lhs, rhs) => lhs + rhs, 0)))
+  }
+
+  function getHeight (vrender: VRender): number {
+    return vrender.length
   }
 }

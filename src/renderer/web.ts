@@ -1,4 +1,4 @@
-import { VNode } from 'core/vdom'
+import { VNode } from 'core/vdom/node'
 import { CoreRenderOptions } from 'core/renderer'
 import { CoreAssetCacher, RendererImpl } from 'renderer/common'
 import { Key, Strings } from '@raycenity/misc-ts'
@@ -127,7 +127,7 @@ export class BrowserRendererImpl extends RendererImpl<VRender, AssetCacher> {
         width: (width ?? (children.width + (paddingLeft ?? 0) + (paddingRight ?? 0))) + (marginLeft ?? 0) + (marginRight ?? 0),
         height: (height ?? (children.height + (paddingTop ?? 0) + (paddingBottom ?? 0))) + (marginTop ?? 0) + (marginBottom ?? 0)
       }
-    } else if (VNode.isImage(node)) {
+    } else if (VNode.isGraphic(node)) {
       const {
         visible,
         width,

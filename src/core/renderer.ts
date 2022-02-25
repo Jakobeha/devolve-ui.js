@@ -1,4 +1,4 @@
-import { VNode } from 'core/vdom'
+import { VNode } from 'core/vdom/node'
 
 export interface Renderer {
   reroot: (root: () => VNode) => void
