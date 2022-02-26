@@ -1,6 +1,7 @@
-import { ColorAttrs, JSXBoxAttrs, SourceAttrs, TextAttrs } from 'core/vdom/attrs'
+import { CommonAttrs, JSXBoxAttrs, JSXColorAttrs, JSXSourceAttrs, JSXTextAttrs } from 'core/vdom/attrs'
+import { Bounds, BoundsSpec, SubLayout } from 'core/vdom/bounds'
 import { VBox, VColor, VNode, VSource, VText } from 'core/vdom/node'
-import { IntoArray } from '@raycenity/misc-ts'
+import { ExplicitPartial, IntoArray } from '@raycenity/misc-ts'
 
 export type JSX =
   VNode |
@@ -24,9 +25,9 @@ export interface JSXIntrinsics {
   hbox: Omit<JSXBoxAttrs, 'direction'> & { children?: JSX[] }
   vbox: Omit<JSXBoxAttrs, 'direction'> & { children?: JSX[] }
   box: JSXBoxAttrs & { children?: JSX[] }
-  text: TextAttrs & { children?: string | string[] }
-  color: ColorAttrs & { children?: [] }
-  source: SourceAttrs & { children?: [] }
+  text: JSXTextAttrs & { children?: string | string[] }
+  color: JSXColorAttrs & { children?: [] }
+  source: JSXSourceAttrs & { children?: [] }
 }
 
 export const intrinsics: {
@@ -37,15 +38,19 @@ export const intrinsics: {
   vbox: (props: Omit<JSXBoxAttrs, 'direction'>, ...children: JSX[]): VNode =>
     intrinsics.box({ ...props, direction: 'vertical' }, ...children),
   box: (props: JSXBoxAttrs, ...children: JSX[]): VNode => {
-    const { bounds, visible, key } = props
-    delete props.bounds
-    delete props.visible
-    delete props.key
-    // props becomes sublayout, since the rest of the props are sublayout
+    const { visible, key, bounds, direction, gap, custom, ...attrs } = jsxToNormalAttrs(props)
+    const sublayout: ExplicitPartial<SubLayout> = { direction, gap, custom }
 
-    return VBox(JSX.collapse(children), { bounds, visible, key, sublayout: props })
+    return VBox(JSX.collapse(children), { bounds, visible, key, sublayout, ...attrs })
   },
-  text: (props: TextAttrs, ...text: string[]): VNode => VText(text.join(''), props),
-  color: (props: ColorAttrs): VNode => VColor(props),
-  source: (props: SourceAttrs): VNode => VSource(props)
+  text: (props: JSXTextAttrs, ...text: string[]): VNode => VText(text.join(''), jsxToNormalAttrs(props)),
+  color: (props: JSXColorAttrs): VNode => VColor(jsxToNormalAttrs(props)),
+  source: (props: JSXSourceAttrs): VNode => VSource(jsxToNormalAttrs(props))
+}
+
+function jsxToNormalAttrs<T extends CommonAttrs> (jsxAttrs: T & BoundsSpec): Omit<T & BoundsSpec, 'bounds' | keyof BoundsSpec> & { bounds: Bounds } {
+  const { x, y, z, anchorX, anchorY, width, height, bounds: explicitBounds, ...attrs } = jsxAttrs
+  const bounds = explicitBounds ?? Bounds({ x, y, z, anchorX, anchorY, width, height })
+  // @ts-expect-error this really should not be an error
+  return { bounds, ...attrs }
 }

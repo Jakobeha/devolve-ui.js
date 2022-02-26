@@ -36,7 +36,7 @@ export abstract class DevolveUICore<Props extends RootProps<MessageKeys, PromptK
     this.instance = this.mkRenderer(() => VComponent('RootComponent', () => RootComponent(this.props)), opts)
   }
 
-  setMessage<Key extends MessageKeys> (key: Key, message: Props['messages'][Key]): void {
+  message<Key extends MessageKeys> (key: Key, message: Props['messages'][Key]): void {
     this.props.messages[key] = message
     this.instance.reroot()
   }

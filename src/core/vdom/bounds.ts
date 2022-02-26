@@ -1,9 +1,8 @@
 export type LayoutDirection = 'horizontal' | 'vertical' | 'overlap'
 
 export type Measurement =
-  '0' |
+  number |
   `${number}px` |
-  `${number}em` |
   `${number}%`
 
 export type LayoutPosition1D =
@@ -50,14 +49,13 @@ export interface FullBoundsSpec {
   height?: Measurement
 }
 
-export type BoundsSpec =
-  FullBoundsSpec
+export type BoundsSpec = FullBoundsSpec
 
 export function Bounds (spec: BoundsSpec): Bounds {
   if ('layout' in spec && 'x' in spec && 'y' in spec && 'z' in spec && 'anchorX' in spec && 'anchorY' in spec && 'width' in spec && 'height' in spec) {
     return (parent, prevSibling) => ({
-      x: applyLayoutX(parent, prevSibling, spec.layout ?? 'relative', reifyX(parent, spec.x ?? '0')),
-      y: applyLayoutY(parent, prevSibling, spec.layout ?? 'relative', reifyY(parent, spec.y ?? '0')),
+      x: applyLayoutX(parent, prevSibling, spec.layout ?? 'relative', reifyX(parent, spec.x ?? 0)),
+      y: applyLayoutY(parent, prevSibling, spec.layout ?? 'relative', reifyY(parent, spec.y ?? 0)),
       z: spec.z ?? parent.boundingBox.z + Bounds.BOX_Z,
       anchorX: spec.anchorX ?? 0,
       anchorY: spec.anchorY ?? 0,
@@ -70,34 +68,30 @@ export function Bounds (spec: BoundsSpec): Bounds {
 }
 
 function reifyX (parent: ParentBounds, x: Measurement): number {
-  if (x.endsWith('%')) {
+  if (typeof x === 'number') {
+    return x
+  } else if (x.endsWith('%')) {
     if (parent.boundingBox.width === undefined) {
       throw new Error(`cannot reify percent ${x} because parent width is unknown`)
     }
     return (parent.boundingBox.width * parseFloat(x) / 100)
-  } else if (x.endsWith('em')) {
-    return parseFloat(x)
   } else if (x.endsWith('px')) {
     return parseFloat(x) / parent.columnSize.width
-  } else if (x === '0') {
-    return 0
   } else {
     throw new Error(`invalid measurement: ${x}`)
   }
 }
 
 function reifyY (parent: ParentBounds, y: Measurement): number {
-  if (y.endsWith('%')) {
+  if (typeof y === 'number') {
+    return y
+  } else if (y.endsWith('%')) {
     if (parent.boundingBox.height === undefined) {
       throw new Error(`cannot reify percent ${y} because parent height is unknown`)
     }
     return (parent.boundingBox.height * parseFloat(y) / 100)
-  } else if (y.endsWith('em')) {
-    return parseFloat(y)
   } else if (y.endsWith('px')) {
     return parseFloat(y) / parent.columnSize.height
-  } else if (y === '0') {
-    return 0
   } else {
     throw new Error(`invalid measurement: ${y}`)
   }

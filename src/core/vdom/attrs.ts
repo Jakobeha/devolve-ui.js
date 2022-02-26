@@ -1,4 +1,4 @@
-import { Bounds, SubLayout } from 'core/vdom/bounds'
+import { Bounds, BoundsSpec, SubLayout } from 'core/vdom/bounds'
 import { LCHColor } from 'core/vdom/color'
 
 export interface CommonAttrs {
@@ -23,4 +23,7 @@ export interface SourceAttrs extends CommonAttrs {
   src: string
 }
 
-export type JSXBoxAttrs = Omit<BoxAttrs, 'sublayout'> & SubLayout
+export type JSXTextAttrs = TextAttrs & BoundsSpec
+export type JSXBoxAttrs = Omit<BoxAttrs, 'sublayout'> & BoundsSpec & SubLayout
+export type JSXColorAttrs = ColorAttrs & BoundsSpec
+export type JSXSourceAttrs = SourceAttrs & BoundsSpec
