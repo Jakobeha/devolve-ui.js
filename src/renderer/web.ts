@@ -1,19 +1,15 @@
-import { VNode } from 'core/vdom/node'
+import { BoundingBox, LCHColor, VNode } from 'core/vdom'
 import { CoreRenderOptions } from 'core/renderer'
-import { CoreAssetCacher, RendererImpl } from 'renderer/common'
+import { CoreAssetCacher, RendererImpl, VRenderBatch } from 'renderer/common'
 import { Key, Strings } from '@raycenity/misc-ts'
-import type { Application, Container, DisplayObject, IApplicationOptions, ITextStyle, Sprite, Texture } from 'pixi.js'
+import type { Application, Container, DisplayObject, IApplicationOptions, ITextStyle, Texture } from 'pixi.js'
 import AnsiParser from 'node-ansiparser'
 
 declare global {
   const PIXI: typeof import('pixi.js')
 }
 
-interface VRender {
-  pixi: DisplayObject | null
-  width: number
-  height: number
-}
+type VRender = DisplayObject
 
 export interface BrowserRenderOptions extends CoreRenderOptions, IApplicationOptions {
   container?: HTMLElement
@@ -27,11 +23,9 @@ class AssetCacher extends CoreAssetCacher {
 }
 
 export class BrowserRendererImpl extends RendererImpl<VRender, AssetCacher> {
-  static readonly EM: number = 24
-
   private readonly canvas: Application
 
-  private readonly em: number
+  private readonly em: number | null
 
   constructor (root: () => VNode, opts: BrowserRenderOptions = {}) {
     super(new AssetCacher(), opts)
@@ -45,7 +39,7 @@ export class BrowserRendererImpl extends RendererImpl<VRender, AssetCacher> {
       resolution: 1,
       ...opts
     })
-    this.em = opts.em ?? BrowserRendererImpl.EM
+    this.em = opts.em ?? null
     container.appendChild(this.canvas.view)
 
     this.finishInit(root)
@@ -55,182 +49,54 @@ export class BrowserRendererImpl extends RendererImpl<VRender, AssetCacher> {
     this.canvas.stage.removeChildren()
   }
 
-  protected override writeRender (render: VRender): void {
-    if (render.pixi !== null) {
-      this.canvas.stage.addChild(render.pixi)
-    }
+  protected override writeRender (render: VRenderBatch<VRender>): void {
+    const collapsed = Object.entries(render).sort(([lhs], [rhs]) => Number(lhs) - Number(rhs)).map(([, v]) => v)
+    this.canvas.stage.addChild(...collapsed)
   }
 
-  protected override renderNodeImpl (node: VNode): VRender {
-    if (VNode.isText(node)) {
-      return this.renderText(node.text)
-    } else if (VNode.isBox(node)) {
-      const {
-        visible,
-        direction,
-        gap,
-        width,
-        height,
-        marginLeft,
-        marginTop,
-        marginRight,
-        marginBottom,
-        paddingLeft,
-        paddingTop,
-        paddingRight,
-        paddingBottom
-      } = node.box
-      if (visible === false) {
-        return {
-          pixi: null,
-          width: 0,
-          height: 0
+  protected override getRootDimensions (): {
+    boundingBox: BoundingBox
+    columnSize?: { width: number, height: number }
+  } {
+    const columnSize = this.em !== null
+      ? {
+          width: this.em / 2,
+          height: this.em
         }
-      }
-
-      // Render children
-      const children = this.renderDivChildren(node.children, direction, gap)
-      const pixi = children.pixi
-
-      // Add padding
-      if (paddingLeft !== undefined) {
-        pixi.x += paddingLeft
-      }
-      if (paddingTop !== undefined) {
-        pixi.y += paddingTop
-      }
-
-      // Clip to get correct size
-      if (width !== undefined) {
-        const childWidth = width - (paddingLeft ?? 0) - (paddingRight ?? 0)
-        if (children.width > childWidth) {
-          pixi.width = childWidth
-        }
-      }
-      if (height !== undefined) {
-        const childHeight = height - (paddingTop ?? 0) - (paddingBottom ?? 0)
-        if (children.height > childHeight) {
-          pixi.height = childHeight
-        }
-      }
-
-      // Add margin
-      if (marginLeft !== undefined) {
-        pixi.x += marginLeft
-      }
-      if (marginTop !== undefined) {
-        pixi.y += marginTop
-      }
-
-      return {
-        pixi,
-        width: (width ?? (children.width + (paddingLeft ?? 0) + (paddingRight ?? 0))) + (marginLeft ?? 0) + (marginRight ?? 0),
-        height: (height ?? (children.height + (paddingTop ?? 0) + (paddingBottom ?? 0))) + (marginTop ?? 0) + (marginBottom ?? 0)
-      }
-    } else if (VNode.isGraphic(node)) {
-      const {
-        visible,
-        width,
-        height
-      } = node.image
-      if (visible === false) {
-        return {
-          pixi: null,
-          width: 0,
-          height: 0
-        }
-      }
-      const image = this.renderImage(node.path)
-
-      if (width !== undefined) {
-        image.width = width
-      }
-      if (height !== undefined) {
-        image.height = height
-      }
-
-      return {
-        pixi: image,
-        width: width ?? image.width,
-        height: height ?? image.height
-      }
-    } else {
-      throw new Error('Unhandled node type')
-    }
-  }
-
-  private renderText (text: string): VRender {
-    const lines = text.split('\n')
-    const width = lines.reduce((max, line) => Math.max(max, Strings.width(line)), 0) * (this.em / 2)
-    // TODO: Process terminal escapes
-    const pixi = styledPixiText(text, this.em)
+      : RendererImpl.DEFAULT_COLUMN_SIZE
     return {
-      pixi,
-      width,
-      height: lines.length * this.em
+      boundingBox: {
+        x: 0,
+        y: 0,
+        z: 0,
+        anchorX: 0,
+        anchorY: 0,
+        width: this.canvas.stage.width / columnSize.width,
+        height: this.canvas.stage.height / columnSize.height
+      },
+      columnSize
     }
   }
 
-  private renderDivChildren (children: VNode[], renderDirection?: 'horizontal' | 'vertical' | null, gap?: number): VRender & { pixi: Container } {
-    const container = new PIXI.Container()
-    let width = 0
-    let height = 0
-    if (renderDirection === 'vertical') {
-      let isFirst = true
-      for (const child of children) {
-        if (gap !== undefined && !isFirst) {
-          height += gap * this.em
-        }
-        isFirst = false
-        const render = this.renderNodeImpl(child)
-        if (render.pixi !== null) {
-          render.pixi.y = height
-          container.addChild(render.pixi)
-        }
-        width = Math.max(width, render.width)
-        height += render.height
-      }
-    } else if (renderDirection === 'horizontal') {
-      let isFirst = true
-      for (const child of children) {
-        if (gap !== undefined && !isFirst) {
-          width += gap * (this.em / 2)
-        }
-        isFirst = false
-        const render = this.renderNodeImpl(child)
-        if (render.pixi !== null) {
-          render.pixi.x = width
-          container.addChild(render.pixi)
-        }
-        width += render.width
-        height = Math.max(height, render.height)
-      }
-    } else {
-      if (gap !== undefined) {
-        throw new Error('Gap is not supported for overlay (default) direction')
-      }
-
-      for (const child of children) {
-        const render = this.renderNodeImpl(child)
-        if (render.pixi !== null) {
-          container.addChild(render.pixi)
-        }
-        width = Math.max(width, render.width)
-        height = Math.max(height, render.height)
-      }
-    }
-    return {
-      pixi: container,
-      width,
-      height
-    }
+  protected override renderText (bounds: BoundingBox, wrapMode: 'word' | 'char' | 'clip' | undefined, text: string): VRender {
+    return styledPixiText(text, wrapMode, this.em ?? RendererImpl.DEFAULT_COLUMN_SIZE.height)
   }
 
-  private renderImage (path: string): Sprite {
+  protected override renderSolidColor (bounds: BoundingBox, color: LCHColor): VRender {
+    // TODO
+    return null as any
+  }
+
+  protected override renderImage (bounds: BoundingBox, path: string): VRender {
     const image = new PIXI.Sprite(this.assets.getImage(path))
     // noinspection JSDeprecatedSymbols IntelliJ bug
     image.anchor.set(0, 0)
     return image
+  }
+
+  protected override renderVectorImage (bounds: BoundingBox, path: string): VRender {
+    // TODO
+    return null as any
   }
 
   override useInput (handler: (key: Key) => void): () => void {
@@ -259,7 +125,7 @@ export class BrowserRendererImpl extends RendererImpl<VRender, AssetCacher> {
   }
 }
 
-function styledPixiText (text: string, fontSize: number): Container {
+function styledPixiText (text: string, wrapMode: 'word' | 'char' | 'clip' | undefined, fontSize: number): Container {
   const result = new PIXI.Container()
   let row = 0
   let column = 0
@@ -268,7 +134,7 @@ function styledPixiText (text: string, fontSize: number): Container {
     fontFamily: 'monospace',
     fontSize,
     align: 'left',
-    wordWrap: false,
+    wordWrap: wrapMode === 'word',
     fill: 0x000000
   }
   let underline: boolean = false

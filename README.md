@@ -27,7 +27,7 @@ const App = ({ name }) => {
   )
 }
 
-new DevolveUI(<App name='devolve-ui' />).start()
+new DevolveUI(App, { name: 'devolve-ui' }).start()
 
 // Works in node or browser (with additional pixi.js script)
 ```

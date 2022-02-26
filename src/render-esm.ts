@@ -1,11 +1,6 @@
-import type { TerminalRenderOptions } from 'renderer/cli'
-import type { BrowserRenderOptions } from 'renderer/web'
+import { DevolveUICore, RenderOptions, RootProps } from 'DevolveUICore'
 import type { RendererImpl } from 'renderer/common'
 import { PLATFORM, Renderer, VNode } from 'core'
-
-type RenderOptions =
-  TerminalRenderOptions &
-  BrowserRenderOptions
 
 /* eslint-disable @typescript-eslint/restrict-template-expressions */
 const PlatformRendererImpl: new (root: () => VNode, opts?: RenderOptions) => RendererImpl<any, any> = await (
@@ -20,14 +15,19 @@ const PlatformRendererImpl: new (root: () => VNode, opts?: RenderOptions) => Ren
 )
 /* eslint-enable @typescript-eslint/restrict-template-expressions */
 
-export function render (root: () => VNode, opts?: RenderOptions): Renderer {
-  const renderer = new PlatformRendererImpl(root, opts)
-  renderer.start()
-  return renderer
-}
+export type { RenderOptions, RootProps }
+export * from 'flash-prompt'
 
-export function renderOnce (root: () => VNode, opts?: RenderOptions): void {
-  const renderer = new PlatformRendererImpl(root, opts)
-  renderer.rerender()
-  renderer.dispose()
+export class DevolveUI<
+  Props extends RootProps<MessageKeys, PromptKeys>,
+  MessageKeys extends string | number | symbol = keyof Props['messages'],
+  PromptKeys extends string | number | symbol = keyof Props['prompts']
+> extends DevolveUICore<Props, MessageKeys, PromptKeys> {
+  protected override mkRenderer (root: () => VNode, opts?: RenderOptions): Renderer {
+    return new PlatformRendererImpl(root, opts)
+  }
+
+  static renderSnapshot<Props> (RootComponent: (props: Props) => VNode, props: Props, opts?: RenderOptions): void {
+    return DevolveUICore._renderSnapshot((root, opts) => new PlatformRendererImpl(root, opts), RootComponent, props, opts)
+  }
 }

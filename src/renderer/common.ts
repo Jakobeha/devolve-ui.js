@@ -37,20 +37,30 @@ export abstract class CoreAssetCacher {
 
 export interface VRenderBatch<VRender> {
   [zPosition: number]: VRender
+  bounds: BoundingBox | null
+}
+
+interface CachedRenderInfo {
+  parentBounds: ParentBounds
+  siblingBounds: BoundingBox | null
 }
 
 export abstract class RendererImpl<VRender, AssetCacher extends CoreAssetCacher> implements Renderer {
   static readonly DEFAULT_FPS: number = 20
+  static readonly DEFAULT_COLUMN_SIZE: { width: number, height: number } = {
+    width: 7,
+    height: 14
+  }
 
   private readonly defaultFps: number
   private root: VNode | null = null
   rootComponent: VComponent | null = null
   protected readonly assets: AssetCacher
 
-  private readonly cachedRenders: Map<VNode, VRenderBatch<VRender> & { parentBounds: ParentBounds }> = new Map()
+  private readonly cachedRenders: Map<VNode, VRenderBatch<VRender> & CachedRenderInfo> = new Map()
   private needsRerender: boolean = false
   private timer: Timer | null = null
-  private isVisible: boolean = true
+  private isVisible: boolean = false
 
   protected constructor (assetCacher: AssetCacher, { fps }: CoreRenderOptions) {
     this.defaultFps = fps ?? RendererImpl.DEFAULT_FPS
@@ -70,8 +80,8 @@ export abstract class RendererImpl<VRender, AssetCacher extends CoreAssetCacher>
     }
 
     this.timer = setInterval(() => {
-      if (this.needsRerender) {
-        this.rerender()
+      if (this.needsRerender && this.isVisible) {
+        this.forceRerender()
       }
     }, 1 / (fps ?? this.defaultFps))
   }
@@ -105,72 +115,87 @@ export abstract class RendererImpl<VRender, AssetCacher extends CoreAssetCacher>
     this.needsRerender = true
   }
 
-  reroot (root: () => VNode): void {
-    this.rootComponent!.construct = root
+  reroot (root?: () => VNode): void {
+    if (root !== undefined) {
+      this.rootComponent!.construct = root
+    }
     VComponent.update(this.rootComponent!)
     this.cachedRenders.clear()
     this.needsRerender = true
   }
 
-  rerender (): void {
-    if (this.isVisible) {
-      this.needsRerender = false
-      this.clear()
-      this.writeRender(this.renderNode(this.getRootParentBounds(), this.root!))
-    }
+  forceRerender (): void {
+    this.needsRerender = false
+    this.clear()
+    this.writeRender(this.renderNode(this.getRootParentBounds(), null, this.root!))
   }
 
   abstract useInput (handler: (key: Key) => void): () => void
 
   protected abstract clear (): void
   protected abstract writeRender (render: VRenderBatch<VRender>): void
-  protected abstract getRootBoundingBox (): BoundingBox
+  protected abstract getRootDimensions (): {
+    boundingBox: BoundingBox
+    columnSize?: { width: number, height: number }
+  }
   protected abstract renderText (bounds: BoundingBox, wrapMode: 'word' | 'char' | 'clip' | undefined, text: string, node: VNode): VRender
   protected abstract renderSolidColor (bounds: BoundingBox, color: LCHColor, node: VNode): VRender
   protected abstract renderImage (bounds: BoundingBox, src: string, node: VNode): VRender
   protected abstract renderVectorImage (bounds: BoundingBox, src: string, node: VNode): VRender
 
-  protected renderNode (parentBounds: ParentBounds, node: VNode): VRenderBatch<VRender> {
+  protected renderNode (parentBounds: ParentBounds, siblingBounds: BoundingBox | null, node: VNode): VRenderBatch<VRender> {
     if (this.cachedRenders.has(node)) {
       const cachedRender = this.cachedRenders.get(node)!
-      if (ParentBounds.equals(cachedRender.parentBounds, parentBounds)) {
+      if (
+        ParentBounds.equals(cachedRender.parentBounds, parentBounds) &&
+        BoundingBox.equals(cachedRender.siblingBounds, siblingBounds)
+      ) {
         return cachedRender
       } else {
         this.cachedRenders.delete(node)
       }
     }
-    const render: VRender & { parentBounds: ParentBounds } = this.renderNodeImpl(parentBounds, node) as any
+    const render: VRenderBatch<VRender> & CachedRenderInfo = this.renderNodeImpl(parentBounds, siblingBounds, node) as any
     render.parentBounds = parentBounds
+    render.siblingBounds = siblingBounds
     this.cachedRenders.set(node, render)
     return render
   }
 
   private getRootParentBounds (): ParentBounds {
     return {
-      boundingBox: this.getRootBoundingBox(),
+      ...this.getRootDimensions(),
+      columnSize: RendererImpl.DEFAULT_COLUMN_SIZE,
       sublayout: {}
     }
   }
 
-  private renderNodeImpl (parentBounds: ParentBounds, node: VNode): VRenderBatch<VRender> {
+  private renderNodeImpl (parentBounds: ParentBounds, siblingBounds: BoundingBox | null, node: VNode): VRenderBatch<VRender> {
     if (node.visible === false) {
-      return {}
+      return { bounds: null }
     }
 
-    const bounds = node.bounds(parentBounds)
+    const bounds = (node.bounds ?? Bounds.DEFAULT)(parentBounds, siblingBounds)
 
     switch (node.type) {
       case 'box': {
         const bounds2: ParentBounds = {
           boundingBox: bounds,
-          sublayout: node.sublayout ?? {}
+          sublayout: node.sublayout ?? {},
+          columnSize: parentBounds.columnSize
         }
 
         // Render children
-        const children = node.children.map(child => this.renderNode(bounds2, child))
+        const children = []
+        let lastChild = null
+        for (const child of node.children) {
+          const childRender = this.renderNode(bounds2, lastChild?.bounds ?? null, child)
+          children.push(childRender)
+          lastChild = childRender
+        }
 
         // Merge child renders
-        const render: Record<number, VRender> = {}
+        const render: VRenderBatch<VRender> = { bounds }
         for (const child of children) {
           for (const [zString, render] of Object.entries(child)) {
             let zPosition = Number(zString)
@@ -183,9 +208,15 @@ export abstract class RendererImpl<VRender, AssetCacher extends CoreAssetCacher>
         return render
       }
       case 'text':
-        return { [bounds.z]: this.renderText(bounds, node.wrapMode, node.text, node) }
+        return {
+          bounds,
+          [bounds.z]: this.renderText(bounds, node.wrapMode, node.text, node)
+        }
       case 'color':
-        return { [bounds.z]: this.renderSolidColor(bounds, node.color, node) }
+        return {
+          bounds,
+          [bounds.z]: this.renderSolidColor(bounds, node.color, node)
+        }
       case 'source': {
         const extension = node.src.split('.').pop()
         switch (extension) {
@@ -193,11 +224,19 @@ export abstract class RendererImpl<VRender, AssetCacher extends CoreAssetCacher>
           case 'jpg':
           case 'jpeg':
           case 'gif':
-            return { [bounds.z]: this.renderImage(bounds, node.src, node) }
+            return {
+              bounds,
+              [bounds.z]: this.renderImage(bounds, node.src, node)
+            }
           case 'svg':
-            return { [bounds.z]: this.renderVectorImage(bounds, node.src, node) }
+            return {
+              bounds,
+              [bounds.z]: this.renderVectorImage(bounds, node.src, node)
+            }
+          case undefined:
+            throw new Error('source must have an extension to determine the filetype')
           default:
-            throw new Error(`Unsupported source extension: ${extension}`)
+            throw new Error(`unsupported source extension: ${extension}`)
         }
       }
     }

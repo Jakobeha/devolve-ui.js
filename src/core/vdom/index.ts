@@ -3,4 +3,4 @@ export * from 'core/vdom/bounds'
 export * from 'core/vdom/color'
 export * from 'core/vdom/jsx'
 export * from 'core/vdom/node'
-// No exports from react-adapter
+export { React } from 'core/vdom/react-adapter'

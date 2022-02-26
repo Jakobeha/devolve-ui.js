@@ -25,8 +25,8 @@ function _useState<T> (initialState: T, doUpdate: boolean): [() => T, (newState:
   ]
 }
 
-type UseEffectRerunOnChange<Dep> = { onChange: Dep[], compare?: (lhs: Dep, rhs: Dep) => boolean }
-type UseEffectRerunOnTrue = { onTrue: () => boolean }
+interface UseEffectRerunOnChange<Dep> { onChange: Dep[], compare?: (lhs: Dep, rhs: Dep) => boolean }
+interface UseEffectRerunOnTrue { onTrue: () => boolean }
 
 export type UseEffectRerun =
   'on-update' |

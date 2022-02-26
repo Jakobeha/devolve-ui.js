@@ -15,7 +15,9 @@ const ignoredRules = [
   // We already force it to be explicit '!' via strictNullChecks
   '@typescript-eslint/no-non-null-assertion',
   // We throw literals when fall-through control-flow is particularly useful
-  '@typescript-eslint/no-throw-literal'
+  '@typescript-eslint/no-throw-literal',
+  // we basically always know that keys are safe to delete, since we don't use hasOwnProperty etc.
+  '@typescript-eslint/no-dynamic-delete'
 ]
 
 stderr.write('Modified ts-standard to suppress certain rules\n')

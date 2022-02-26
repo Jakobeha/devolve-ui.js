@@ -2,7 +2,7 @@ import { Bounds, SubLayout } from 'core/vdom/bounds'
 import { LCHColor } from 'core/vdom/color'
 
 export interface CommonAttrs {
-  bounds: Bounds
+  bounds?: Bounds
   visible?: boolean
   key?: string
 }
@@ -23,4 +23,4 @@ export interface SourceAttrs extends CommonAttrs {
   src: string
 }
 
-export type BoxAttrsWithoutDirection = Omit<BoxAttrs, 'sublayout'> & { sublayout: Omit<SubLayout, 'direction'> }
+export type JSXBoxAttrs = Omit<BoxAttrs, 'sublayout'> & SubLayout

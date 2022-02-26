@@ -12,7 +12,7 @@ export function initModule (imports: { readline: typeof import('readline') }): v
   readline = imports.readline
 }
 
-type VRender = (string | null)[][]
+type VRender = Array<Array<string | null>>
 
 export interface TerminalRenderOptions extends CoreRenderOptions {
   input?: ReadStream
@@ -87,16 +87,21 @@ export class TerminalRendererImpl extends RendererImpl<VRender, AssetCacher> {
     this.linesOutput += lines.length
   }
 
-  protected override getRootBoundingBox (): BoundingBox {
+  protected override getRootDimensions (): {
+    boundingBox: BoundingBox
+    columnSize?: { width: number, height: number }
+  } {
     return {
-      x: 0,
-      y: 0,
-      z: 0,
-      anchorX: 0,
-      anchorY: 0,
-      width: this.output.columns,
-      height: this.output.rows
-   }
+      boundingBox: {
+        x: 0,
+        y: 0,
+        z: 0,
+        anchorX: 0,
+        anchorY: 0,
+        width: this.output.columns,
+        height: this.output.rows
+      }
+    }
   }
 
   protected override renderText (bounds: BoundingBox, wrap: 'word' | 'char' | 'clip' | undefined, text: string | string[]): VRender {
@@ -108,6 +113,7 @@ export class TerminalRendererImpl extends RendererImpl<VRender, AssetCacher> {
     // all lines start with an empty character, for zero-width characters to be outside on overlap
     let nextOutLine: string[] = ['']
     let nextOutLineWidth = 0
+    // eslint-disable-next-line no-labels
     outer: for (const line of input) {
       const chars = [...line]
       let nextWord: string[] = []
@@ -130,6 +136,7 @@ export class TerminalRendererImpl extends RendererImpl<VRender, AssetCacher> {
               // so wrap line
               if (result.length === height) {
                 // no more room
+                // eslint-disable-next-line no-labels
                 break outer
               }
               result.push(nextOutLine)
@@ -155,6 +162,7 @@ export class TerminalRendererImpl extends RendererImpl<VRender, AssetCacher> {
                 case 'char':
                   if (result.length === height) {
                     // no more room
+                    // eslint-disable-next-line no-labels
                     break outer
                   }
                   result.push(nextOutLine)
@@ -252,9 +260,13 @@ module VRender {
 
     for (const line of vrender) {
       if (line.length > 0) {
-        line[0] = ' ' + line[0]
+        if (line[0] === '') {
+          line[0] = null
+        } else {
+          line[0] = ' ' + (line[0] as string)
+        }
         for (let x = 1; x < xOffset; x++) {
-          line.unshift(' ')
+          line.unshift(null)
         }
         line.unshift('')
       }
@@ -269,7 +281,7 @@ module VRender {
     const height = Math.max(...Object.values(textMatrix).map(getHeight))
     const matrixSorted = Object.entries(textMatrix).sort(([lhs], [rhs]) => Number(lhs) - Number(rhs)).map(([, lines]) => lines)
 
-    const result: (string | null)[][] = Array(height).fill(Array(width).fill(null))
+    const result: Array<Array<string | null>> = Array(height).fill(Array(width).fill(null))
     for (const lines of matrixSorted) {
       for (let y = 0; y < lines.length; y++) {
         const line = lines[y]

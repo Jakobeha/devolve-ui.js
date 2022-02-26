@@ -1,5 +1,6 @@
-import { BoxAttrs, BoxAttrsWithoutDirection, ColorAttrs, SourceAttrs, TextAttrs } from 'core/vdom/attrs'
+import { ColorAttrs, JSXBoxAttrs, SourceAttrs, TextAttrs } from 'core/vdom/attrs'
 import { VBox, VColor, VNode, VSource, VText } from 'core/vdom/node'
+import { IntoArray } from '@raycenity/misc-ts'
 
 export type JSX =
   VNode |
@@ -20,23 +21,31 @@ export module JSX {
 }
 
 export interface JSXIntrinsics {
-  hbox: BoxAttrsWithoutDirection & { children: JSX[] }
-  vbox: BoxAttrsWithoutDirection & { children: JSX[] }
-  box: BoxAttrs & { children: JSX[] }
-  text: TextAttrs & { children: [string] }
-  color: ColorAttrs & { children: [] }
-  source: SourceAttrs & { children: [] }
+  hbox: Omit<JSXBoxAttrs, 'direction'> & { children?: JSX[] }
+  vbox: Omit<JSXBoxAttrs, 'direction'> & { children?: JSX[] }
+  box: JSXBoxAttrs & { children?: JSX[] }
+  text: TextAttrs & { children?: string | string[] }
+  color: ColorAttrs & { children?: [] }
+  source: SourceAttrs & { children?: [] }
 }
 
 export const intrinsics: {
-  [Key in keyof JSXIntrinsics]: (props: Omit<JSXIntrinsics[Key], 'children'>, ...children: JSXIntrinsics[Key]['children']) => VNode
+  [Key in keyof JSXIntrinsics]: (props: Omit<JSXIntrinsics[Key], 'children'>, ...children: IntoArray<JSXIntrinsics[Key]['children']>) => VNode
 } = {
-  hbox: (props: BoxAttrsWithoutDirection, ...children: JSX[]): VNode =>
-    intrinsics.box({ ...props, sublayout: { ...(props.sublayout ?? {}), direction: 'horizontal' } }, ...children),
-  vbox: (props: BoxAttrsWithoutDirection, ...children: JSX[]): VNode =>
-    intrinsics.box({ ...props, sublayout: { ...(props.sublayout ?? {}), direction: 'vertical' } }, ...children),
-  box: (props: BoxAttrs, ...children: JSX[]): VNode => VBox(JSX.collapse(children) as VNode[], props),
-  text: (props: TextAttrs, text: string): VNode => VText(text, props),
+  hbox: (props: Omit<JSXBoxAttrs, 'direction'>, ...children: JSX[]): VNode =>
+    intrinsics.box({ ...props, direction: 'horizontal' }, ...children),
+  vbox: (props: Omit<JSXBoxAttrs, 'direction'>, ...children: JSX[]): VNode =>
+    intrinsics.box({ ...props, direction: 'vertical' }, ...children),
+  box: (props: JSXBoxAttrs, ...children: JSX[]): VNode => {
+    const { bounds, visible, key } = props
+    delete props.bounds
+    delete props.visible
+    delete props.key
+    // props becomes sublayout, since the rest of the props are sublayout
+
+    return VBox(JSX.collapse(children), { bounds, visible, key, sublayout: props })
+  },
+  text: (props: TextAttrs, ...text: string[]): VNode => VText(text.join(''), props),
   color: (props: ColorAttrs): VNode => VColor(props),
   source: (props: SourceAttrs): VNode => VSource(props)
 }

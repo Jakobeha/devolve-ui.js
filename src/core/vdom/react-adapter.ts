@@ -1,6 +1,7 @@
 import { VNode } from 'core/vdom/node'
 import { intrinsics, JSX, JSXIntrinsics } from 'core/vdom/jsx'
 import { VComponent } from 'core/component'
+import { IntoArray } from '@raycenity/misc-ts'
 
 function createElement (
   element: undefined,
@@ -10,7 +11,7 @@ function createElement (
 function createElement <Key extends keyof JSXIntrinsics> (
   element: Key,
   props: Omit<JSXIntrinsics[Key], 'children'>,
-  ...children: JSXIntrinsics[Key]['children']
+  ...children: IntoArray<JSXIntrinsics[Key]['children']>
 ): VNode
 function createElement <T extends VNode, Props, Children extends any[]> (
   element: (props: Props & { children?: Children }) => T,

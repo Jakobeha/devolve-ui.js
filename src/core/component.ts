@@ -20,7 +20,7 @@ export interface VComponent {
   nextStateIndex: number
 }
 
-let RENDERER_STACK: RendererImpl<any, any>[] = []
+const RENDERER_STACK: Array<RendererImpl<any, any>> = []
 const VCOMPONENT_STACK: VComponent[] = []
 
 export function getRenderer (): RendererImpl<any, any> {
