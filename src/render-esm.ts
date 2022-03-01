@@ -16,7 +16,7 @@ const PlatformRendererImpl: new (root: () => VNode, opts?: RenderOptions) => Ren
 /* eslint-enable @typescript-eslint/restrict-template-expressions */
 
 export type { RenderOptions, RootProps }
-export * from 'flash-prompt'
+export * from 'prompt'
 
 export class DevolveUI<
   Props extends RootProps<MessageKeys, PromptKeys>,

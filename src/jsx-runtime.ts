@@ -1,12 +1,11 @@
 // noinspection JSUnusedGlobalSymbols
 
-import { JSXIntrinsics, VNode } from 'core/vdom'
+import { JSXIntrinsicAttributes, JSXIntrinsics, VNode } from 'core'
 
 /* eslint-disable @typescript-eslint/no-unused-vars */
-/* eslint-disable @typescript-eslint/no-empty-interface */
 export namespace JSX {
   export type Element = VNode
   export type IntrinsicElements = JSXIntrinsics
+  export type IntrinsicAttributes = JSXIntrinsicAttributes
 }
-/* eslint-enable @typescript-eslint/no-empty-interface */
 /* eslint-enable @typescript-eslint/no-unused-vars */

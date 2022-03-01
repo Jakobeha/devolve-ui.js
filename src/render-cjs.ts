@@ -26,7 +26,7 @@ try {
 /* eslint-enable @typescript-eslint/no-var-requires */
 
 export type { RenderOptions, RootProps }
-export * from 'flash-prompt'
+export * from 'prompt'
 
 export class DevolveUI<
   Props extends RootProps<MessageKeys, PromptKeys>,

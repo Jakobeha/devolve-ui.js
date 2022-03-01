@@ -1,12 +1,13 @@
 import { RendererImpl } from 'renderer/common'
 import { VNode } from 'core/vdom'
 
-export interface VComponent {
+export interface VComponent<Props = any> {
   readonly node: Partial<VNode>
   children: Record<string, VComponent>
   readonly renderer: RendererImpl<any, any>
 
-  construct: () => VNode
+  props: Props
+  construct: (props: Props) => VNode
   readonly state: any[]
   readonly effects: Array<() => void>
   readonly updateDestructors: Array<() => void>
@@ -56,10 +57,12 @@ function withRenderer<T> (vrenderer: RendererImpl<any, any>, body: () => T): T {
 }
 
 export function VRoot<T extends VNode> (renderer: RendererImpl<any, any>, construct: () => T): T {
-  return withRenderer(renderer, construct)
+  const node = withRenderer(renderer, construct)
+  node.parent = 'none'
+  return node
 }
 
-export function VComponent (key: string, construct: () => VNode): VNode {
+export function VComponent<Props> (key: string, props: Props, construct: (props: Props) => VNode): VNode {
   if (VCOMPONENT_STACK.length !== 0) {
     const parent = getVComponent()
     // parent is being created = if there are any existing children, they're not being reused, they're a conflict
@@ -68,8 +71,9 @@ export function VComponent (key: string, construct: () => VNode): VNode {
         const vcomponent = parent.children[key]
         // If the componennt was already reused this update, it's a conflict. We fallthrough to newVComponent which throws the error
         if (!vcomponent.isFresh) {
-          vcomponent.isFresh = true
+          vcomponent.props = props
           vcomponent.construct = construct
+          vcomponent.isFresh = true
           VComponent.update(vcomponent)
           return vcomponent.node as VNode
         }
@@ -77,17 +81,18 @@ export function VComponent (key: string, construct: () => VNode): VNode {
     }
   }
 
-  return VComponent.create(key, construct)
+  return VComponent.create(key, props, construct)
 }
 
 export module VComponent {
-  export function create (key: string, construct: () => VNode): VNode {
+  export function create<Props> (key: string, props: Props, construct: (props: Props) => VNode): VNode {
     // Create JS object
-    const vcomponent: VComponent = {
+    const vcomponent: VComponent<Props> = {
       node: {},
       children: {},
       renderer: getRenderer(),
 
+      props,
       construct,
       state: [],
       effects: [],
@@ -120,7 +125,7 @@ export module VComponent {
 
     // Do construct (component and renderer are already set)
     doUpdate(vcomponent, () => {
-      const constructed = construct()
+      const constructed = construct(vcomponent.props)
       if (typeof constructed !== 'object' || Array.isArray(constructed)) {
         throw new Error('JSX components can only be nodes. Call this function normally, not with JSX')
       }
@@ -142,7 +147,7 @@ export module VComponent {
       // Do construct
       // We also need to use VComponent's renderer because the current renderer might be different
       withRenderer(vcomponent.renderer, () => doUpdate(vcomponent, () => {
-        VNode.convertInto(vcomponent.node, vcomponent.construct())
+        VNode.convertInto(vcomponent.node, vcomponent.construct(vcomponent.props))
       }))
     }
   }

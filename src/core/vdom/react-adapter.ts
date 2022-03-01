@@ -19,7 +19,7 @@ function createElement <T extends VNode, Props, Children extends any[]> (
   ...children: Children
 ): VNode
 function createElement <T extends VNode, Props extends { key?: string }, Children extends any[]> (
-  element: undefined | keyof JSXIntrinsics | ((props: Props & { children?: Children}) => T),
+  element: undefined | keyof JSXIntrinsics | ((props: Props & { children?: Children }) => T),
   props: Props & { key?: string },
   ...children: Children
 ): VNode | VNode[] {
@@ -42,7 +42,7 @@ function createElement <T extends VNode, Props extends { key?: string }, Childre
     }
   } else {
     // Component
-    return VComponent(props.key ?? element.name, () => element({ ...props, children: children }))
+    return VComponent(props.key ?? element.name, { ...props, children }, element)
   }
 }
 

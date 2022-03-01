@@ -4,13 +4,35 @@
 
 devolve-ui is a super simple graphics library for games, canvas-based websites, TUIs, and JavaScript applications, which can deploy to both browser *and* terminal.
 
-**Live demos: standalone @ [demos/index.html](demos/index.html), with CGE @ [https://cge.raycenity.net/demos/](https://cge.raycenity.net/demos/)**
+devolve-ui also has built-in support for the [*prompt-based GUI*](./docs/prompt-based-gui.md) pattern, where you write your application as a series of prompts similar to a CLI.
+
+**Live demos: standalone @ [https://github.com/Jakobeha/devolve-ui-demos/src/index.html](https://github.com/Jakobeha/devolve-ui-demos/src/index.html), with CGE @ [https://cge.raycenity.net/demos/](https://cge.raycenity.net/demos/)**
+
+**Important setup information:** besides installing this package, you *must* add this to your tsconfig.json or TypeScript won't work with the project:
+
+```json5
+{
+  /* ... */
+  "jsx": "preserve",
+  "jsxImportSource": "@raycenity/devolve-ui",
+  "paths": {
+    /* ... */
+    "@raycenity/devolve-ui/jsx-runtime": ["../devolve-ui/out/types/jsx-runtime.d.ts"]
+  }
+}
+```
+
+Example:
 
 ```tsx
-// demos/readme.tsx
-import { DevolveUI, useState, useTimeout } from '@raycenity/devolve-ui'
+// https://github.com/Jakobeha/devolve-ui-demos/src/readme.tsx
+import { DevolveUI, RootProps, useState, useTimeout } from '@raycenity/devolve-ui'
 
-const App = ({ name }) => {
+interface AppProps extends RootProps {
+  name: string
+}
+
+const App = ({ name }: AppProps) => {
   const [counter, setCounter] = useState(0)
   useTimeout(() => {
     setCounter(counter() + 1)
@@ -45,6 +67,14 @@ devolve-ui uses JSX and React-style **components**: you write your UI declarativ
 devolve-ui components return **nodes**, which make up the "virtual DOM" or "HTML" of your scene. Unlike real HTML there are 3 kinds of nodes: box, text, and graphic. Boxes contain children and define your layout, text contains styled (e.g. bold, colored) text, and graphics are solid backgrounds, gradients, images, videos, and custom pixi elements.
 
 Every devolve-ui node has **bounds**, which define its position, size, and z-position (nodes with higher z-positions are rendered on top of nodes with lower z-positions). You create bounds using the function `Bounds`, e.g. `Bounds({ left: '32em', centerY: '50%', width: '250px' })`. The bounds system is very flexibld, so you can define custom layouts (see the section in [Implementation](#Bounds)).
+
+## Prompt-based GUI
+
+Prompt-based GUI is when you write your GUI components as asynchronous functions which display prompts, and then await the user's input before they continue execution. You can present prompts concurrently using `Promise.all` or `Promise.race`, and thus you can write entire GUI applications in this pattern. Prompt-based GUI is particularly useful if you want your application to be easily automated, or if your application's UI is stateful (as opposed to a control center where the GUI elements don't change much).
+
+In devolve-ui, you call `devolveUI.prompt(name, input)` with your prompt name and input. This function re-renders your UI with the `prompt.name` prop set to `input`. Your root UI component uses this prop to display the prompt. When the prompt is completed, your UI calls `prompt.name.resolve` (or `prompt.name.reject`) with the prompt output, and the `devolveUI.prompt` call returns with this value.
+
+For more info, read [*the article*](./docs/prompt-based-gui.md)
 
 ### Implementation
 

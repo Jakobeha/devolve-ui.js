@@ -1,4 +1,4 @@
-import { BoundingBox, Bounds, LCHColor, ParentBounds, VNode } from 'core/vdom'
+import { BoundingBox, Bounds, Color, ParentBounds, Rectangle, Size, VNode } from 'core/vdom'
 import { CoreRenderOptions, Renderer } from 'core/renderer'
 import { VComponent, VRoot } from 'core/component'
 import { Key } from '@raycenity/misc-ts'
@@ -47,7 +47,7 @@ interface CachedRenderInfo {
 
 export abstract class RendererImpl<VRender, AssetCacher extends CoreAssetCacher> implements Renderer {
   static readonly DEFAULT_FPS: number = 20
-  static readonly DEFAULT_COLUMN_SIZE: { width: number, height: number } = {
+  static readonly DEFAULT_COLUMN_SIZE: Size = {
     width: 7,
     height: 14
   }
@@ -115,7 +115,10 @@ export abstract class RendererImpl<VRender, AssetCacher extends CoreAssetCacher>
     this.needsRerender = true
   }
 
-  reroot (root?: () => VNode): void {
+  reroot<Props> (props?: Props, root?: (props: Props) => VNode): void {
+    if (props !== undefined) {
+      this.rootComponent!.props = props
+    }
     if (root !== undefined) {
       this.rootComponent!.construct = root
     }
@@ -136,10 +139,10 @@ export abstract class RendererImpl<VRender, AssetCacher extends CoreAssetCacher>
   protected abstract writeRender (render: VRenderBatch<VRender>): void
   protected abstract getRootDimensions (): {
     boundingBox: BoundingBox
-    columnSize?: { width: number, height: number }
+    columnSize?: Size
   }
   protected abstract renderText (bounds: BoundingBox, wrapMode: 'word' | 'char' | 'clip' | undefined, text: string, node: VNode): VRender
-  protected abstract renderSolidColor (bounds: BoundingBox, color: LCHColor, node: VNode): VRender
+  protected abstract renderSolidColor (rect: Rectangle, columnSize: Size, color: Color, node: VNode): VRender
   protected abstract renderImage (bounds: BoundingBox, src: string, node: VNode): VRender
   protected abstract renderVectorImage (bounds: BoundingBox, src: string, node: VNode): VRender
 
@@ -195,28 +198,40 @@ export abstract class RendererImpl<VRender, AssetCacher extends CoreAssetCacher>
         }
 
         // Merge child renders
-        const render: VRenderBatch<VRender> = { bounds }
+        const mergedRender: VRenderBatch<VRender> = { bounds }
         for (const child of children) {
           for (const [zString, render] of Object.entries(child)) {
             let zPosition = Number(zString)
-            while (zPosition in render) {
-              zPosition += Bounds.DELTA_Z
+            if (!isNaN(zPosition)) {
+              while (zPosition in mergedRender) {
+                zPosition += Bounds.DELTA_Z
+              }
+              mergedRender[zPosition] = render
             }
-            render[zPosition] = render
           }
         }
-        return render
+        return mergedRender
       }
       case 'text':
         return {
           bounds,
           [bounds.z]: this.renderText(bounds, node.wrapMode, node.text, node)
         }
-      case 'color':
+      case 'color': {
+        const inferredBounds = {
+          ...bounds,
+          width: bounds.width ?? parentBounds.boundingBox.width ?? siblingBounds?.width,
+          height: bounds.height ?? parentBounds.boundingBox.height ?? siblingBounds?.height
+        }
+        if (inferredBounds.width === undefined || inferredBounds.height === undefined) {
+          throw new Error('Cannot infer width or height for color node')
+        }
+        const rect = BoundingBox.toRectangle(inferredBounds as BoundingBox & Size)
         return {
           bounds,
-          [bounds.z]: this.renderSolidColor(bounds, node.color, node)
+          [bounds.z]: this.renderSolidColor(rect, parentBounds.columnSize, node.color, node)
         }
+      }
       case 'source': {
         const extension = node.src.split('.').pop()
         switch (extension) {

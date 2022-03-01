@@ -1,6 +1,7 @@
 lockfileVersion: 5.3
 
 specifiers:
+  '@raycenity/chalk-cross': link:../chalk-cross
   '@raycenity/misc-ts': link:../misc-ts
   '@raycenity/terminal-image-min': link:../terminal-image-min
   '@types/node': ^17.0.8
@@ -16,6 +17,7 @@ specifiers:
   typescript: ^4.5.4
 
 dependencies:
+  '@raycenity/chalk-cross': link:../chalk-cross
   '@raycenity/misc-ts': link:../misc-ts
   '@raycenity/terminal-image-min': link:../terminal-image-min
   node-ansiparser: 2.2.0

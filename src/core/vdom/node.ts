@@ -74,9 +74,6 @@ export function VText (text: string, attrs: TextAttrs): VText {
 export function VBox (children: VNode[], attrs: BoxAttrs): VBox {
   const box: VBox = { type: 'box', children, ...attrs }
   for (const child of box.children) {
-    if (child.parent !== null) {
-      throw new Error('Child already has a parent')
-    }
     child.parent = box
   }
   return box

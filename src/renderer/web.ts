@@ -1,4 +1,4 @@
-import { BoundingBox, LCHColor, VNode } from 'core/vdom'
+import { BoundingBox, Color, Rectangle, Size, VNode } from 'core/vdom'
 import { CoreRenderOptions } from 'core/renderer'
 import { CoreAssetCacher, RendererImpl, VRenderBatch } from 'renderer/common'
 import { Key, Strings } from '@raycenity/misc-ts'
@@ -56,7 +56,7 @@ export class BrowserRendererImpl extends RendererImpl<VRender, AssetCacher> {
 
   protected override getRootDimensions (): {
     boundingBox: BoundingBox
-    columnSize?: { width: number, height: number }
+    columnSize?: Size
   } {
     const columnSize = this.em !== null
       ? {
@@ -82,9 +82,16 @@ export class BrowserRendererImpl extends RendererImpl<VRender, AssetCacher> {
     return styledPixiText(text, wrapMode, this.em ?? RendererImpl.DEFAULT_COLUMN_SIZE.height)
   }
 
-  protected override renderSolidColor (bounds: BoundingBox, color: LCHColor): VRender {
-    // TODO
-    return null as any
+  protected override renderSolidColor (rect: Rectangle, columnSize: Size, color: Color): VRender {
+    const pixiColor = new PIXI.Graphics()
+    pixiColor.beginFill(Color.toNumber(color))
+    pixiColor.drawRect(
+      rect.left * columnSize.width,
+      rect.top * columnSize.height,
+      rect.width * columnSize.width,
+      rect.height * columnSize.height
+    )
+    return pixiColor
   }
 
   protected override renderImage (bounds: BoundingBox, path: string): VRender {

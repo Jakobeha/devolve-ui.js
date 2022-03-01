@@ -1,10 +1,11 @@
 import type { Interface } from 'readline'
 import type { ReadStream, WriteStream } from 'tty'
-import { BoundingBox, LCHColor, VNode } from 'core/vdom'
+import { BoundingBox, Color, Rectangle, Size, VNode } from 'core/vdom'
 import { CoreRenderOptions } from 'core/renderer'
 import { Key, Strings } from '@raycenity/misc-ts'
 import { terminalImage } from '@raycenity/terminal-image-min'
 import { CoreAssetCacher, RendererImpl, VRenderBatch } from 'renderer/common'
+import { chalk } from '@raycenity/chalk-cross'
 
 let readline: typeof import('readline')
 
@@ -89,7 +90,7 @@ export class TerminalRendererImpl extends RendererImpl<VRender, AssetCacher> {
 
   protected override getRootDimensions (): {
     boundingBox: BoundingBox
-    columnSize?: { width: number, height: number }
+    columnSize?: Size
   } {
     return {
       boundingBox: {
@@ -188,15 +189,41 @@ export class TerminalRendererImpl extends RendererImpl<VRender, AssetCacher> {
           }
         }
       }
+
+      // add line
+      if (result.length === height) {
+        // no more room
+        // eslint-disable-next-line no-labels
+        break
+      }
+      result.push(nextOutLine)
+      nextOutLine = []
+      nextOutLineWidth = 0
     }
 
-    VRender.translate(bounds, result)
+    VRender.translate1(result, bounds)
     return result
   }
 
-  protected override renderSolidColor (bounds: BoundingBox, color: LCHColor): VRender {
-    // TODO
-    return []
+  protected override renderSolidColor (rect: Rectangle, columnSize: Size, color: Color): VRender {
+    const rgbColor = Color.toRGB(color)
+    const { openEscape, closeEscape } = chalk.bgRgb(rgbColor.red, rgbColor.green, rgbColor.blue)
+    const result: VRender = []
+    // all lines start with an empty character, for zero-width characters to be outside on overlap
+    let nextLine: string[] = []
+    for (let y = 0; y < rect.height; y++) {
+      nextLine.push(openEscape)
+      for (let x = 0; x < rect.width; x++) {
+        nextLine.push(' ')
+      }
+      nextLine.push(closeEscape)
+
+      result.push(nextLine)
+      nextLine = []
+    }
+
+    VRender.translate2(result, rect.left, rect.top)
+    return result
   }
 
   protected override renderImage (bounds: BoundingBox, src: string, node: VNode): VRender {
@@ -251,12 +278,19 @@ export class TerminalRendererImpl extends RendererImpl<VRender, AssetCacher> {
 }
 
 module VRender {
-  export function translate (bounds: BoundingBox, vrender: VRender): void {
+  export function translate1 (vrender: VRender, bounds: BoundingBox): void {
     const width = bounds.width ?? getWidth(vrender)
     const height = bounds.height ?? getHeight(vrender)
 
-    const xOffset = Math.round(bounds.x + (bounds.anchorX * width))
-    const yOffset = Math.round(bounds.y + (bounds.anchorY * height))
+    const xOffset = bounds.x + (bounds.anchorX * width)
+    const yOffset = bounds.y + (bounds.anchorY * height)
+
+    return translate2(vrender, xOffset, yOffset)
+  }
+
+  export function translate2 (vrender: VRender, xOffset: number, yOffset: number): void {
+    xOffset = Math.round(xOffset)
+    yOffset = Math.round(yOffset)
 
     for (const line of vrender) {
       if (line.length > 0) {
@@ -277,11 +311,22 @@ module VRender {
   }
 
   export function collapse (textMatrix: Record<number, VRender>): string[][] {
-    const width = Math.max(...Object.values(textMatrix).map(getWidth))
+    for (const key of Object.keys(textMatrix)) {
+      if (isNaN(parseFloat(key))) {
+        delete textMatrix[key as any]
+      }
+    }
+
+    if (Object.values(textMatrix).length === 0) {
+      return []
+    }
+
+    // Array length not width
+    const length = Math.max(...Object.values(textMatrix).map(get2dArrayLength))
     const height = Math.max(...Object.values(textMatrix).map(getHeight))
     const matrixSorted = Object.entries(textMatrix).sort(([lhs], [rhs]) => Number(lhs) - Number(rhs)).map(([, lines]) => lines)
 
-    const result: Array<Array<string | null>> = Array(height).fill(Array(width).fill(null))
+    const result: Array<Array<string | null>> = Array(height).fill(null).map(() => Array(length).fill(null))
     for (const lines of matrixSorted) {
       for (let y = 0; y < lines.length; y++) {
         const line = lines[y]
@@ -305,7 +350,11 @@ module VRender {
   }
 
   function getWidth (vrender: VRender): number {
-    return Math.max(...vrender.map(line => line.map(char => char === null ? 1 : Strings.width(char)).reduce((lhs, rhs) => lhs + rhs, 0)))
+    return Math.max(0, ...vrender.map(line => line.map(char => char === null ? 1 : Strings.width(char)).reduce((lhs, rhs) => lhs + rhs, 0)))
+  }
+
+  function get2dArrayLength (vrender: VRender): number {
+    return Math.max(0, ...vrender.map(line => line.length))
   }
 
   function getHeight (vrender: VRender): number {

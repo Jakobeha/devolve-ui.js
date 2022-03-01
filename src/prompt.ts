@@ -20,7 +20,7 @@ export class PromptReplacedError extends PromptCancelledError {
 
 export interface PromptSpec<Resolve = any> {
   resolve: (arg: Resolve) => void
-  reject: (arg: any) => void
+  reject?: (arg: any) => void
 }
 
 export type PromptArgs<T extends PromptSpec | undefined> = Omit<T, 'resolve' | 'reject'>
