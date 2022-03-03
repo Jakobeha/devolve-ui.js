@@ -1,6 +1,10 @@
 import { RendererImpl } from 'renderer/common'
 import { VNode } from 'core/vdom'
 
+type PendingUpdateDetails = string
+
+const MAX_RECURSIVE_UPDATES_BEFORE_LOOP_DETECTED = 100
+
 export interface VComponent<Props = any> {
   readonly node: Partial<VNode>
   children: Record<string, VComponent>
@@ -19,11 +23,13 @@ export interface VComponent<Props = any> {
   isFresh: boolean
   isDead: boolean
   hasPendingUpdates: boolean
+  recursiveUpdateStackTrace: PendingUpdateDetails[]
   nextStateIndex: number
 }
 
 const RENDERER_STACK: Array<RendererImpl<any, any>> = []
 const VCOMPONENT_STACK: VComponent[] = []
+let IS_DEBUG_MODE: boolean = true
 
 export function getRenderer (): RendererImpl<any, any> {
   if (RENDERER_STACK.length === 0) {
@@ -37,6 +43,14 @@ export function getVComponent (): VComponent {
     throw new Error('No current component')
   }
   return VCOMPONENT_STACK[VCOMPONENT_STACK.length - 1]
+}
+
+export function isDebugMode (): boolean {
+  return IS_DEBUG_MODE
+}
+
+export function setDebugMode (debugMode: boolean): void {
+  IS_DEBUG_MODE = debugMode
 }
 
 function withVComponent<T> (vcomponent: VComponent, body: () => T): T {
@@ -75,7 +89,7 @@ export function VComponent<Props> (key: string, props: Props, construct: (props:
           vcomponent.props = props
           vcomponent.construct = construct
           vcomponent.isFresh = true
-          VComponent.update(vcomponent)
+          VComponent.update(vcomponent, `child ${key}`)
           return vcomponent.node as VNode
         }
       }
@@ -106,6 +120,7 @@ export module VComponent {
       isFresh: true,
       isDead: false,
       hasPendingUpdates: false,
+      recursiveUpdateStackTrace: [],
       nextStateIndex: 0
     }
 
@@ -137,10 +152,13 @@ export module VComponent {
     return vcomponent.node as VNode
   }
 
-  export function update (vcomponent: VComponent): void {
+  export function update (vcomponent: VComponent, details: PendingUpdateDetails | null): void {
     if (vcomponent.isBeingUpdated) {
       // Delay until after this update, especially if there are multiple triggered updates since we only have to update once more
       vcomponent.hasPendingUpdates = true
+      if (isDebugMode() && details !== null) {
+        vcomponent.recursiveUpdateStackTrace.push(details)
+      }
     } else {
       // Reset
       runUpdateDestructors(vcomponent)
@@ -187,7 +205,12 @@ export module VComponent {
     })
     if (vcomponent.hasPendingUpdates) {
       vcomponent.hasPendingUpdates = false
-      update(vcomponent)
+      if (vcomponent.recursiveUpdateStackTrace.length > MAX_RECURSIVE_UPDATES_BEFORE_LOOP_DETECTED) {
+        throw new Error(`update loop detected:\n${vcomponent.recursiveUpdateStackTrace.map(details => JSON.stringify(details)).join('\n')}`)
+      }
+      update(vcomponent, null)
+    } else if (isDebugMode()) {
+      vcomponent.recursiveUpdateStackTrace = []
     }
   }
 

@@ -1,4 +1,4 @@
-import { getVComponent, VComponent } from 'core/component'
+import { getVComponent, isDebugMode, VComponent } from 'core/component'
 
 /**
  * Returns a value and setter.
@@ -36,9 +36,15 @@ export function _useDynamicState<T> (initialState: T, doUpdate: boolean): [() =>
   return [
     () => component.state[index],
     (newState: T) => {
-      component.state[index] = newState
-      if (doUpdate) {
-        VComponent.update(component)
+      // Don't trigger update if state is the same
+      if (component.state[index] !== newState) {
+        component.state[index] = newState
+        if (doUpdate) {
+          const stackTrace = isDebugMode()
+            ? (new Error().stack?.replace('\n', '  \n') ?? 'could not get stack, new Error().stack is undefined')
+            : 'omitted in production'
+          VComponent.update(component, `set-state-${index}\n${stackTrace}`)
+        }
       }
     }
   ]

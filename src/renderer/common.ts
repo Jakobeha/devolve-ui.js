@@ -124,7 +124,7 @@ export abstract class RendererImpl<VRender, AssetCacher extends CoreAssetCacher>
     if (root !== undefined) {
       this.rootComponent!.construct = root
     }
-    VComponent.update(this.rootComponent!)
+    VComponent.update(this.rootComponent!, root !== undefined ? 'set-root' : props !== undefined ? 'set-props' : 'manual')
     this.cachedRenders.clear()
     this.needsRerender = true
   }
