@@ -2,7 +2,7 @@ import type { Interface } from 'readline'
 import type { ReadStream, WriteStream } from 'tty'
 import { BoundingBox, Color, Rectangle, Size, VNode } from 'core/vdom'
 import { CoreRenderOptions } from 'core/renderer'
-import { Key, Strings } from '@raycenity/misc-ts'
+import { Key, range, Strings } from '@raycenity/misc-ts'
 import { terminalImage } from '@raycenity/terminal-image-min'
 import { CoreAssetCacher, RendererImpl, VRenderBatch } from 'renderer/common'
 import { chalk } from '@raycenity/chalk-cross'
@@ -16,9 +16,8 @@ export function initModule (imports: { readline: typeof import('readline') }): v
 /**
  * Each x/y index represents the character at that exact position in the terminal.
  * If the character is multi-width, then the next character will be empty.
- * If the character is \u{FFF0} it is a fallthrough (transparent, so the character under will be used).
- * If the character contains \u{FFF1}, afterwards is a prefix which will be applied to the character above
- * If the character contains \u{FFF2}, afterwards is a suffix which will be applied to the character above
+ * If the character is \u{FFF0} it is transparent (the character under will be used).
+ * If the character contains \u{FFF1} and \u{FFF2}, it is a background (characters above will also have the background unless they also contain a background)
  */
 type VRender = string[][]
 
@@ -218,22 +217,9 @@ export class TerminalRendererImpl extends RendererImpl<VRender, AssetCacher> {
 
     const rgbColor = Color.toRGB(color)
     const { openEscape, closeEscape } = chalk.bgRgb(rgbColor.red * 255, rgbColor.green * 255, rgbColor.blue * 255)
-    const result: VRender = []
-    let nextLine: string[] = []
-    for (let y = 0; y < rect.height; y++) {
-      if (rect.width === 1) {
-        nextLine.push(` \u{FFF1}${openEscape}\u{FFF2}${closeEscape}`)
-      } else {
-        nextLine.push(` \u{FFF1}${openEscape}`)
-        for (let x = 1; x < rect.width - 1; x++) {
-          nextLine.push(' ')
-        }
-        nextLine.push(` \u{FFF2}${closeEscape}`)
-      }
+    const bg = CharBg(openEscape, closeEscape)
 
-      result.push(nextLine)
-      nextLine = []
-    }
+    const result: VRender = range(rect.height).map(() => Array(rect.width).fill(` ${bg}`))
 
     VRender.translate2(result, rect.left, rect.top)
     return result
@@ -306,7 +292,7 @@ module VRender {
     for (const line of vrender) {
       if (line.length > 0) {
         for (let x = 0; x < xOffset; x++) {
-          line.unshift('\u{FFF0}')
+          line.unshift(TRANSPARENT)
         }
       }
     }
@@ -331,7 +317,7 @@ module VRender {
     const height = Math.max(...Object.values(textMatrix).map(getHeight))
     const matrixSorted = Object.entries(textMatrix).sort(([lhs], [rhs]) => Number(rhs) - Number(lhs)).map(([, lines]) => lines)
 
-    const result: string[][] = Array(height).fill(null).map(() => Array(length).fill('\u{FFF0}'))
+    const result: string[][] = Array(height).fill(null).map(() => Array(length).fill(TRANSPARENT))
     for (const lines of matrixSorted) {
       for (let y = 0; y < lines.length; y++) {
         const line = lines[y]
@@ -339,37 +325,45 @@ module VRender {
         for (let x = 0; x < line.length; x++) {
           const resultChar = resultLine[x]
           const char = line[x]
-          if (resultChar === '\u{FFF0}') {
+          if (resultChar === TRANSPARENT) {
+            // fall through
             resultLine[x] = char
-          } else {
-            const prefixIndex = char.indexOf('\u{FFF1}')
-            const suffixIndex = char.indexOf('\u{FFF2}')
-            if (prefixIndex !== -1 && suffixIndex !== -1) {
-              resultLine[x] = char.slice(prefixIndex + 1, suffixIndex) + resultChar + char.slice(suffixIndex + 1)
-            } else if (prefixIndex !== -1) {
-              resultLine[x] = char.slice(prefixIndex + 1) + resultChar
-            } else if (suffixIndex !== -1) {
-              resultLine[x] = resultChar + char.slice(suffixIndex + 1)
-            } // else ignore
+          } else if (!CharBg.has(resultChar) && CharBg.has(char)) {
+            // add background
+            resultLine[x] += CharBg.get(char)!
           }
         }
       }
     }
     for (let y = 0; y < result.length; y++) {
       const line = result[y]
+      let prevBg: CharBg | null = null
       for (let x = 0; x < line.length; x++) {
         const char = line[x]
-        if (char === '\u{FFF0}') {
+
+        // Fill if fallthrough
+        if (char === TRANSPARENT) {
           line[x] = ' '
-        } else {
-          const prefixIndex = char.indexOf('\u{FFF1}')
-          const suffixIndex = char.indexOf('\u{FFF2}')
-          if (prefixIndex !== -1) {
-            line[x] = char.slice(0, prefixIndex)
-          } else if (suffixIndex !== -1) {
-            line[x] = char.slice(0, suffixIndex)
-          } // else do nothing
         }
+
+        // Add open or close for background
+        const bg = CharBg.get(char)
+        if (bg !== null) {
+          line[x] = CharBg.remove(line[x])
+        }
+        if (prevBg !== bg) {
+          if (bg !== null) {
+            line[x] = CharBg.open(bg) + line[x]
+          }
+          if (prevBg !== null) {
+            line[x] = CharBg.close(prevBg) + line[x]
+          }
+        }
+        prevBg = bg
+      }
+
+      if (prevBg !== null) {
+        line[line.length - 1] += CharBg.close(prevBg)
       }
     }
     return result
@@ -385,5 +379,43 @@ module VRender {
 
   function getHeight (vrender: VRender): number {
     return vrender.length
+  }
+}
+
+const TRANSPARENT = '\u{FFF0}'
+
+type CharBg = string
+
+function CharBg (openEscape: string, closeEscape: string): string {
+  return `\u{FFF1}${openEscape}\u{FFF2}${closeEscape}`
+}
+
+module CharBg {
+  export function has (string: string): boolean {
+    return string.includes('\u{FFF1}')
+  }
+
+  export function get (string: string): CharBg | null {
+    if (!string.includes('\u{FFF1}')) {
+      return null
+    } else {
+      return string.substring(string.indexOf('\u{FFF1}'))
+    }
+  }
+
+  export function remove (string: string): string {
+    if (!string.includes('\u{FFF1}')) {
+      return string
+    } else {
+      return string.substring(0, string.indexOf('\u{FFF1}'))
+    }
+  }
+
+  export function open (bg: CharBg): string {
+    return bg.substring(bg.indexOf('\u{FFF1}') + 1, bg.indexOf('\u{FFF2}'))
+  }
+
+  export function close (bg: CharBg): string {
+    return bg.substring(bg.indexOf('\u{FFF2}') + 1)
   }
 }
