@@ -1,3 +1,5 @@
+import { Color as W3Color, Lab_to_XYZ, LCH_to_Lab, XYZ_to_lin_sRGB } from 'core/vdom/w3-color-conversions'
+
 export interface LCHColor {
   lightness: number
   chroma: number
@@ -91,15 +93,15 @@ export function Color (color: ColorSpec): RGBColor | LCHColor {
 
 export module LCHColor {
   export function toRGB (color: LCHColor): RGBColor {
-    const { lightness, chroma, hue } = color
-    const hrad = hue * Math.PI / 180
-    const c = chroma * Math.cos(hrad)
-    const x = c * (1 - Math.abs((lightness / 100) % 2 - 1))
-    const m = lightness / 100 - c / 2
-    const red = x + m
-    const green = m + c
-    const blue = m - x + m
-    return { red, green, blue }
+    const lch: W3Color = [color.lightness, color.chroma, color.hue]
+    const [red, green, blue] = XYZ_to_lin_sRGB(Lab_to_XYZ(LCH_to_Lab(lch)))
+
+    return {
+      red,
+      green,
+      blue,
+      alpha: color.alpha
+    }
   }
 
   export const FROM_STRING: Record<ColorName, LCHColor> = {

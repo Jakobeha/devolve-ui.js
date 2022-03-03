@@ -94,14 +94,18 @@ export class BrowserRendererImpl extends RendererImpl<VRender, AssetCacher> {
     return pixiColor
   }
 
-  protected override renderImage (bounds: BoundingBox, path: string): VRender {
-    const image = new PIXI.Sprite(this.assets.getImage(path))
-    // noinspection JSDeprecatedSymbols IntelliJ bug
-    image.anchor.set(0, 0)
-    return image
+  protected override renderImage (bounds: BoundingBox, columnSize: Size, path: string): { render: VRender, size: Size } {
+    const image = this.assets.getImage(path)
+    const render = new PIXI.Sprite(image)
+    render.anchor.set(0, 0)
+    const size: Size = {
+      width: image.width / columnSize.width,
+      height: image.height / columnSize.height
+    }
+    return { render, size }
   }
 
-  protected override renderVectorImage (bounds: BoundingBox, path: string): VRender {
+  protected override renderVectorImage (bounds: BoundingBox, columnSize: Size, path: string): { render: VRender, size: Size } {
     // TODO
     return null as any
   }

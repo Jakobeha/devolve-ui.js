@@ -13,7 +13,14 @@ export function initModule (imports: { readline: typeof import('readline') }): v
   readline = imports.readline
 }
 
-type VRender = Array<Array<string | null>>
+/**
+ * Each x/y index represents the character at that exact position in the terminal.
+ * If the character is multi-width, then the next character will be empty.
+ * If the character is \u{FFF0} it is a fallthrough (transparent, so the character under will be used).
+ * If the character contains \u{FFF1}, afterwards is a prefix which will be applied to the character above
+ * If the character contains \u{FFF2}, afterwards is a suffix which will be applied to the character above
+ */
+type VRender = string[][]
 
 export interface TerminalRenderOptions extends CoreRenderOptions {
   input?: ReadStream
@@ -111,8 +118,7 @@ export class TerminalRendererImpl extends RendererImpl<VRender, AssetCacher> {
     const input = Array.isArray(text) ? text : text.split('\n')
 
     const result: VRender = []
-    // all lines start with an empty character, for zero-width characters to be outside on overlap
-    let nextOutLine: string[] = ['']
+    let nextOutLine: string[] = []
     let nextOutLineWidth = 0
     // eslint-disable-next-line no-labels
     outer: for (const line of input) {
@@ -206,17 +212,24 @@ export class TerminalRendererImpl extends RendererImpl<VRender, AssetCacher> {
   }
 
   protected override renderSolidColor (rect: Rectangle, columnSize: Size, color: Color): VRender {
+    if (rect.width === 0 || rect.height === 0) {
+      return []
+    }
+
     const rgbColor = Color.toRGB(color)
-    const { openEscape, closeEscape } = chalk.bgRgb(rgbColor.red, rgbColor.green, rgbColor.blue)
+    const { openEscape, closeEscape } = chalk.bgRgb(rgbColor.red * 255, rgbColor.green * 255, rgbColor.blue * 255)
     const result: VRender = []
-    // all lines start with an empty character, for zero-width characters to be outside on overlap
     let nextLine: string[] = []
     for (let y = 0; y < rect.height; y++) {
-      nextLine.push(openEscape)
-      for (let x = 0; x < rect.width; x++) {
-        nextLine.push(' ')
+      if (rect.width === 1) {
+        nextLine.push(` \u{FFF1}${openEscape}\u{FFF2}${closeEscape}`)
+      } else {
+        nextLine.push(` \u{FFF1}${openEscape}`)
+        for (let x = 1; x < rect.width - 1; x++) {
+          nextLine.push(' ')
+        }
+        nextLine.push(` \u{FFF2}${closeEscape}`)
       }
-      nextLine.push(closeEscape)
 
       result.push(nextLine)
       nextLine = []
@@ -226,48 +239,46 @@ export class TerminalRendererImpl extends RendererImpl<VRender, AssetCacher> {
     return result
   }
 
-  protected override renderImage (bounds: BoundingBox, src: string, node: VNode): VRender {
+  protected override renderImage (bounds: BoundingBox, columnSize: Size, src: string, node: VNode): { render: VRender, size: Size } {
     const [image, resolveCallback] = this.assets.getImage(src, bounds.width, bounds.height)
     if (image === undefined) {
       throw new Error(`Could not get image for some unknown reason: ${src}`)
     } else if (image === null) {
-      resolveCallback(() => this.setNeedsRerender(node))
-      return this.renderText(bounds, 'clip', '...')
+      resolveCallback(() => this.invalidate(node))
+      return {
+        render: this.renderText(bounds, 'clip', '...'),
+        size: { width: '...'.length, height: 1 }
+      }
     } else {
-      return this.renderText(bounds, 'clip', image)
+      return {
+        render: this.renderText(bounds, 'clip', image),
+        size: {
+          width: Math.max(0, ...image.map(line => line.length)),
+          height: image.length
+        }
+      }
     }
   }
 
-  protected override renderVectorImage (bounds: BoundingBox, src: string): VRender {
+  protected override renderVectorImage (bounds: BoundingBox, columnSize: Size, src: string): { render: VRender, size: Size } {
     // Don't render these in terminal
-    return []
+    return {
+      render: [],
+      size: { width: 0, height: 0 }
+    }
   }
 
   override useInput (handler: (key: Key) => void): () => void {
-    function listener (chunk: string | Buffer): void {
-      if (chunk instanceof Buffer) {
-        chunk = chunk.toString()
-      }
-      for (const key of chunk) {
-        handler({
-          name: key,
-          shift: key === key.toUpperCase(),
-          ctrl: false,
-          meta: false
-        })
-      }
-    }
-    function listener2 (keyStr: string, key: Key): void {
-      if (key.name !== undefined) {
-        // key.name is undefined on data input
+    function listener (keyStr: string, key: Key): void {
+      if (key.name === undefined) {
+        console.warn(`Unknown key: ${keyStr} ${JSON.stringify(key)}`)
+      } else {
         handler(key)
       }
     }
-    this.input.addListener('data', listener)
-    this.input.addListener('keypress', listener2)
+    this.input.addListener('keypress', listener)
     return () => {
-      this.input.removeListener('keypress', listener2)
-      this.input.removeListener('data', listener)
+      this.input.removeListener('keypress', listener)
     }
   }
 
@@ -294,15 +305,9 @@ module VRender {
 
     for (const line of vrender) {
       if (line.length > 0) {
-        if (line[0] === '') {
-          line[0] = null
-        } else {
-          line[0] = ' ' + (line[0] as string)
+        for (let x = 0; x < xOffset; x++) {
+          line.unshift('\u{FFF0}')
         }
-        for (let x = 1; x < xOffset; x++) {
-          line.unshift(null)
-        }
-        line.unshift('')
       }
     }
     for (let y = 0; y < yOffset; y++) {
@@ -324,16 +329,28 @@ module VRender {
     // Array length not width
     const length = Math.max(...Object.values(textMatrix).map(get2dArrayLength))
     const height = Math.max(...Object.values(textMatrix).map(getHeight))
-    const matrixSorted = Object.entries(textMatrix).sort(([lhs], [rhs]) => Number(lhs) - Number(rhs)).map(([, lines]) => lines)
+    const matrixSorted = Object.entries(textMatrix).sort(([lhs], [rhs]) => Number(rhs) - Number(lhs)).map(([, lines]) => lines)
 
-    const result: Array<Array<string | null>> = Array(height).fill(null).map(() => Array(length).fill(null))
+    const result: string[][] = Array(height).fill(null).map(() => Array(length).fill('\u{FFF0}'))
     for (const lines of matrixSorted) {
       for (let y = 0; y < lines.length; y++) {
         const line = lines[y]
         const resultLine = result[y]
         for (let x = 0; x < line.length; x++) {
-          if (resultLine[x] === null) {
-            resultLine[x] = line[x]
+          const resultChar = resultLine[x]
+          const char = line[x]
+          if (resultChar === '\u{FFF0}') {
+            resultLine[x] = char
+          } else {
+            const prefixIndex = char.indexOf('\u{FFF1}')
+            const suffixIndex = char.indexOf('\u{FFF2}')
+            if (prefixIndex !== -1 && suffixIndex !== -1) {
+              resultLine[x] = char.slice(prefixIndex + 1, suffixIndex) + resultChar + char.slice(suffixIndex + 1)
+            } else if (prefixIndex !== -1) {
+              resultLine[x] = char.slice(prefixIndex + 1) + resultChar
+            } else if (suffixIndex !== -1) {
+              resultLine[x] = resultChar + char.slice(suffixIndex + 1)
+            } // else ignore
           }
         }
       }
@@ -341,12 +358,21 @@ module VRender {
     for (let y = 0; y < result.length; y++) {
       const line = result[y]
       for (let x = 0; x < line.length; x++) {
-        if (line[x] === null) {
+        const char = line[x]
+        if (char === '\u{FFF0}') {
           line[x] = ' '
+        } else {
+          const prefixIndex = char.indexOf('\u{FFF1}')
+          const suffixIndex = char.indexOf('\u{FFF2}')
+          if (prefixIndex !== -1) {
+            line[x] = char.slice(0, prefixIndex)
+          } else if (suffixIndex !== -1) {
+            line[x] = char.slice(0, suffixIndex)
+          } // else do nothing
         }
       }
     }
-    return result as string[][]
+    return result
   }
 
   function getWidth (vrender: VRender): number {

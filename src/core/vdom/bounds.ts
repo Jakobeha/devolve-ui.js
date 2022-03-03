@@ -52,7 +52,7 @@ export interface ParentBounds {
   columnSize: Size
 }
 
-export type Bounds = (parent: ParentBounds, prevSibling: BoundingBox | null) => BoundingBox
+export type Bounds = (parent: ParentBounds, prevSibling: Rectangle | null) => BoundingBox
 
 export interface FullBoundsSpec {
   layout?: LayoutPosition
@@ -113,7 +113,7 @@ function reifyY (parent: ParentBounds, y: Measurement): number {
     return parseFloat(y)
   } else if (y.endsWith('%')) {
     if (parent.boundingBox.height === undefined) {
-      throw new Error(`cannot convert percent ${y} to number because parent height is unknown`)
+      throw new Error(`bad layout: cannot convert percent ${y} to number because parent height is unknown`)
     }
     return (parent.boundingBox.height * parseFloat(y) / 100)
   } else if (y.endsWith('px')) {
@@ -129,7 +129,7 @@ function reifyY (parent: ParentBounds, y: Measurement): number {
   }
 }
 
-function applyLayoutX (parent: ParentBounds, prevSibling: BoundingBox | null, layout: LayoutPosition, reified: number): number {
+function applyLayoutX (parent: ParentBounds, prevSibling: Rectangle | null, layout: LayoutPosition, reified: number): number {
   const layout1D = typeof layout === 'string' ? layout : layout.x
   switch (layout1D) {
     case 'global-absolute':
@@ -139,7 +139,7 @@ function applyLayoutX (parent: ParentBounds, prevSibling: BoundingBox | null, la
     case 'relative':
       switch (parent.sublayout.direction) {
         case 'horizontal':
-          return reified + (prevSibling?.x ?? parent.boundingBox.x)
+          return reified + (prevSibling !== null ? prevSibling.left + prevSibling.width : getLayoutBoundingBoxLeft(parent.boundingBox))
         case 'vertical':
           return reified + parent.boundingBox.x
         case 'overlap':
@@ -153,7 +153,7 @@ function applyLayoutX (parent: ParentBounds, prevSibling: BoundingBox | null, la
   }
 }
 
-function applyLayoutY (parent: ParentBounds, prevSibling: BoundingBox | null, layout: LayoutPosition, reified: number): number {
+function applyLayoutY (parent: ParentBounds, prevSibling: Rectangle | null, layout: LayoutPosition, reified: number): number {
   const layout1D = typeof layout === 'string' ? layout : layout.y
   switch (layout1D) {
     case 'global-absolute':
@@ -165,7 +165,7 @@ function applyLayoutY (parent: ParentBounds, prevSibling: BoundingBox | null, la
         case 'horizontal':
           return reified + parent.boundingBox.y
         case 'vertical':
-          return reified + (prevSibling?.y ?? parent.boundingBox.y)
+          return reified + (prevSibling !== null ? prevSibling.top + prevSibling.height : getLayoutBoundingBoxTop(parent.boundingBox))
         case 'overlap':
           return reified + parent.boundingBox.y
         case undefined:
@@ -177,23 +177,71 @@ function applyLayoutY (parent: ParentBounds, prevSibling: BoundingBox | null, la
   }
 }
 
+export function getLayoutBoundingBoxLeft (bounds: BoundingBox): number {
+  if (bounds.anchorX === 0) {
+    return bounds.x
+  } else if (bounds.width === undefined) {
+    throw new Error('bad layout: bounds not anchored at left has no width, so we don\'t know where to put the child')
+  } else {
+    return bounds.x - (bounds.anchorX * bounds.width)
+  }
+}
+
+export function getLayoutBoundingBoxTop (bounds: BoundingBox): number {
+  if (bounds.anchorY === 0) {
+    return bounds.y
+  } else if (bounds.height === undefined) {
+    throw new Error('bad layout: bounds not anchored at top has no height, so we don\'t know where to put the child')
+  } else {
+    return bounds.y - (bounds.anchorY * bounds.height)
+  }
+}
+
 export module ParentBounds {
   export function equals (a: ParentBounds, b: ParentBounds): boolean {
     return JSON.stringify(a) === JSON.stringify(b)
   }
 }
 
-export module BoundingBox {
-  export function equals (a: BoundingBox | null, b: BoundingBox | null): boolean {
+export module Rectangle {
+  export function equals (a: Rectangle | null, b: Rectangle | null): boolean {
     return JSON.stringify(a) === JSON.stringify(b)
   }
 
-  export function toRectangle (bounds: BoundingBox & Size): Rectangle {
+  export function union (a: Rectangle | null, b: Rectangle | null): Rectangle | null {
+    if (a === null) {
+      return b
+    } else if (b === null) {
+      return a
+    } else {
+      const left = Math.min(a.left, b.left)
+      const top = Math.min(a.top, b.top)
+      const right = Math.max(a.left + a.width, b.left + b.width)
+      const bottom = Math.max(a.top + a.height, b.top + b.height)
+      return {
+        left,
+        top,
+        width: right - left,
+        height: bottom - top
+      }
+    }
+  }
+}
+
+export module BoundingBox {
+  export function toRectangle (bounds: BoundingBox & Size): Rectangle
+  export function toRectangle (bounds: BoundingBox, size: Size): Rectangle
+  export function toRectangle (bounds: BoundingBox, size?: Size): Rectangle {
+    const width = bounds.width ?? size?.width
+    const height = bounds.height ?? size?.height
+    if (width === undefined || height === undefined) {
+      throw new Error('toRectangle invalid arguments: bounds has no size and no size provided')
+    }
     return {
-      left: bounds.x - (bounds.anchorX * bounds.width),
-      top: bounds.y - (bounds.anchorY * bounds.height),
-      width: bounds.width,
-      height: bounds.height
+      left: bounds.x - (bounds.anchorX * width),
+      top: bounds.y - (bounds.anchorY * height),
+      width,
+      height
     }
   }
 }

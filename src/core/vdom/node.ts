@@ -1,12 +1,10 @@
 import { BoxAttrs, ColorAttrs, SourceAttrs, TextAttrs } from 'core/vdom/attrs'
-import { RendererImpl } from 'renderer/common'
 
 export type VNode = VBox | VText | VColor | VSource
 
 interface VNodeCommon {
   // Really don't want to use both null and undefined
   parent?: VBox | 'none'
-  renderer?: RendererImpl<any, any>
 }
 
 export interface VBox extends BoxAttrs, VNodeCommon {
@@ -46,14 +44,14 @@ export module VNode {
 
   export function convertInto<T extends VNode> (target: Partial<VNode>, newData: T): asserts target is T {
     for (const prop in target) {
-      if (prop !== 'parent' && prop !== 'renderer') {
+      if (prop !== 'parent') {
         // eslint-disable-next-line @typescript-eslint/no-dynamic-delete
         delete (target as any)[prop]
       }
     }
     for (const prop in newData) {
-      if (prop === 'parent' || prop === 'renderer') {
-        throw new Error('new data cannot have parent or renderer')
+      if (prop === 'parent') {
+        throw new Error('new data cannot have parent')
       } else {
         (target as T)[prop] = newData[prop]
         if (prop === 'children') {

@@ -1,7 +1,7 @@
 import { BoundingBox, Bounds, Color, ParentBounds, Rectangle, Size, VNode } from 'core/vdom'
 import { CoreRenderOptions, Renderer } from 'core/renderer'
 import { VComponent, VRoot } from 'core/component'
-import { Key } from '@raycenity/misc-ts'
+import { Key, Strings } from '@raycenity/misc-ts'
 
 type Timer = NodeJS.Timer
 
@@ -37,12 +37,12 @@ export abstract class CoreAssetCacher {
 
 export interface VRenderBatch<VRender> {
   [zPosition: number]: VRender
-  bounds: BoundingBox | null
+  rect: Rectangle | null
 }
 
 interface CachedRenderInfo {
   parentBounds: ParentBounds
-  siblingBounds: BoundingBox | null
+  siblingBounds: Rectangle | null
 }
 
 export abstract class RendererImpl<VRender, AssetCacher extends CoreAssetCacher> implements Renderer {
@@ -106,13 +106,15 @@ export abstract class RendererImpl<VRender, AssetCacher extends CoreAssetCacher>
     this.isVisible = false
   }
 
-  setNeedsRerender (diff: RenderDiff): void {
-    let node: VNode | 'none' = diff
-    while (node !== 'none') {
-      this.cachedRenders.delete(node)
-      node = node.parent!
+  invalidate (node: VNode): void {
+    let nextNode: VNode | 'none' = node
+    while (nextNode !== 'none' && nextNode !== undefined) {
+      this.cachedRenders.delete(nextNode)
+      nextNode = nextNode.parent!
     }
-    this.needsRerender = true
+    if (nextNode === 'none') {
+      this.needsRerender = true
+    }
   }
 
   reroot<Props> (props?: Props, root?: (props: Props) => VNode): void {
@@ -143,15 +145,15 @@ export abstract class RendererImpl<VRender, AssetCacher extends CoreAssetCacher>
   }
   protected abstract renderText (bounds: BoundingBox, wrapMode: 'word' | 'char' | 'clip' | undefined, text: string, node: VNode): VRender
   protected abstract renderSolidColor (rect: Rectangle, columnSize: Size, color: Color, node: VNode): VRender
-  protected abstract renderImage (bounds: BoundingBox, src: string, node: VNode): VRender
-  protected abstract renderVectorImage (bounds: BoundingBox, src: string, node: VNode): VRender
+  protected abstract renderImage (bounds: BoundingBox, columnSize: Size, src: string, node: VNode): { render: VRender, size: Size }
+  protected abstract renderVectorImage (bounds: BoundingBox, columnSize: Size, src: string, node: VNode): { render: VRender, size: Size }
 
-  protected renderNode (parentBounds: ParentBounds, siblingBounds: BoundingBox | null, node: VNode): VRenderBatch<VRender> {
+  protected renderNode (parentBounds: ParentBounds, siblingBounds: Rectangle | null, node: VNode): VRenderBatch<VRender> {
     if (this.cachedRenders.has(node)) {
       const cachedRender = this.cachedRenders.get(node)!
       if (
         ParentBounds.equals(cachedRender.parentBounds, parentBounds) &&
-        BoundingBox.equals(cachedRender.siblingBounds, siblingBounds)
+        Rectangle.equals(cachedRender.siblingBounds, siblingBounds)
       ) {
         return cachedRender
       } else {
@@ -173,9 +175,9 @@ export abstract class RendererImpl<VRender, AssetCacher extends CoreAssetCacher>
     }
   }
 
-  private renderNodeImpl (parentBounds: ParentBounds, siblingBounds: BoundingBox | null, node: VNode): VRenderBatch<VRender> {
+  private renderNodeImpl (parentBounds: ParentBounds, siblingBounds: Rectangle | null, node: VNode): VRenderBatch<VRender> {
     if (node.visible === false) {
-      return { bounds: null }
+      return { rect: null }
     }
 
     const bounds = (node.bounds ?? Bounds.DEFAULT)(parentBounds, siblingBounds)
@@ -192,14 +194,18 @@ export abstract class RendererImpl<VRender, AssetCacher extends CoreAssetCacher>
         const children = []
         let lastChild = null
         for (const child of node.children) {
-          const childRender = this.renderNode(bounds2, lastChild?.bounds ?? null, child)
+          const childRender = this.renderNode(bounds2, lastChild?.rect ?? null, child)
           children.push(childRender)
           lastChild = childRender
         }
 
+        // Reverse so renders earlier are rendered above
+        children.reverse()
+
         // Merge child renders
-        const mergedRender: VRenderBatch<VRender> = { bounds }
+        const mergedRender: VRenderBatch<VRender> = { rect: null }
         for (const child of children) {
+          mergedRender.rect = Rectangle.union(mergedRender.rect, child.rect)
           for (const [zString, render] of Object.entries(child)) {
             let zPosition = Number(zString)
             if (!isNaN(zPosition)) {
@@ -212,11 +218,17 @@ export abstract class RendererImpl<VRender, AssetCacher extends CoreAssetCacher>
         }
         return mergedRender
       }
-      case 'text':
+      case 'text': {
+        const lines = node.text.split('\n')
+        const rect = BoundingBox.toRectangle(bounds, {
+          width: Math.max(0, ...lines.map(Strings.width)),
+          height: lines.length
+        })
         return {
-          bounds,
+          rect,
           [bounds.z]: this.renderText(bounds, node.wrapMode, node.text, node)
         }
+      }
       case 'color': {
         const inferredBounds = {
           ...bounds,
@@ -228,7 +240,7 @@ export abstract class RendererImpl<VRender, AssetCacher extends CoreAssetCacher>
         }
         const rect = BoundingBox.toRectangle(inferredBounds as BoundingBox & Size)
         return {
-          bounds,
+          rect,
           [bounds.z]: this.renderSolidColor(rect, parentBounds.columnSize, node.color, node)
         }
       }
@@ -238,16 +250,22 @@ export abstract class RendererImpl<VRender, AssetCacher extends CoreAssetCacher>
           case 'png':
           case 'jpg':
           case 'jpeg':
-          case 'gif':
+          case 'gif': {
+            const { render, size } = this.renderImage(bounds, parentBounds.columnSize, node.src, node)
+            const rect = BoundingBox.toRectangle(bounds, size)
             return {
-              bounds,
-              [bounds.z]: this.renderImage(bounds, node.src, node)
+              rect,
+              [bounds.z]: render
             }
-          case 'svg':
+          }
+          case 'svg': {
+            const { render, size } = this.renderVectorImage(bounds, parentBounds.columnSize, node.src, node)
+            const rect = BoundingBox.toRectangle(bounds, size)
             return {
-              bounds,
-              [bounds.z]: this.renderVectorImage(bounds, node.src, node)
+              rect,
+              [bounds.z]: render
             }
+          }
           case undefined:
             throw new Error('source must have an extension to determine the filetype')
           default:

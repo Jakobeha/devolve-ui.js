@@ -45,13 +45,13 @@ export function _useDynamicState<T> (initialState: T, doUpdate: boolean): [() =>
 }
 
 interface UseEffectRerunOnChange<Dep> { onChange: Dep[], compare?: (lhs: Dep, rhs: Dep) => boolean }
-interface UseEffectRerunOnTrue { onTrue: () => boolean }
+interface UseEffectRerunOnDefine<Dep> { onDefine: Array<Dep | undefined> }
 
 export type UseEffectRerun =
   'on-update' |
   'on-create' |
   UseEffectRerunOnChange<any> |
-  UseEffectRerunOnTrue
+  UseEffectRerunOnDefine<any>
 
 /**
  * Returns an effect which will be called according to `rerun`:
@@ -59,6 +59,7 @@ export type UseEffectRerun =
  * - `on-update`: Called every time the component updates. This means it will work the same as putting the code outside of `useEffect`, except effects are delayed until after the component is created.
  * - `on-create`: Called only once when the component is created. Not called in subsequent updates.
  * - `{ onChange: deps, compare? }`: Called when `deps` change, compares each dependency using `compare` if provided (otherwise `===`).
+ * - `{ onDefine: deps }`: Called when `deps` change and every one of `deps` becomes undefined
  * - `{ onTrue: () => boolean }`: Called when the return value of `() => boolean` is true (TODO not implemented).
  */
 // eslint-disable-next-line @typescript-eslint/no-invalid-void-type
@@ -112,7 +113,27 @@ export function useEffect (effect: () => void | (() => void), rerun: UseEffectRe
     if (!component.isBeingCreated) {
       setMemo(ourMemo)
     }
-  } else if ('onTrue' in rerun) {
-    throw new Error('TODO not implemented')
+  } else if ('onDefine' in rerun) {
+    const deps = rerun.onDefine
+    const depsWereDefined = !deps.some(dep => dep === undefined)
+    const [lastDepsWereDefined, setLastDepsWereDefined] = _useDynamicState(false, false)
+    if (depsWereDefined && !lastDepsWereDefined()) {
+      component.effects.push(() => {
+        const result = effect()
+        if (typeof result === 'function') {
+          const updateDestructor = (): void => {
+            if (!lastDepsWereDefined()) {
+              result()
+            } else {
+              component.nextUpdateDestructors.push(updateDestructor)
+            }
+          }
+          component.updateDestructors.push(updateDestructor)
+          // Update destructors aren't run on permanent destruct (we take advantage of that here w/ different update destructor)
+          component.permanentDestructors.push(result)
+        }
+      })
+    }
+    setLastDepsWereDefined(depsWereDefined)
   }
 }

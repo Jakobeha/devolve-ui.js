@@ -11,6 +11,7 @@ export interface VComponent<Props = any> {
   readonly state: any[]
   readonly effects: Array<() => void>
   readonly updateDestructors: Array<() => void>
+  nextUpdateDestructors: Array<() => void>
   readonly permanentDestructors: Array<() => void>
 
   isBeingCreated: boolean
@@ -97,6 +98,7 @@ export module VComponent {
       state: [],
       effects: [],
       updateDestructors: [],
+      nextUpdateDestructors: [],
       permanentDestructors: [],
 
       isBeingCreated: true,
@@ -149,6 +151,7 @@ export module VComponent {
       withRenderer(vcomponent.renderer, () => doUpdate(vcomponent, () => {
         VNode.convertInto(vcomponent.node, vcomponent.construct(vcomponent.props))
       }))
+      vcomponent.renderer.invalidate(vcomponent.node as VNode)
     }
   }
 
@@ -157,10 +160,14 @@ export module VComponent {
       throw new Error('sanity check: tried to destroy already dead component')
     }
 
+    vcomponent.renderer.invalidate(vcomponent.node as VNode)
+
     runPermanentDestructors(vcomponent)
     vcomponent.isDead = true
 
     for (const child of Object.values(vcomponent.children)) {
+      // set parent to undefined before destroy so it doesn't invalidate the parent again
+      child.node.parent = undefined
       destroy(child)
     }
   }
@@ -213,6 +220,8 @@ export module VComponent {
       const destructor = vcomponent.updateDestructors.pop()!
       destructor()
     }
+    vcomponent.updateDestructors.push(...vcomponent.nextUpdateDestructors)
+    vcomponent.nextUpdateDestructors = []
     // Child update (and permanent if necessary) destructors are taken care of
   }
 
