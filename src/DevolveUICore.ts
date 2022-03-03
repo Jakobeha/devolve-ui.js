@@ -79,20 +79,31 @@ export abstract class DevolveUICore<Props extends RootProps<MessageKeys, PromptK
     const earlyCancelPromise: PromptReturn<Props['prompts'][Key]> = new Promise((resolve, reject) => {
       setInterval(() => {
         if (earlyCancelPing?.() === true) {
+          delete this.props.prompts[key]
           reject(new PromptTimeoutError())
         }
       }, 100)
     })
-    const promptPromise: PromptReturn<Props['prompts'][Key]> = new Promise((resolve, reject) => {
+    // eslint-disable-next-line promise/param-names
+    const promptPromise: PromptReturn<Props['prompts'][Key]> = new Promise((resolve_, reject_) => {
       if (key in this.props.prompts) {
         throw new Error('sanity check failed, probably a race condition')
       }
+
+      // We want to delete the prompt before resolve completes, to prevent confusing race conditions
+      const resolve = (arg: any): void => {
+        delete this.props.prompts[key]
+        resolve_(arg)
+      }
+      const reject = (arg: any): void => {
+        delete this.props.prompts[key]
+        reject_(arg)
+      }
       this.props.prompts[key] = { ...promptArgs, resolve, reject }
+
       this.updateProps()
     })
-    return await Promise.race([promptPromise, earlyCancelPromise]).finally(() => {
-      delete this.props.prompts[key]
-    })
+    return await Promise.race([promptPromise, earlyCancelPromise])
   }
 
   show (): void {
