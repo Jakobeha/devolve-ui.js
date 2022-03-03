@@ -138,8 +138,11 @@ function applyLayoutX (parent: ParentBounds, prevSibling: Rectangle | null, layo
       return reified + parent.boundingBox.x
     case 'relative':
       switch (parent.sublayout.direction) {
-        case 'horizontal':
-          return reified + (prevSibling !== null ? prevSibling.left + prevSibling.width : getLayoutBoundingBoxLeft(parent.boundingBox))
+        case 'horizontal': {
+          // Yes, we do want to reify the parent's sublayout with it's own bounds
+          const gap = parent.sublayout.gap !== undefined ? reifyX(parent, parent.sublayout.gap) : 0
+          return reified + (prevSibling !== null ? prevSibling.left + prevSibling.width + gap : getLayoutBoundingBoxLeft(parent.boundingBox))
+        }
         case 'vertical':
           return reified + parent.boundingBox.x
         case 'overlap':
@@ -164,8 +167,11 @@ function applyLayoutY (parent: ParentBounds, prevSibling: Rectangle | null, layo
       switch (parent.sublayout.direction) {
         case 'horizontal':
           return reified + parent.boundingBox.y
-        case 'vertical':
-          return reified + (prevSibling !== null ? prevSibling.top + prevSibling.height : getLayoutBoundingBoxTop(parent.boundingBox))
+        case 'vertical': {
+          // Yes, we do want to reify the parent's sublayout with it's own bounds
+          const gap = parent.sublayout.gap !== undefined ? reifyY(parent, parent.sublayout.gap) : 0
+          return reified + (prevSibling !== null ? prevSibling.top + prevSibling.height + gap : getLayoutBoundingBoxTop(parent.boundingBox))
+        }
         case 'overlap':
           return reified + parent.boundingBox.y
         case undefined:
