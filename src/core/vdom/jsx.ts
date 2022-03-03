@@ -55,10 +55,10 @@ export const intrinsics: {
   },
   text: (props: JSXTextAttrs, ...text: string[]): VNode => VText(text.join(''), jsxToNormalAttrs(props)),
   color: (props: JSXColorAttrs): VNode => {
-    const { color: providedColor, name, red, green, blue, lightness, chroma, hue, bounds, ...attrs } = jsxToNormalAttrs(props)
+    const { color: colorSpec, name, red, green, blue, lightness, chroma, hue, bounds, ...attrs } = jsxToNormalAttrs(props)
     let color: Color | null = null
-    if (providedColor !== undefined) {
-      color = providedColor
+    if (colorSpec !== undefined) {
+      color = Color(colorSpec)
     } else if (name !== undefined) {
       color = Color({ name })
     } else if (red !== undefined && green !== undefined && blue !== undefined) {

@@ -27,7 +27,8 @@ export type ColorName =
   'brown' |
   'black' |
   'white' |
-  'gray'
+  'gray' |
+  'cyan'
 
 export type Color =
   LCHColor |
@@ -115,7 +116,8 @@ export module LCHColor {
     brown: { lightness: 50, chroma: 50, hue: 30 },
     black: { lightness: 0, chroma: 0, hue: 0 },
     white: { lightness: 100, chroma: 0, hue: 0 },
-    gray: { lightness: 50, chroma: 0, hue: 0 }
+    gray: { lightness: 50, chroma: 0, hue: 0 },
+    cyan: { lightness: 50, chroma: 100, hue: 180 }
   }
 }
 
