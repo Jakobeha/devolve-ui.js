@@ -195,7 +195,6 @@ export module VComponent {
     for (const [childKey, child] of Object.entries(vcomponent.children)) {
       if (child.isFresh) {
         child.isFresh = false
-        clearFreshAndRemoveStaleChildren(child)
       } else {
         destroy(child)
         delete vcomponent.children[childKey]
