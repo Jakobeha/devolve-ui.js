@@ -69,8 +69,8 @@ export type BoundsSpec = FullBoundsSpec
 
 export function Bounds (spec: BoundsSpec): Bounds {
   return (parent, prevSibling) => ({
-    x: applyLayoutX(parent, prevSibling, spec.layout ?? 'relative', reifyX(parent, spec.x ?? 0)),
-    y: applyLayoutY(parent, prevSibling, spec.layout ?? 'relative', reifyY(parent, spec.y ?? 0)),
+    x: applyLayoutX(parent, prevSibling, spec.layout, reifyX(parent, spec.x)),
+    y: applyLayoutY(parent, prevSibling, spec.layout, reifyY(parent, spec.y)),
     z: spec.z ?? parent.boundingBox.z + Bounds.BOX_Z,
     anchorX: spec.anchorX ?? 0,
     anchorY: spec.anchorY ?? 0,
@@ -79,8 +79,10 @@ export function Bounds (spec: BoundsSpec): Bounds {
   })
 }
 
-function reifyX (parent: ParentBounds, x: Measurement): number {
-  if (typeof x === 'number') {
+function reifyX (parent: ParentBounds, x: Measurement | undefined): number {
+  if (x === undefined) {
+    return 0
+  } else if (typeof x === 'number') {
     return x
   } else if (/^[0-9]+$/.test(x)) {
     return parseInt(x)
@@ -104,8 +106,10 @@ function reifyX (parent: ParentBounds, x: Measurement): number {
   }
 }
 
-function reifyY (parent: ParentBounds, y: Measurement): number {
-  if (typeof y === 'number') {
+function reifyY (parent: ParentBounds, y: Measurement | undefined): number {
+  if (y === undefined) {
+    return 0
+  } else if (typeof y === 'number') {
     return y
   } else if (/^[0-9]+$/.test(y)) {
     return parseInt(y)
@@ -129,18 +133,19 @@ function reifyY (parent: ParentBounds, y: Measurement): number {
   }
 }
 
-function applyLayoutX (parent: ParentBounds, prevSibling: Rectangle | null, layout: LayoutPosition, reified: number): number {
-  const layout1D = typeof layout === 'string' ? layout : layout.x
+function applyLayoutX (parent: ParentBounds, prevSibling: Rectangle | null, layout: LayoutPosition | undefined, reified: number): number {
+  const layout1D = typeof layout === 'string' || typeof layout === 'undefined' ? layout : layout.x
   switch (layout1D) {
     case 'global-absolute':
       return reified
     case 'local-absolute':
       return reified + parent.boundingBox.x
+    case undefined:
     case 'relative':
       switch (parent.sublayout.direction) {
         case 'horizontal': {
           // Yes, we do want to reify the parent's sublayout with it's own bounds
-          const gap = parent.sublayout.gap !== undefined ? reifyX(parent, parent.sublayout.gap) : 0
+          const gap = reifyX(parent, parent.sublayout.gap)
           return reified + (prevSibling !== null ? prevSibling.left + prevSibling.width + gap : getLayoutBoundingBoxLeft(parent.boundingBox))
         }
         case 'vertical':
@@ -156,20 +161,21 @@ function applyLayoutX (parent: ParentBounds, prevSibling: Rectangle | null, layo
   }
 }
 
-function applyLayoutY (parent: ParentBounds, prevSibling: Rectangle | null, layout: LayoutPosition, reified: number): number {
-  const layout1D = typeof layout === 'string' ? layout : layout.y
+function applyLayoutY (parent: ParentBounds, prevSibling: Rectangle | null, layout: LayoutPosition | undefined, reified: number): number {
+  const layout1D = typeof layout === 'string' || typeof layout === 'undefined' ? layout : layout.y
   switch (layout1D) {
     case 'global-absolute':
       return reified
     case 'local-absolute':
       return reified + parent.boundingBox.y
+    case undefined:
     case 'relative':
       switch (parent.sublayout.direction) {
         case 'horizontal':
           return reified + parent.boundingBox.y
         case 'vertical': {
           // Yes, we do want to reify the parent's sublayout with it's own bounds
-          const gap = parent.sublayout.gap !== undefined ? reifyY(parent, parent.sublayout.gap) : 0
+          const gap = reifyY(parent, parent.sublayout.gap)
           return reified + (prevSibling !== null ? prevSibling.top + prevSibling.height + gap : getLayoutBoundingBoxTop(parent.boundingBox))
         }
         case 'overlap':

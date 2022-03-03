@@ -75,8 +75,7 @@ export const intrinsics: {
 }
 
 function jsxToNormalAttrs<T extends CommonAttrs> (jsxAttrs: T & BoundsSpec): Omit<T & BoundsSpec, 'bounds' | keyof BoundsSpec> & { bounds: Bounds } {
-  const { x, y, z, anchorX, anchorY, width, height, bounds: explicitBounds, ...attrs } = jsxAttrs
-  const bounds = explicitBounds ?? Bounds({ x, y, z, anchorX, anchorY, width, height })
-  // @ts-expect-error this really should not be an error
+  const { layout, x, y, z, anchorX, anchorY, width, height, bounds: explicitBounds, ...attrs } = jsxAttrs
+  const bounds = explicitBounds ?? Bounds({ layout, x, y, z, anchorX, anchorY, width, height })
   return { bounds, ...attrs }
 }
