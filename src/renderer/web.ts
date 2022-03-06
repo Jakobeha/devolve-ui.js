@@ -1,4 +1,4 @@
-import { BoundingBox, Color, Rectangle, Size, VNode } from 'core/vdom'
+import { BorderStyle, BoundingBox, Color, Rectangle, Size, VNode } from 'core/vdom'
 import { CoreRenderOptions } from 'core/renderer'
 import { CoreAssetCacher, RendererImpl, VRenderBatch } from 'renderer/common'
 import { Key, Strings } from '@raycenity/misc-ts'
@@ -91,6 +91,76 @@ export class BrowserRendererImpl extends RendererImpl<VRender, AssetCacher> {
       rect.width * columnSize.width,
       rect.height * columnSize.height
     )
+    return pixiColor
+  }
+
+  protected override renderBorder (rect: Rectangle, columnSize: Size, color: Color | null, borderStyle: BorderStyle): VRender {
+    const pixiColor = new PIXI.Graphics()
+    pixiColor.lineStyle(borderStyle === 'thick' ? 2 : 1, Color.toNumber(color ?? Color('black')))
+    switch (borderStyle) {
+      case 'single':
+        pixiColor.drawRect(
+          rect.left * columnSize.width,
+          rect.top * columnSize.height,
+          rect.width * columnSize.width,
+          rect.height * columnSize.height
+        )
+        break
+      case 'card':
+        pixiColor.drawRect(
+          (rect.left - 0.125) * columnSize.width,
+          rect.top * columnSize.height,
+          (rect.width + 0.25) * columnSize.width,
+          rect.height * columnSize.height
+        )
+        pixiColor.drawRect(
+          (rect.left + 0.125) * columnSize.width,
+          rect.top * columnSize.height,
+          (rect.width + 0.25) * columnSize.width,
+          rect.height * columnSize.height
+        )
+        break
+      case 'double':
+        pixiColor.drawRect(
+          (rect.left - 0.125) * columnSize.width,
+          (rect.top - 0.0625) * columnSize.height,
+          (rect.width + 0.25) * columnSize.width,
+          (rect.height + 0.125) * columnSize.height
+        )
+        pixiColor.drawRect(
+          (rect.left + 0.125) * columnSize.width,
+          (rect.top + 0.0625) * columnSize.height,
+          (rect.width + 0.25) * columnSize.width,
+          (rect.height + 0.125) * columnSize.height
+        )
+        break
+      case 'thick':
+        pixiColor.drawRect(
+          (rect.left - 0.125) * columnSize.width,
+          (rect.top - 0.0625) * columnSize.height,
+          (rect.width + 0.25) * columnSize.width,
+          (rect.height + 0.125) * columnSize.height
+        )
+        break
+      case 'rounded':
+        pixiColor.drawRoundedRect(
+          rect.left * columnSize.width,
+          rect.top * columnSize.height,
+          rect.width * columnSize.width,
+          rect.height * columnSize.height,
+          0.125 * Math.min(columnSize.width, columnSize.height)
+        )
+        break
+      case 'dashed':
+        console.warn('TODO: dashed border style not supported by Pixi renderer')
+        pixiColor.drawRect(
+          rect.left * columnSize.width,
+          rect.top * columnSize.height,
+          rect.width * columnSize.width,
+          rect.height * columnSize.height
+        )
+        break
+    }
     return pixiColor
   }
 

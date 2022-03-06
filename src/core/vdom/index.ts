@@ -1,4 +1,5 @@
 export * from 'core/vdom/attrs'
+export * from 'core/vdom/border-style'
 export * from 'core/vdom/bounds'
 export * from 'core/vdom/color'
 export * from 'core/vdom/jsx'

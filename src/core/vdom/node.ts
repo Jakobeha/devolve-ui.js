@@ -1,6 +1,6 @@
-import { BoxAttrs, ColorAttrs, SourceAttrs, TextAttrs } from 'core/vdom/attrs'
+import { BorderAttrs, BoxAttrs, ColorAttrs, SourceAttrs, TextAttrs } from 'core/vdom/attrs'
 
-export type VNode = VBox | VText | VColor | VSource
+export type VNode = VBox | VText | VColor | VBorder | VSource
 
 interface VNodeCommon {
   // Really don't want to use both null and undefined
@@ -21,27 +21,15 @@ export interface VColor extends ColorAttrs, VNodeCommon {
   type: 'color'
 }
 
+export interface VBorder extends BorderAttrs, VNodeCommon {
+  type: 'border'
+}
+
 export interface VSource extends SourceAttrs, VNodeCommon {
   type: 'source'
 }
 
 export module VNode {
-  export function isText (node: VNode): node is VText {
-    return node.type === 'text'
-  }
-
-  export function isBox (node: VNode): node is VBox {
-    return node.type === 'box'
-  }
-
-  export function isColor (node: VNode): node is VColor {
-    return node.type === 'color'
-  }
-
-  export function isSource (node: VNode): node is VSource {
-    return node.type === 'source'
-  }
-
   export function convertInto<T extends VNode> (target: Partial<VNode>, newData: T): asserts target is T {
     for (const prop in target) {
       if (prop !== 'parent') {
@@ -79,6 +67,10 @@ export function VBox (children: VNode[], attrs: BoxAttrs): VBox {
 
 export function VColor (attrs: ColorAttrs): VColor {
   return { type: 'color', ...attrs }
+}
+
+export function VBorder (attrs: BorderAttrs): VBorder {
+  return { type: 'border', ...attrs }
 }
 
 export function VSource (attrs: SourceAttrs): VSource {

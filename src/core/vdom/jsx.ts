@@ -1,7 +1,7 @@
-import { CommonAttrs, JSXBoxAttrs, JSXColorAttrs, JSXSourceAttrs, JSXTextAttrs } from 'core/vdom/attrs'
+import { CommonAttrs, JSXBorderAttrs, JSXBoxAttrs, JSXColorAttrs, JSXSourceAttrs, JSXTextAttrs } from 'core/vdom/attrs'
 import { Bounds, BoundsSpec, SubLayout } from 'core/vdom/bounds'
 import { Color } from 'core/vdom/color'
-import { VBox, VColor, VNode, VSource, VText } from 'core/vdom/node'
+import { VBorder, VBox, VColor, VNode, VSource, VText } from 'core/vdom/node'
 import { ExplicitPartial, IntoArray } from '@raycenity/misc-ts'
 
 export type JSX =
@@ -28,6 +28,7 @@ export interface JSXIntrinsics {
   box: JSXBoxAttrs & { children?: JSX[] }
   text: JSXTextAttrs & { children?: string | string[] }
   color: JSXColorAttrs & { children?: [] }
+  border: JSXBorderAttrs & { children?: [] }
   source: JSXSourceAttrs & { children?: [] }
 }
 
@@ -54,23 +55,8 @@ export const intrinsics: {
     return VBox(children_, { bounds, visible, key, sublayout, ...attrs })
   },
   text: (props: JSXTextAttrs, ...text: string[]): VNode => VText(text.join(''), jsxToNormalAttrs(props)),
-  color: (props: JSXColorAttrs): VNode => {
-    const { color: colorSpec, name, red, green, blue, lightness, chroma, hue, bounds, ...attrs } = jsxToNormalAttrs(props)
-    let color: Color | null = null
-    if (colorSpec !== undefined) {
-      color = Color(colorSpec)
-    } else if (name !== undefined) {
-      color = Color({ name })
-    } else if (red !== undefined && green !== undefined && blue !== undefined) {
-      color = Color({ red, green, blue })
-    } else if (lightness !== undefined && chroma !== undefined && hue !== undefined) {
-      color = Color({ lightness, chroma, hue })
-    }
-    if (color === null) {
-      throw new Error(`Can't deduce color: ${JSON.stringify(props)}`)
-    }
-    return VColor({ color, bounds, ...attrs })
-  },
+  color: (props: JSXColorAttrs): VNode => VColor(jsxColorToNormalAttrs(props, true)),
+  border: (props: JSXBorderAttrs): VNode => VBorder(jsxColorToNormalAttrs(props, false)),
   source: (props: JSXSourceAttrs): VNode => VSource(jsxToNormalAttrs(props))
 }
 
@@ -78,4 +64,23 @@ function jsxToNormalAttrs<T extends CommonAttrs> (jsxAttrs: T & BoundsSpec): Omi
   const { layout, x, y, z, anchorX, anchorY, width, height, bounds: explicitBounds, ...attrs } = jsxAttrs
   const bounds = explicitBounds ?? Bounds({ layout, x, y, z, anchorX, anchorY, width, height })
   return { bounds, ...attrs }
+}
+
+function jsxColorToNormalAttrs<T extends CommonAttrs & { color: Color | null }> (jsxAttrs: JSXColorAttrs<T>, requiresColor: boolean): T {
+  const { color: colorSpec, name, red, green, blue, lightness, chroma, hue, bounds, ...attrs } = jsxToNormalAttrs(jsxAttrs)
+  let color: Color | null = null
+  if (colorSpec !== undefined) {
+    color = Color(colorSpec)
+  } else if (name !== undefined) {
+    color = Color({ name })
+  } else if (red !== undefined && green !== undefined && blue !== undefined) {
+    color = Color({ red, green, blue })
+  } else if (lightness !== undefined && chroma !== undefined && hue !== undefined) {
+    color = Color({ lightness, chroma, hue })
+  }
+  if (color === null && requiresColor) {
+    throw new Error(`Can't deduce color: ${JSON.stringify(jsxAttrs)}`)
+  }
+  // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
+  return { color, bounds, ...attrs } as T
 }

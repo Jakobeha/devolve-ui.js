@@ -2,6 +2,7 @@ import { BoundingBox, Bounds, Color, ParentBounds, Rectangle, Size, VNode } from
 import { CoreRenderOptions, Renderer } from 'core/renderer'
 import { VComponent, VRoot } from 'core/component'
 import { Key, Strings } from '@raycenity/misc-ts'
+import { BorderStyle } from 'core/vdom/border-style'
 
 type Timer = NodeJS.Timer
 
@@ -145,6 +146,7 @@ export abstract class RendererImpl<VRender, AssetCacher extends CoreAssetCacher>
   }
   protected abstract renderText (bounds: BoundingBox, wrapMode: 'word' | 'char' | 'clip' | undefined, text: string, node: VNode): VRender
   protected abstract renderSolidColor (rect: Rectangle, columnSize: Size, color: Color, node: VNode): VRender
+  protected abstract renderBorder (rect: Rectangle, columnSize: Size, color: Color | null, borderStyle: BorderStyle, node: VNode): VRender
   protected abstract renderImage (bounds: BoundingBox, columnSize: Size, src: string, node: VNode): { render: VRender, size: Size }
   protected abstract renderVectorImage (bounds: BoundingBox, columnSize: Size, src: string, node: VNode): { render: VRender, size: Size }
 
@@ -242,6 +244,21 @@ export abstract class RendererImpl<VRender, AssetCacher extends CoreAssetCacher>
         return {
           rect,
           [bounds.z]: this.renderSolidColor(rect, parentBounds.columnSize, node.color, node)
+        }
+      }
+      case 'border': {
+        const inferredBounds = {
+          ...bounds,
+          width: bounds.width ?? parentBounds.boundingBox.width ?? siblingBounds?.width,
+          height: bounds.height ?? parentBounds.boundingBox.height ?? siblingBounds?.height
+        }
+        if (inferredBounds.width === undefined || inferredBounds.height === undefined) {
+          throw new Error('Cannot infer width or height for border node')
+        }
+        const rect = BoundingBox.toRectangle(inferredBounds as BoundingBox & Size)
+        return {
+          rect,
+          [bounds.z]: this.renderBorder(rect, parentBounds.columnSize, node.color, node.style, node)
         }
       }
       case 'source': {

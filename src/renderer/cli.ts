@@ -1,6 +1,6 @@
 import type { Interface } from 'readline'
 import type { ReadStream, WriteStream } from 'tty'
-import { BoundingBox, Color, Rectangle, Size, VNode } from 'core/vdom'
+import { BorderStyle, BoundingBox, Color, Rectangle, Size, VNode } from 'core/vdom'
 import { CoreRenderOptions } from 'core/renderer'
 import { Key, range, Strings } from '@raycenity/misc-ts'
 import { terminalImage } from '@raycenity/terminal-image-min'
@@ -220,6 +220,33 @@ export class TerminalRendererImpl extends RendererImpl<VRender, AssetCacher> {
     const bg = CharBg(openEscape, closeEscape)
 
     const result: VRender = range(rect.height).map(() => Array(rect.width).fill(` ${bg}`))
+
+    VRender.translate2(result, rect.left, rect.top)
+    return result
+  }
+
+  protected override renderBorder (rect: Rectangle, columnSize: Size, color: Color | null, borderStyle: BorderStyle): VRender {
+    if (rect.width === 0 || rect.height === 0) {
+      return []
+    }
+
+    let fg: string
+    if (color !== null) {
+      const rgbColor = Color.toRGB(color)
+      const { openEscape, closeEscape } = chalk.rgb(rgbColor.red * 255, rgbColor.green * 255, rgbColor.blue * 255)
+      fg = CharBg(openEscape, closeEscape)
+    } else {
+      fg = ''
+    }
+
+    const border = BorderStyle.ASCII[borderStyle]
+    const result: VRender = range(rect.height).map(i => (
+      i === 0
+        ? [border.topLeft, ...Array(rect.width - 2).fill(border.top), border.topRight]
+        : i === rect.height - 1
+          ? [border.bottomLeft, ...Array(rect.width - 2).fill(border.bottom), border.bottomRight]
+          : [border.left, ...Array(rect.width - 2).fill(TRANSPARENT), border.right]
+    ).map((char: string) => char === TRANSPARENT ? char : char + fg))
 
     VRender.translate2(result, rect.left, rect.top)
     return result
