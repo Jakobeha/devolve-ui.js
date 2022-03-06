@@ -25,21 +25,21 @@ export interface BorderAscii {
 export module BorderStyle {
   export const ASCII: Record<BorderStyle, BorderAscii> = {
     single: asciiFromString(`
-    ┌────┐
-    │    │
-    └────┘
+    ┌───┐
+    │   │
+    └───┘
     ├┬┴┤ ┼
     `),
     card: asciiFromString(`
-    ╓────╖
-    ║    ║
-    ╙────╜
+    ╓───╖
+    ║   ║
+    ╙───╜
     ╟╥╨╢ ╫
     `),
     double: asciiFromString(`
-    ╔════╗
-    ║    ║
-    ╚════╝
+    ╔═══╗
+    ║   ║
+    ╚═══╝
     ╠╦╩╣ ╬
     `),
     rounded: asciiFromString(`
@@ -63,7 +63,7 @@ export module BorderStyle {
   }
 
   function asciiFromString (str: string): BorderAscii {
-    const matrix = str.split('\n').map(row => row.trim())
+    const matrix = str.split('\n').map(row => row.trim()).filter(row => row.length > 0)
     return {
       topLeft: matrix[0][0],
       top: matrix[0][2],
