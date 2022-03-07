@@ -10,7 +10,6 @@ specifiers:
   esbuild: ^0.14.9
   eslint: ^5.0.0 || ^6.0.0 || ^7.0.0
   husky: ^7.0.4
-  node-ansiparser: ^2.2.0
   npm-run-all: ^4.1.5
   pixi.js: ^6.2.2
   ts-standard: ^11.0.0
@@ -20,7 +19,6 @@ dependencies:
   '@raycenity/chalk-cross': link:../chalk-cross
   '@raycenity/misc-ts': link:../misc-ts
   '@raycenity/terminal-image-min': link:../terminal-image-min
-  node-ansiparser: 2.2.0
 
 devDependencies:
   '@types/node': 17.0.15
@@ -1936,10 +1934,6 @@ packages:
   /nice-try/1.0.5:
     resolution: {integrity: sha512-1nh45deeb5olNY7eX82BkPO7SSxR5SSYJiPTrTdFUVYwAl8CKMA5N9PjTYkHiRjisVcxcQ1HXdLhx2qxxJzLNQ==}
     dev: true
-
-  /node-ansiparser/2.2.0:
-    resolution: {integrity: sha1-tyTT5eP6WoVCVrtjrOsJHnIHk60=}
-    dev: false
 
   /normalize-package-data/2.5.0:
     resolution: {integrity: sha512-/5CMN3T0R4XTj4DcGaexo+roZSdSFW/0AOOTROrjxzCG1wrWXEsGbRKevjlIL+ZDE4sZlJr5ED4YW0yqmkK+eA==}

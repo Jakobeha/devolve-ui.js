@@ -48,7 +48,6 @@
   "dependencies": {
     "@raycenity/chalk-cross": "link:../chalk-cross",
     "@raycenity/misc-ts": "link:../misc-ts",
-    "@raycenity/terminal-image-min": "link:../terminal-image-min",
-    "node-ansiparser": "^2.2.0"
+    "@raycenity/terminal-image-min": "link:../terminal-image-min"
   }
 }

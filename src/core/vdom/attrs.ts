@@ -13,6 +13,7 @@ export interface BoxAttrs extends CommonAttrs {
 }
 
 export interface TextAttrs extends CommonAttrs {
+  color: Color | null
   wrapMode?: 'word' | 'char' | 'clip'
 }
 
@@ -29,7 +30,7 @@ export interface SourceAttrs extends CommonAttrs {
   src: string
 }
 
-export type JSXTextAttrs = TextAttrs & BoundsSpec
+export type JSXTextAttrs = JSXColorAttrs<TextAttrs>
 export type JSXBoxAttrs = Omit<BoxAttrs, 'sublayout'> & SubLayout & BoundsSpec
 export type JSXColorAttrs<T extends CommonAttrs & { color: Color | null } = ColorAttrs> = Omit<T, 'color'> & Partial<{ color: ColorSpec } & LCHColor & RGBColor & { name: ColorName }> & BoundsSpec
 export type JSXBorderAttrs = JSXColorAttrs<BorderAttrs>

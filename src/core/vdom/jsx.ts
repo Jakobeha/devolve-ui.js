@@ -54,7 +54,7 @@ export const intrinsics: {
 
     return VBox(children_, { bounds, visible, key, sublayout, ...attrs })
   },
-  text: (props: JSXTextAttrs, ...text: string[]): VNode => VText(text.join(''), jsxToNormalAttrs(props)),
+  text: (props: JSXTextAttrs, ...text: string[]): VNode => VText(text.join(''), jsxColorToNormalAttrs(props, false)),
   color: (props: JSXColorAttrs): VNode => VColor(jsxColorToNormalAttrs(props, true)),
   border: (props: JSXBorderAttrs): VNode => VBorder(jsxColorToNormalAttrs(props, false)),
   source: (props: JSXSourceAttrs): VNode => VSource(jsxToNormalAttrs(props))

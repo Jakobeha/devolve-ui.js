@@ -111,7 +111,7 @@ export class TerminalRendererImpl extends RendererImpl<VRender, AssetCacher> {
     }
   }
 
-  protected override renderText (bounds: BoundingBox, wrap: 'word' | 'char' | 'clip' | undefined, text: string | string[]): VRender {
+  protected override renderText (bounds: BoundingBox, columnSize: Size, wrap: 'word' | 'char' | 'clip' | undefined, color: Color | null, text: string | string[]): VRender {
     const width = bounds.width ?? Infinity
     const height = bounds.height ?? Infinity
     const input = Array.isArray(text) ? text : text.split('\n')
@@ -206,6 +206,13 @@ export class TerminalRendererImpl extends RendererImpl<VRender, AssetCacher> {
       nextOutLineWidth = 0
     }
 
+    if (color !== null) {
+      const rgbColor = Color.toRGB(color)
+      const { openEscape, closeEscape } = chalk.rgb(rgbColor.red * 255, rgbColor.green * 255, rgbColor.blue * 255)
+      const fg = CharColor(openEscape, closeEscape)
+      VRender.addColor(result, fg)
+    }
+
     VRender.translate1(result, bounds)
     return result
   }
@@ -217,7 +224,7 @@ export class TerminalRendererImpl extends RendererImpl<VRender, AssetCacher> {
 
     const rgbColor = Color.toRGB(color)
     const { openEscape, closeEscape } = chalk.bgRgb(rgbColor.red * 255, rgbColor.green * 255, rgbColor.blue * 255)
-    const bg = CharBg(openEscape, closeEscape)
+    const bg = CharColor(openEscape, closeEscape)
 
     const result: VRender = range(rect.height).map(() => Array(rect.width).fill(` ${bg}`))
 
@@ -234,7 +241,7 @@ export class TerminalRendererImpl extends RendererImpl<VRender, AssetCacher> {
     if (color !== null) {
       const rgbColor = Color.toRGB(color)
       const { openEscape, closeEscape } = chalk.rgb(rgbColor.red * 255, rgbColor.green * 255, rgbColor.blue * 255)
-      fg = CharBg(openEscape, closeEscape)
+      fg = CharColor(openEscape, closeEscape)
     } else {
       fg = ''
     }
@@ -259,12 +266,13 @@ export class TerminalRendererImpl extends RendererImpl<VRender, AssetCacher> {
     } else if (image === null) {
       resolveCallback(() => this.invalidate(node))
       return {
-        render: this.renderText(bounds, 'clip', '...'),
+        render: this.renderText(bounds, columnSize, 'clip', Color('gray'), '...'),
         size: { width: '...'.length, height: 1 }
       }
     } else {
+      // TODO: Fix so color is rendered correctly instead of using renderText
       return {
-        render: this.renderText(bounds, 'clip', image),
+        render: this.renderText(bounds, columnSize, 'clip', null, image),
         size: {
           width: Math.max(0, ...image.map(line => line.length)),
           height: image.length
@@ -302,6 +310,14 @@ export class TerminalRendererImpl extends RendererImpl<VRender, AssetCacher> {
 }
 
 module VRender {
+  export function addColor (vrender: VRender, color: CharColor): void {
+    for (const line of vrender) {
+      for (let x = 0; x < line.length; x++) {
+        line[x] += color
+      }
+    }
+  }
+
   export function translate1 (vrender: VRender, bounds: BoundingBox): void {
     const width = bounds.width ?? getWidth(vrender)
     const height = bounds.height ?? getHeight(vrender)
@@ -355,16 +371,16 @@ module VRender {
           if (resultChar === TRANSPARENT) {
             // fall through
             resultLine[x] = char
-          } else if (!CharBg.has(resultChar) && CharBg.has(char)) {
+          } else if (!CharColor.has(resultChar) && CharColor.has(char)) {
             // add background
-            resultLine[x] += CharBg.get(char)!
+            resultLine[x] += CharColor.get(char)!
           }
         }
       }
     }
     for (let y = 0; y < result.length; y++) {
       const line = result[y]
-      let prevBg: CharBg | null = null
+      let prevBg: CharColor | null = null
       for (let x = 0; x < line.length; x++) {
         const char = line[x]
 
@@ -374,23 +390,23 @@ module VRender {
         }
 
         // Add open or close for background
-        const bg = CharBg.get(char)
+        const bg = CharColor.get(char)
         if (bg !== null) {
-          line[x] = CharBg.remove(line[x])
+          line[x] = CharColor.remove(line[x])
         }
         if (prevBg !== bg) {
           if (bg !== null) {
-            line[x] = CharBg.open(bg) + line[x]
+            line[x] = CharColor.open(bg) + line[x]
           }
           if (prevBg !== null) {
-            line[x] = CharBg.close(prevBg) + line[x]
+            line[x] = CharColor.close(prevBg) + line[x]
           }
         }
         prevBg = bg
       }
 
       if (prevBg !== null) {
-        line[line.length - 1] += CharBg.close(prevBg)
+        line[line.length - 1] += CharColor.close(prevBg)
       }
     }
     return result
@@ -411,18 +427,18 @@ module VRender {
 
 const TRANSPARENT = '\u{FFF0}'
 
-type CharBg = string
+type CharColor = string
 
-function CharBg (openEscape: string, closeEscape: string): string {
+function CharColor (openEscape: string, closeEscape: string): string {
   return `\u{FFF1}${openEscape}\u{FFF2}${closeEscape}`
 }
 
-module CharBg {
+module CharColor {
   export function has (string: string): boolean {
     return string.includes('\u{FFF1}')
   }
 
-  export function get (string: string): CharBg | null {
+  export function get (string: string): CharColor | null {
     if (!string.includes('\u{FFF1}')) {
       return null
     } else {
@@ -438,11 +454,11 @@ module CharBg {
     }
   }
 
-  export function open (bg: CharBg): string {
+  export function open (bg: CharColor): string {
     return bg.substring(bg.indexOf('\u{FFF1}') + 1, bg.indexOf('\u{FFF2}'))
   }
 
-  export function close (bg: CharBg): string {
+  export function close (bg: CharColor): string {
     return bg.substring(bg.indexOf('\u{FFF2}') + 1)
   }
 }

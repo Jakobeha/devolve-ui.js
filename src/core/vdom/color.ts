@@ -151,9 +151,4 @@ export module Color {
       throw new Error(`Invalid color: ${JSON.stringify(color)}`)
     }
   }
-
-  export function toNumber (color: Color): number {
-    const { red, green, blue } = Color.toRGB(color)
-    return (red * 255) << 16 | (green * 255) << 8 | blue * 255
-  }
 }

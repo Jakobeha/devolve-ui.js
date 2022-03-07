@@ -144,7 +144,7 @@ export abstract class RendererImpl<VRender, AssetCacher extends CoreAssetCacher>
     boundingBox: BoundingBox
     columnSize?: Size
   }
-  protected abstract renderText (bounds: BoundingBox, wrapMode: 'word' | 'char' | 'clip' | undefined, text: string, node: VNode): VRender
+  protected abstract renderText (bounds: BoundingBox, columnSize: Size, wrapMode: 'word' | 'char' | 'clip' | undefined, color: Color | null, text: string, node: VNode): VRender
   protected abstract renderSolidColor (rect: Rectangle, columnSize: Size, color: Color, node: VNode): VRender
   protected abstract renderBorder (rect: Rectangle, columnSize: Size, color: Color | null, borderStyle: BorderStyle, node: VNode): VRender
   protected abstract renderImage (bounds: BoundingBox, columnSize: Size, src: string, node: VNode): { render: VRender, size: Size }
@@ -228,7 +228,7 @@ export abstract class RendererImpl<VRender, AssetCacher extends CoreAssetCacher>
         })
         return {
           rect,
-          [bounds.z]: this.renderText(bounds, node.wrapMode, node.text, node)
+          [bounds.z]: this.renderText(bounds, parentBounds.columnSize, node.wrapMode, node.color, node.text, node)
         }
       }
       case 'color': {
