@@ -9,18 +9,17 @@ export type RenderOptions =
   TerminalRenderOptions &
   BrowserRenderOptions
 
-export interface RootProps<MessageKeys extends string | number | symbol, PromptKeys extends string | number | symbol> {
-  messages: { [Key in MessageKeys]?: any }
+export interface RootProps<PromptKeys extends string | number | symbol> {
   prompts: { [Key in PromptKeys]?: PromptSpec }
 }
 
-export abstract class DevolveUICore<Props extends RootProps<MessageKeys, PromptKeys>, MessageKeys extends string | number | symbol, PromptKeys extends string | number | symbol> {
+export abstract class DevolveUICore<Props extends RootProps<PromptKeys>, PromptKeys extends string | number | symbol> {
   protected abstract mkRenderer (root: () => VNode, opts?: RenderOptions): Renderer
 
   private readonly instance: Renderer
   private readonly props: Props
   /** A proxy which sets the given property */
-  readonly p: Omit<Props, keyof RootProps<any, any>>
+  readonly p: Omit<Props, keyof RootProps<any>>
 
   /** Renders a HUD with the given content and doesn't clear, useful for logging */
   protected static _renderSnapshot<Props>(mkRenderer: (root: () => VNode, opts?: RenderOptions) => Renderer, RootComponent: (props: Props) => VNode, props: Props, opts?: RenderOptions): void {
@@ -29,11 +28,10 @@ export abstract class DevolveUICore<Props extends RootProps<MessageKeys, PromptK
     renderer.dispose()
   }
 
-  constructor (private readonly RootComponent: (props: Props) => VNode, props: Omit<Props, keyof RootProps<any, any>>, opts?: RenderOptions) {
+  constructor (private readonly RootComponent: (props: Props) => VNode, props: Omit<Props, keyof RootProps<any>>, opts?: RenderOptions) {
     // Idk why the cast is necessary
     this.props = {
       ...props as Props,
-      messages: {},
       prompts: {}
     }
     this.instance = this.mkRenderer(() => VComponent('RootComponent', this.props, RootComponent), opts)
@@ -44,30 +42,14 @@ export abstract class DevolveUICore<Props extends RootProps<MessageKeys, PromptK
     return this.props
   }
 
-  setProps (newProps: Omit<Props, keyof RootProps<any, any>>): void {
+  setProps (newProps: Omit<Props, keyof RootProps<any>>): void {
     for (const _key in newProps) {
-      if (_key === 'messages' || _key === 'prompts') {
-        throw new Error('can\'t set messages or prompts directly')
+      if (_key === 'prompts') {
+        throw new Error('can\'t set prompts directly')
       }
-      const key: Exclude<keyof Props, keyof RootProps<any, any>> = _key as any
+      const key: Exclude<keyof Props, keyof RootProps<any>> = _key as any
       this.props[key] = newProps[key]
     }
-  }
-
-  // TODO: Remove messages as they are subsumed by p
-  message<Key extends MessageKeys>(key: Key, message: Props['messages'][Key]): void {
-    this.props.messages[key] = message
-    this.updateProps()
-  }
-
-  clearMessage<Key extends MessageKeys>(key: Key): void {
-    delete this.props.messages[key]
-    this.updateProps()
-  }
-
-  clearMessages (): void {
-    this.props.messages = {}
-    this.updateProps()
   }
 
   async prompt<Key extends PromptKeys>(key: Key, promptArgs: PromptArgs<Props['prompts'][Key]>, earlyCancelPing?: () => boolean): PromptReturn<Props['prompts'][Key]> {
@@ -129,8 +111,8 @@ export abstract class DevolveUICore<Props extends RootProps<MessageKeys, PromptK
         }
       },
       set: (target: T, p: string | symbol, value: any): boolean => {
-        if (isRoot && (p === 'prompts' || p === 'messages')) {
-          throw new Error('can\'t set prompts or messages')
+        if (isRoot && (p === 'prompts')) {
+          throw new Error('can\'t set prompts')
         }
         (target as any)[p] = value
         this.updateProps()

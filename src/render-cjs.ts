@@ -29,10 +29,9 @@ export type { RenderOptions, RootProps }
 export * from 'prompt'
 
 export class DevolveUI<
-  Props extends RootProps<MessageKeys, PromptKeys>,
-  MessageKeys extends string | number | symbol = keyof Props['messages'],
+  Props extends RootProps<PromptKeys>,
   PromptKeys extends string | number | symbol = keyof Props['prompts']
-> extends DevolveUICore<Props, MessageKeys, PromptKeys> {
+> extends DevolveUICore<Props, PromptKeys> {
   protected override mkRenderer (root: () => VNode, opts?: RenderOptions): Renderer {
     return new PlatformRendererImpl(root, opts)
   }
