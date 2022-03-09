@@ -21,6 +21,7 @@ export function createTerminalInterface (): TerminalInterface {
 
   return {
     write: process.stdout.write.bind(process.stdout),
+    writeln: text => process.stdout.write(text + '\n'),
     question: async question => await new Promise(resolve => readlineInterface.question(question, resolve)),
     pause () {
       readlineInterface.pause()

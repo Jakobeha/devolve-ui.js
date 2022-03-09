@@ -2,6 +2,7 @@ import { Key } from '@raycenity/misc-ts'
 
 export interface TerminalInterface {
   write: (text: string) => void
+  writeln: (text: string) => void
   question: (text: string) => Promise<string>
   pause: () => void
   resume: () => void

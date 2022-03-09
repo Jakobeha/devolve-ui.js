@@ -22,6 +22,11 @@ export function createTerminalInterface (): TerminalInterface {
       terminalDiv.appendChild(document.createTextNode(text))
       cursorPosition = null
     },
+    writeln: text => {
+      terminalDiv.appendChild(document.createTextNode(text))
+      terminalDiv.appendChild(document.createElement('br'))
+      cursorPosition = null
+    },
     question: async question => await new Promise(resolve => {
       terminalDiv.appendChild(document.createTextNode(question))
       const input = document.createElement('input')
