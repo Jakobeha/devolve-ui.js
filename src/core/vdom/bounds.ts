@@ -1,13 +1,15 @@
 export type LayoutDirection = 'horizontal' | 'vertical' | 'overlap'
 
 export type Measurement =
-  number |
-  `${number}` |
-  `${number}px` |
-  `${number}%` |
-  `${number}% ${'+' | '-'} ${number}` |
-  `${number}% ${'+' | '-'} ${number}px` |
-  `${number}% ${'+' | '-'} ${number}px ${'+' | '-'} ${number}`
+  Measurement2 |
+  `${Measurement2} ${'+' | '-'} ${Measurement3}` |
+  `${Measurement2} ${'+' | '-'} ${Measurement3} ${'+' | '-'} ${Measurement4}` |
+  `${Measurement2} ${'+' | '-'} ${Measurement3} ${'+' | '-'} ${Measurement4} ${'+' | '-'} ${Measurement5}`
+
+type Measurement2 = 'prev' | Measurement3
+type Measurement3 = `${number}%` | Measurement4
+type Measurement4 = `${number}px` | Measurement5
+type Measurement5 = `${number}` | number
 
 export type LayoutPosition1D =
   'global-absolute' |
@@ -69,17 +71,17 @@ export type BoundsSpec = FullBoundsSpec
 
 export function Bounds (spec: BoundsSpec): Bounds {
   return (parent, prevSibling) => ({
-    x: applyLayoutX(parent, prevSibling, spec.layout, reifyX(parent, spec.x)),
-    y: applyLayoutY(parent, prevSibling, spec.layout, reifyY(parent, spec.y)),
+    x: applyLayoutX(parent, prevSibling, spec.layout, reifyX(parent, 'not-applicable', spec.x)),
+    y: applyLayoutY(parent, prevSibling, spec.layout, reifyY(parent, 'not-applicable', spec.y)),
     z: spec.z ?? parent.boundingBox.z + Bounds.BOX_Z,
     anchorX: spec.anchorX ?? 0,
     anchorY: spec.anchorY ?? 0,
-    width: spec.width === undefined ? undefined : reifyX(parent, spec.width),
-    height: spec.height === undefined ? undefined : reifyY(parent, spec.height)
+    width: spec.width === undefined ? undefined : reifyX(parent, prevSibling?.width ?? null, spec.width),
+    height: spec.height === undefined ? undefined : reifyY(parent, prevSibling?.height ?? null, spec.height)
   })
 }
 
-function reifyX (parent: ParentBounds, x: Measurement | undefined): number {
+function reifyX (parent: ParentBounds, prevSibling: number |'not-applicable' | null, x: Measurement | undefined): number {
   if (x === undefined) {
     return 0
   } else if (typeof x === 'number') {
@@ -95,18 +97,26 @@ function reifyX (parent: ParentBounds, x: Measurement | undefined): number {
     return (parent.boundingBox.width * parseFloat(x) / 100)
   } else if (x.endsWith('px')) {
     return parseFloat(x) / parent.columnSize.width
+  } else if (x === 'prev') {
+    if (prevSibling === 'not-applicable') {
+      throw new Error('can\'t use \'prev\' for position or gap')
+    } else if (prevSibling === null) {
+      throw new Error('can\'t use \'prev\' for first child')
+    } else {
+      return prevSibling
+    }
   } else if (x.includes('+')) {
     const [left, right] = x.split('+')
-    return reifyX(parent, left.trimEnd() as Measurement) + reifyX(parent, right.trimStart() as Measurement)
+    return reifyX(parent, prevSibling, left.trimEnd() as Measurement) + reifyX(parent, prevSibling, right.trimStart() as Measurement)
   } else if (x.includes('-')) {
     const [left, right] = x.split('-')
-    return reifyX(parent, left.trimEnd() as Measurement) - reifyX(parent, right.trimStart() as Measurement)
+    return reifyX(parent, prevSibling, left.trimEnd() as Measurement) - reifyX(parent, prevSibling, right.trimStart() as Measurement)
   } else {
     throw new Error(`invalid measurement: ${x}`)
   }
 }
 
-function reifyY (parent: ParentBounds, y: Measurement | undefined): number {
+function reifyY (parent: ParentBounds, prevSibling: number | 'not-applicable' | null, y: Measurement | undefined): number {
   if (y === undefined) {
     return 0
   } else if (typeof y === 'number') {
@@ -122,12 +132,20 @@ function reifyY (parent: ParentBounds, y: Measurement | undefined): number {
     return (parent.boundingBox.height * parseFloat(y) / 100)
   } else if (y.endsWith('px')) {
     return parseFloat(y) / parent.columnSize.height
+  } else if (y === 'prev') {
+    if (prevSibling === 'not-applicable') {
+      throw new Error('can\'t use \'prev\' for position or gap')
+    } else if (prevSibling === null) {
+      throw new Error('can\'t use \'prev\' for first child')
+    } else {
+      return prevSibling
+    }
   } else if (y.includes('+')) {
     const [left, right] = y.split('+')
-    return reifyY(parent, left.trimEnd() as Measurement) + reifyY(parent, right.trimStart() as Measurement)
+    return reifyY(parent, prevSibling, left.trimEnd() as Measurement) + reifyY(parent, prevSibling, right.trimStart() as Measurement)
   } else if (y.includes('-')) {
     const [left, right] = y.split('-')
-    return reifyY(parent, left.trimEnd() as Measurement) - reifyY(parent, right.trimStart() as Measurement)
+    return reifyY(parent, prevSibling, left.trimEnd() as Measurement) - reifyY(parent, prevSibling, right.trimStart() as Measurement)
   } else {
     throw new Error(`invalid measurement: ${y}`)
   }
@@ -145,7 +163,7 @@ function applyLayoutX (parent: ParentBounds, prevSibling: Rectangle | null, layo
       switch (parent.sublayout.direction) {
         case 'horizontal': {
           // Yes, we do want to reify the parent's sublayout with it's own bounds
-          const gap = reifyX(parent, parent.sublayout.gap)
+          const gap = reifyX(parent, null, parent.sublayout.gap)
           return reified + (prevSibling !== null ? prevSibling.left + prevSibling.width + gap : getLayoutBoundingBoxLeft(parent.boundingBox))
         }
         case 'vertical':
@@ -175,7 +193,7 @@ function applyLayoutY (parent: ParentBounds, prevSibling: Rectangle | null, layo
           return reified + parent.boundingBox.y
         case 'vertical': {
           // Yes, we do want to reify the parent's sublayout with it's own bounds
-          const gap = reifyY(parent, parent.sublayout.gap)
+          const gap = reifyY(parent, null, parent.sublayout.gap)
           return reified + (prevSibling !== null ? prevSibling.top + prevSibling.height + gap : getLayoutBoundingBoxTop(parent.boundingBox))
         }
         case 'overlap':

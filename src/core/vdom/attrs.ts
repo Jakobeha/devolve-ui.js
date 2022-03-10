@@ -1,6 +1,6 @@
 import { Bounds, BoundsSpec, SubLayout } from 'core/vdom/bounds'
 import { BorderStyle } from 'core/vdom/border-style'
-import { Color, ColorName, ColorSpec, LCHColor, RGBColor } from 'core/vdom/color'
+import { Color, ColorSpec, LCHColor, RGBColor } from 'core/vdom/color'
 
 export interface CommonAttrs {
   bounds?: Bounds
@@ -32,6 +32,6 @@ export interface SourceAttrs extends CommonAttrs {
 
 export type JSXTextAttrs = JSXColorAttrs<TextAttrs>
 export type JSXBoxAttrs = Omit<BoxAttrs, 'sublayout'> & SubLayout & BoundsSpec
-export type JSXColorAttrs<T extends CommonAttrs & { color: Color | null } = ColorAttrs> = Omit<T, 'color'> & Partial<{ color: ColorSpec } & LCHColor & RGBColor & { name: ColorName }> & BoundsSpec
+export type JSXColorAttrs<T extends CommonAttrs & { color: Color | null } = ColorAttrs> = Omit<T, 'color'> & Partial<{ color: ColorSpec } & LCHColor & RGBColor> & BoundsSpec
 export type JSXBorderAttrs = JSXColorAttrs<BorderAttrs>
 export type JSXSourceAttrs = SourceAttrs & BoundsSpec

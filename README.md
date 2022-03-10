@@ -2,54 +2,62 @@
 
 # devolve-ui: super simple reactive graphics for browser *and* terminal
 
-devolve-ui is a super simple graphics library for games, canvas-based websites, TUIs, and JavaScript applications, which can deploy to both browser *and* terminal.
+**Live demos @ [https://github.com/Jakobeha/devolve-ui-demos/src/index.html](https://github.com/Jakobeha/devolve-ui-demos/src/index.html). Clone to get started: [https://github.com/Jakobeha/devolve-ui-demos](https://github.com/Jakobeha/devolve-ui-demos)**
 
-devolve-ui also has built-in support for the [*prompt-based GUI*](./docs/prompt-based-gui.md) pattern, where you write your application as a series of prompts similar to a CLI.
+devolve-ui is a super simple graphics library for canvas-based websites (games) *and* TUIs. A single devolve-ui app can be embedded in a website *and* run on the command line via `node`.
 
-**Live demos: standalone @ [https://github.com/Jakobeha/devolve-ui-demos/src/index.html](https://github.com/Jakobeha/devolve-ui-demos/src/index.html), with CGE @ [https://cge.raycenity.net/demos/](https://cge.raycenity.net/demos/)**
+devolve-ui is JSX-based, like React, but simpler, with fewer dependencies and size. It also allows you to manipulate the props directly, and has built-in support for the [*prompt-based GUI*](./docs/prompt-based-gui.md) pattern, where you wrap user interactions into asynchronous function calls (although this pattern can also be implemented in React or any other library).
 
-**Important setup information:** besides installing this package, you *must* add this to your tsconfig.json or TypeScript won't work with the project:
+**Important setup information:** if adding to an existing project, besides installing the, you *must* add this to your tsconfig.json or TypeScript won't work with the project:
 
 ```json5
 {
   /* ... */
   "jsx": "preserve",
-  "jsxImportSource": "@raycenity/devolve-ui",
-  "paths": {
-    /* ... */
-    "@raycenity/devolve-ui/jsx-runtime": ["../devolve-ui/out/types/jsx-runtime.d.ts"]
-  }
+  "jsxImportSource": "@raycenity/devolve-ui"
 }
+```
+
+```bash
+# if you don't have pnpm installed, uncomment the next line
+# curl -fsSL https://get.pnpm.io/install.sh | sh -
+pnpm add @raycenity/devolve-ui
 ```
 
 Example:
 
 ```tsx
 // https://github.com/Jakobeha/devolve-ui-demos/src/readme.tsx
-import { DevolveUI, RootProps, useState, useTimeout } from '@raycenity/devolve-ui'
+import { DevolveUI, useState, useInterval } from '@raycenity/devolve-ui'
 
-interface AppProps extends RootProps {
+interface AppProps {
   name: string
 }
 
 const App = ({ name }: AppProps) => {
   const [counter, setCounter] = useState(0)
-  useTimeout(() => {
-    setCounter(counter() + 1)
-  }, 1000)
+  useInterval(1000, () => {
+    setCounter(counter + 1)
+  })
 
   return (
-    <vbox sublayout={{ padding: 1, gap: 1 }}>
-      <hbox sublayout={{ paddingX: 1, align: 'justify' }}>
-        <text>Hello {name}</text>
-        <text>{counter} seconds</text>
-      </hbox>
-      <graphic src='dog.png' bounds={Bounds({ width: '100%', height: 'auto' })} />
-    </vbox>
+    <zbox width='100%'>
+      <vbox x={2} y={2} gap={1}>
+        <zbox width='100%'>
+          <hbox width='100%'>
+            <text color='white'>Hello {name}</text>
+            <text color='white' x='100%' anchorX={1}>{counter} seconds</text>
+          </hbox>
+          <color color='orange' />
+        </zbox>
+        <source src='dog.png' width='100%' />
+      </vbox>
+      <border style='single' color='orange' width='prev + 4' height='prev + 4'/>
+    </zbox>
   )
 }
 
-new DevolveUI(App, { name: 'devolve-ui' }).start()
+new DevolveUI(App, { name: 'devolve-ui' }).show()
 
 // Works in node or browser (with additional pixi.js script)
 ```

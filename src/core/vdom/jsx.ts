@@ -4,14 +4,14 @@ import { Color } from 'core/vdom/color'
 import { VBorder, VBox, VColor, VNode, VSource, VText } from 'core/vdom/node'
 import { ExplicitPartial, IntoArray } from '@raycenity/misc-ts'
 
-export type JSX =
+export type VJSX =
   VNode |
   null |
   undefined |
-  JSX[]
+  VJSX[]
 
-export module JSX {
-  export function collapse (jsx: JSX): VNode[] {
+export module VJSX {
+  export function collapse (jsx: VJSX): VNode[] {
     if (Array.isArray(jsx)) {
       return jsx.flatMap(collapse)
     } else if (jsx === null || jsx === undefined) {
@@ -23,9 +23,10 @@ export module JSX {
 }
 
 export interface JSXIntrinsics {
-  hbox: Omit<JSXBoxAttrs, 'direction'> & { children?: JSX[] }
-  vbox: Omit<JSXBoxAttrs, 'direction'> & { children?: JSX[] }
-  box: JSXBoxAttrs & { children?: JSX[] }
+  hbox: Omit<JSXBoxAttrs, 'direction'> & { children?: VJSX[] }
+  vbox: Omit<JSXBoxAttrs, 'direction'> & { children?: VJSX[] }
+  zbox: Omit<JSXBoxAttrs, 'direction'> & { children?: VJSX[] }
+  box: JSXBoxAttrs & { children?: VJSX[] }
   text: JSXTextAttrs & { children?: string | string[] }
   color: JSXColorAttrs & { children?: [] }
   border: JSXBorderAttrs & { children?: [] }
@@ -39,15 +40,17 @@ export interface JSXIntrinsicAttributes {
 export const intrinsics: {
   [Key in keyof JSXIntrinsics]: (props: Omit<JSXIntrinsics[Key], 'children'>, ...children: IntoArray<JSXIntrinsics[Key]['children']>) => VNode
 } = {
-  hbox: (props: Omit<JSXBoxAttrs, 'direction'>, ...children: JSX[]): VNode =>
+  hbox: (props: Omit<JSXBoxAttrs, 'direction'>, ...children: VJSX[]): VNode =>
     intrinsics.box({ ...props, direction: 'horizontal' }, ...children),
-  vbox: (props: Omit<JSXBoxAttrs, 'direction'>, ...children: JSX[]): VNode =>
+  vbox: (props: Omit<JSXBoxAttrs, 'direction'>, ...children: VJSX[]): VNode =>
     intrinsics.box({ ...props, direction: 'vertical' }, ...children),
-  box: (props: JSXBoxAttrs, ...children: JSX[]): VNode => {
+  zbox: (props: Omit<JSXBoxAttrs, 'direction'>, ...children: VJSX[]): VNode =>
+    intrinsics.box({ ...props, direction: 'overlap' }, ...children),
+  box: (props: JSXBoxAttrs, ...children: VJSX[]): VNode => {
     const { visible, key, bounds, direction, gap, custom, ...attrs } = jsxToNormalAttrs(props)
     const sublayout: ExplicitPartial<SubLayout> = { direction, gap, custom }
 
-    const children_ = JSX.collapse(children)
+    const children_ = VJSX.collapse(children)
     if (children_.length > 1 && direction === undefined) {
       console.warn('direction must be specified for multiple children')
     }
@@ -67,12 +70,10 @@ function jsxToNormalAttrs<T extends CommonAttrs> (jsxAttrs: T & BoundsSpec): Omi
 }
 
 function jsxColorToNormalAttrs<T extends CommonAttrs & { color: Color | null }> (jsxAttrs: JSXColorAttrs<T>, requiresColor: boolean): T {
-  const { color: colorSpec, name, red, green, blue, lightness, chroma, hue, bounds, ...attrs } = jsxToNormalAttrs(jsxAttrs)
+  const { color: colorSpec, red, green, blue, lightness, chroma, hue, bounds, ...attrs } = jsxToNormalAttrs(jsxAttrs)
   let color: Color | null = null
   if (colorSpec !== undefined) {
     color = Color(colorSpec)
-  } else if (name !== undefined) {
-    color = Color({ name })
   } else if (red !== undefined && green !== undefined && blue !== undefined) {
     color = Color({ red, green, blue })
   } else if (lightness !== undefined && chroma !== undefined && hue !== undefined) {

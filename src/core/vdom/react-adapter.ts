@@ -1,12 +1,12 @@
 import { VNode } from 'core/vdom/node'
-import { intrinsics, JSX, JSXIntrinsics } from 'core/vdom/jsx'
+import { intrinsics, JSXIntrinsics, VJSX } from 'core/vdom/jsx'
 import { VComponent } from 'core/component'
 import { IntoArray } from '@raycenity/misc-ts'
 
 function createElement (
   element: undefined,
   props: {},
-  ...children: JSX[]
+  ...children: VJSX[]
 ): VNode[]
 function createElement <Key extends keyof JSXIntrinsics> (
   element: Key,
@@ -31,7 +31,7 @@ function createElement <T extends VNode, Props extends { key?: string }, Childre
 
   if (element === undefined) {
     // Fragment (<>{children}</>)
-    return JSX.collapse(children as JSX[])
+    return VJSX.collapse(children as VJSX[])
   } else if (typeof element === 'string') {
     // Intrinsic element
     const intrinsic = intrinsics[element]
@@ -46,8 +46,6 @@ function createElement <T extends VNode, Props extends { key?: string }, Childre
   }
 }
 
-export const React = {
-  createElement
-}
+export const React = { createElement }
 // @ts-expect-error
 globalThis.React = React

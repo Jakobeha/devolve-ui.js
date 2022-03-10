@@ -1,4 +1,5 @@
-import { DevolveUICore, RenderOptions, RootProps } from 'DevolveUICore'
+import { DevolveUICore, RenderOptions } from 'DevolveUICore'
+import { PromptDevolveUICore, PromptProps } from 'PromptDevolveUICore'
 import type { RendererImpl } from 'renderer/common'
 import { PLATFORM, Renderer, VNode } from 'core'
 
@@ -25,13 +26,23 @@ try {
 /* eslint-enable @typescript-eslint/restrict-template-expressions */
 /* eslint-enable @typescript-eslint/no-var-requires */
 
-export type { RenderOptions, RootProps }
+export type { RenderOptions, PromptProps }
 export * from 'prompt'
 
-export class DevolveUI<
-  Props extends RootProps<PromptKeys>,
+export class DevolveUI<Props extends object> extends DevolveUICore<Props> {
+  protected override mkRenderer (root: () => VNode, opts?: RenderOptions): Renderer {
+    return new PlatformRendererImpl(root, opts)
+  }
+
+  static renderSnapshot<Props> (RootComponent: (props: Props) => VNode, props: Props, opts?: RenderOptions): void {
+    return DevolveUICore._renderSnapshot((root, opts) => new PlatformRendererImpl(root, opts), RootComponent, props, opts)
+  }
+}
+
+export class PromptDevolveUI<
+  Props extends PromptProps<PromptKeys>,
   PromptKeys extends string | number | symbol = keyof Props['prompts']
-> extends DevolveUICore<Props, PromptKeys> {
+> extends PromptDevolveUICore<Props, PromptKeys> {
   protected override mkRenderer (root: () => VNode, opts?: RenderOptions): Renderer {
     return new PlatformRendererImpl(root, opts)
   }

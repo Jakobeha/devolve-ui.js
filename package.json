@@ -6,6 +6,11 @@
   "main": "out/src/index-cjs.js",
   "module": "out/src/index.js",
   "types": "out/types/index.d.ts",
+  "typesVersions": {
+    "*": {
+      "jsx-runtime": ["out/types/jsx-runtime.d.ts"]
+    }
+  },
   "scripts": {
     "typegen": "tsc",
     "typegen-watch": "tsc --watch",
