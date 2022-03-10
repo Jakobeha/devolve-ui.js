@@ -3,23 +3,17 @@ import type { ReadStream, WriteStream } from 'tty'
 import { BorderStyle, BoundingBox, Color, Rectangle, Size, VNode } from 'core/vdom'
 import { CoreRenderOptions } from 'core/renderer'
 import { Key, range, Strings } from '@raycenity/misc-ts'
-import { terminalImage } from '@raycenity/terminal-image-min'
+import { terminalImage } from 'renderer/cli/terminal-image-min'
 import { CoreAssetCacher, RendererImpl, VRenderBatch } from 'renderer/common'
 import { chalk } from '@raycenity/chalk-cross'
+import { VRender } from 'renderer/cli/VRender'
+import { CharColor, TRANSPARENT } from 'renderer/cli/CharColor'
 
 let readline: typeof import('readline')
 
 export function initModule (imports: { readline: typeof import('readline') }): void {
   readline = imports.readline
 }
-
-/**
- * Each x/y index represents the character at that exact position in the terminal.
- * If the character is multi-width, then the next character will be empty.
- * If the character is \u{FFF0} it is transparent (the character under will be used).
- * If the character contains \u{FFF1} and \u{FFF2}, it is a background (characters above will also have the background unless they also contain a background)
- */
-type VRender = string[][]
 
 export interface TerminalRenderOptions extends CoreRenderOptions {
   input?: ReadStream
@@ -28,23 +22,17 @@ export interface TerminalRenderOptions extends CoreRenderOptions {
 }
 
 class AssetCacher extends CoreAssetCacher {
-  static async image (path: string, width?: number, height?: number): Promise<string[]> {
+  static async image (path: string, width?: number, height?: number): Promise<VRender> {
     try {
-      return (await terminalImage.file(path, { width, height })).split('\n')
+      return await terminalImage.file(path, { width, height })
     } catch (exception) {
-      // @ts-expect-error
-      if (exception.code !== 'ENOENT') {
-        throw exception
-      }
-      return ['?']
+      console.error('Failed to load image', path, exception)
+      return [['?']]
     }
   }
 
-  getImage (path: string, width?: number, height?: number): [string[] | null, (didResolve: () => void) => void] {
-    return this.getAsync(
-      `${path}?width=${width ?? 'auto'}&height=${height ?? 'auto'}`,
-      async path => await AssetCacher.image(path, width, height)
-    )
+  getImage (path: string, width?: number, height?: number): [VRender | null, (didResolve: () => void) => void] {
+    return this.getAsync(path, async path => await AssetCacher.image(path, width, height))
   }
 }
 
@@ -209,7 +197,7 @@ export class TerminalRendererImpl extends RendererImpl<VRender, AssetCacher> {
     if (color !== null) {
       const rgbColor = Color.toRGB(color)
       const { openEscape, closeEscape } = chalk.rgb(rgbColor.red * 255, rgbColor.green * 255, rgbColor.blue * 255)
-      const fg = CharColor(openEscape, closeEscape)
+      const fg = CharColor('fg', openEscape, closeEscape)
       VRender.addColor(result, fg)
     }
 
@@ -224,7 +212,7 @@ export class TerminalRendererImpl extends RendererImpl<VRender, AssetCacher> {
 
     const rgbColor = Color.toRGB(color)
     const { openEscape, closeEscape } = chalk.bgRgb(rgbColor.red * 255, rgbColor.green * 255, rgbColor.blue * 255)
-    const bg = CharColor(openEscape, closeEscape)
+    const bg = CharColor('bg', openEscape, closeEscape)
 
     const result: VRender = range(rect.height).map(() => Array(rect.width).fill(` ${bg}`))
 
@@ -241,7 +229,7 @@ export class TerminalRendererImpl extends RendererImpl<VRender, AssetCacher> {
     if (color !== null) {
       const rgbColor = Color.toRGB(color)
       const { openEscape, closeEscape } = chalk.rgb(rgbColor.red * 255, rgbColor.green * 255, rgbColor.blue * 255)
-      fg = CharColor(openEscape, closeEscape)
+      fg = CharColor('fg', openEscape, closeEscape)
     } else {
       fg = ''
     }
@@ -270,9 +258,11 @@ export class TerminalRendererImpl extends RendererImpl<VRender, AssetCacher> {
         size: { width: '...'.length, height: 1 }
       }
     } else {
-      // TODO: Fix so color is rendered correctly instead of using renderText
+      const render = image.map(row => [...row])
+      VRender.translate1(render, bounds)
+
       return {
-        render: this.renderText(bounds, columnSize, 'clip', null, image),
+        render,
         size: {
           width: Math.max(0, ...image.map(line => line.length)),
           height: image.length
@@ -306,159 +296,5 @@ export class TerminalRendererImpl extends RendererImpl<VRender, AssetCacher> {
   override dispose (): void {
     super.dispose()
     this.interact.close()
-  }
-}
-
-module VRender {
-  export function addColor (vrender: VRender, color: CharColor): void {
-    for (const line of vrender) {
-      for (let x = 0; x < line.length; x++) {
-        line[x] += color
-      }
-    }
-  }
-
-  export function translate1 (vrender: VRender, bounds: BoundingBox): void {
-    const width = bounds.width ?? getWidth(vrender)
-    const height = bounds.height ?? getHeight(vrender)
-
-    const xOffset = bounds.x + (bounds.anchorX * width)
-    const yOffset = bounds.y + (bounds.anchorY * height)
-
-    return translate2(vrender, xOffset, yOffset)
-  }
-
-  export function translate2 (vrender: VRender, xOffset: number, yOffset: number): void {
-    xOffset = Math.round(xOffset)
-    yOffset = Math.round(yOffset)
-
-    for (const line of vrender) {
-      if (line.length > 0) {
-        for (let x = 0; x < xOffset; x++) {
-          line.unshift(TRANSPARENT)
-        }
-      }
-    }
-    for (let y = 0; y < yOffset; y++) {
-      vrender.unshift([])
-    }
-  }
-
-  export function collapse (textMatrix: Record<number, VRender>): string[][] {
-    for (const key of Object.keys(textMatrix)) {
-      if (isNaN(parseFloat(key))) {
-        delete textMatrix[key as any]
-      }
-    }
-
-    if (Object.values(textMatrix).length === 0) {
-      return []
-    }
-
-    // Array length not width
-    const length = Math.max(...Object.values(textMatrix).map(get2dArrayLength))
-    const height = Math.max(...Object.values(textMatrix).map(getHeight))
-    const matrixSorted = Object.entries(textMatrix).sort(([lhs], [rhs]) => Number(rhs) - Number(lhs)).map(([, lines]) => lines)
-
-    const result: string[][] = Array(height).fill(null).map(() => Array(length).fill(TRANSPARENT))
-    for (const lines of matrixSorted) {
-      for (let y = 0; y < lines.length; y++) {
-        const line = lines[y]
-        const resultLine = result[y]
-        for (let x = 0; x < line.length; x++) {
-          const resultChar = resultLine[x]
-          const char = line[x]
-          if (resultChar === TRANSPARENT) {
-            // fall through
-            resultLine[x] = char
-          } else if (!CharColor.has(resultChar) && CharColor.has(char)) {
-            // add background
-            resultLine[x] += CharColor.get(char)!
-          }
-        }
-      }
-    }
-    for (let y = 0; y < result.length; y++) {
-      const line = result[y]
-      let prevBg: CharColor | null = null
-      for (let x = 0; x < line.length; x++) {
-        const char = line[x]
-
-        // Fill if fallthrough
-        if (char === TRANSPARENT) {
-          line[x] = ' '
-        }
-
-        // Add open or close for background
-        const bg = CharColor.get(char)
-        if (bg !== null) {
-          line[x] = CharColor.remove(line[x])
-        }
-        if (prevBg !== bg) {
-          if (bg !== null) {
-            line[x] = CharColor.open(bg) + line[x]
-          }
-          if (prevBg !== null) {
-            line[x] = CharColor.close(prevBg) + line[x]
-          }
-        }
-        prevBg = bg
-      }
-
-      if (prevBg !== null) {
-        line[line.length - 1] += CharColor.close(prevBg)
-      }
-    }
-    return result
-  }
-
-  function getWidth (vrender: VRender): number {
-    return Math.max(0, ...vrender.map(line => line.map(char => char === null ? 1 : Strings.width(char)).reduce((lhs, rhs) => lhs + rhs, 0)))
-  }
-
-  function get2dArrayLength (vrender: VRender): number {
-    return Math.max(0, ...vrender.map(line => line.length))
-  }
-
-  function getHeight (vrender: VRender): number {
-    return vrender.length
-  }
-}
-
-const TRANSPARENT = '\u{FFF0}'
-
-type CharColor = string
-
-function CharColor (openEscape: string, closeEscape: string): string {
-  return `\u{FFF1}${openEscape}\u{FFF2}${closeEscape}`
-}
-
-module CharColor {
-  export function has (string: string): boolean {
-    return string.includes('\u{FFF1}')
-  }
-
-  export function get (string: string): CharColor | null {
-    if (!string.includes('\u{FFF1}')) {
-      return null
-    } else {
-      return string.substring(string.indexOf('\u{FFF1}'))
-    }
-  }
-
-  export function remove (string: string): string {
-    if (!string.includes('\u{FFF1}')) {
-      return string
-    } else {
-      return string.substring(0, string.indexOf('\u{FFF1}'))
-    }
-  }
-
-  export function open (bg: CharColor): string {
-    return bg.substring(bg.indexOf('\u{FFF1}') + 1, bg.indexOf('\u{FFF2}'))
-  }
-
-  export function close (bg: CharColor): string {
-    return bg.substring(bg.indexOf('\u{FFF2}') + 1)
   }
 }
