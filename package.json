@@ -8,7 +8,9 @@
   "types": "out/types/index.d.ts",
   "typesVersions": {
     "*": {
-      "jsx-runtime": ["out/types/jsx-runtime.d.ts"]
+      "jsx-runtime": [
+        "out/types/jsx-runtime.d.ts"
+      ]
     }
   },
   "scripts": {
@@ -53,6 +55,6 @@
   "dependencies": {
     "@raycenity/chalk-cross": "link:../chalk-cross",
     "@raycenity/misc-ts": "link:../misc-ts",
-    "@raycenity/terminal-image-min": "link:../terminal-image-min"
+    "upng-js": "^2.1.0"
   }
 }

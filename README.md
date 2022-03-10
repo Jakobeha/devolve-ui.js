@@ -2,6 +2,8 @@
 
 # devolve-ui: super simple reactive graphics for browser *and* terminal
 
+*Keep in mind this is an early project, so it's subject to change or be buggy*
+
 **Live demos @ [https://github.com/Jakobeha/devolve-ui-demos/src/index.html](https://github.com/Jakobeha/devolve-ui-demos/src/index.html). Clone to get started: [https://github.com/Jakobeha/devolve-ui-demos](https://github.com/Jakobeha/devolve-ui-demos)**
 
 devolve-ui is a super simple graphics library for canvas-based websites (games) *and* TUIs. A single devolve-ui app can be embedded in a website *and* run on the command line via `node`.
@@ -13,7 +15,7 @@ devolve-ui is JSX-based, like React, but simpler, with fewer dependencies and si
 ```json5
 {
   /* ... */
-  "jsx": "preserve",
+  "jsx": "preserve", /** if using esbuild, otherwise "react" */
   "jsxImportSource": "@raycenity/devolve-ui"
 }
 ```
@@ -86,7 +88,7 @@ For more info, read [*the article*](./docs/prompt-based-gui.md)
 
 ### Implementation
 
-devolve-ui has minimal dependencies and is lightweight relative to React. It is open source so you can [read the code  m yourself](https://github.com/Jakobeha/devolve-ui/tree/master/src)
+devolve-ui has minimal dependencies and is lightweight relative to React. It is open source so you can [read the code yourself](https://github.com/Jakobeha/devolve-ui/tree/master/src)
 
 #### Rendering
 
