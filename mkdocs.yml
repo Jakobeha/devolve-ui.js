@@ -1,4 +1,16 @@
 site_name: devolve-ui
 site_url: https://jakobeha.github.io/devolve-ui
 repo_url: https://github.com/Jakobeha/devolve-ui
-theme: material
+theme:
+  name: slate
+  features:
+    - content.code.annotate
+markdown_extensions:
+  - pymdownx.highlight:
+      anchor_linenums: true
+  - pymdownx.inlinehilite
+  - pymdownx.snippets
+  - pymdownx.superfences
+  - codehilite
+extra_css:
+  - styles/pygments.css

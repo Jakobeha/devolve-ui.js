@@ -4,39 +4,19 @@
 
 *Keep in mind this is an early project, so it's subject to change and buggy*
 
-**Live demos @ [https://jakobeha.github.io/devolve-ui-demos/index.html](https://jakobeha.github.io/devolve-ui-demos/index.html). Clone to get started: [https://github.com/Jakobeha/devolve-ui-demos](https://github.com/Jakobeha/devolve-ui-demos)**
+**[Live demo](https://jakobeha.github.io/devolve-ui-demos/index.html) | [Clone to get started](https://github.com/Jakobeha/devolve-ui-demos)**
 
 devolve-ui is a super simple graphics library for canvas-based websites (games) and TUIs. A single devolve-ui app can be embedded in a website *and* run on the command line via `node`.
 
-devolve-ui is JSX-based, like React, but simpler, with fewer dependencies and size. It also allows you to manipulate the props directly, and has built-in support for the [*prompt-based GUI*](prompt-based-gui.md) pattern, where you wrap user interactions into asynchronous function calls (although this pattern can also be implemented in React or any other library).
-
-**Important setup information:** if adding to an existing project, besides installing the, you *must* add this to your tsconfig.json or TypeScript won't work with the project:
-
-```json5
-{
-  /* ... */
-  "jsx": "preserve", /** if using esbuild, otherwise "react" */
-  "jsxImportSource": "@raycenity/devolve-ui"
-}
-```
-
-```bash
-# if you don't have pnpm installed, uncomment the next line
-# curl -fsSL https://get.pnpm.io/install.sh | sh -
-pnpm add @raycenity/devolve-ui
-```
+devolve-ui is JSX-based like React, but renders to canvas or terminal instead of DOM. It should *not* be used for traditional websites, but will work for games and some SPAs.
 
 Example:
 
-```tsx
+```jsx
 // https://github.com/Jakobeha/devolve-ui-demos/src/readme.tsx
 import { DevolveUI, useState, useInterval } from '@raycenity/devolve-ui'
 
-interface AppProps {
-  name: string
-}
-
-const App = ({ name }: AppProps) => {
+const App = ({ name }) => {
   const [counter, setCounter] = useState(0)
   useInterval(1000, () => {
     setCounter(counter + 1)
@@ -62,6 +42,22 @@ const App = ({ name }: AppProps) => {
 new DevolveUI(App, { name: 'devolve-ui' }).show()
 
 // Works in node or browser (with additional pixi.js script)
+```
+
+**Important setup information:** if adding to an existing project, besides installing the, you *must* add this to your tsconfig.json or TypeScript won't work with the project:
+
+```json5
+{
+  /* ... */
+  "jsx": "preserve", /** if using esbuild, otherwise "react" */
+  "jsxImportSource": "@raycenity/devolve-ui"
+}
+```
+
+```bash
+# if you don't have pnpm installed, uncomment the next line
+# curl -fsSL https://get.pnpm.io/install.sh | sh -
+pnpm add @raycenity/devolve-ui
 ```
 
 ## Cross-platform
