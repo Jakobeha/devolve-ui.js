@@ -77,7 +77,8 @@ export class TerminalRendererImpl extends RendererImpl<VRender, AssetCacher> {
       for (const char of line) {
         this.output.write(char)
       }
-      this.output.write('\n')
+      // This writes a newline without overriding stuff
+      this.output.write('\x1b[1E')
     }
     this.linesOutput += lines.length
   }
@@ -250,7 +251,7 @@ export class TerminalRendererImpl extends RendererImpl<VRender, AssetCacher> {
   protected override renderImage (bounds: BoundingBox, columnSize: Size, src: string, node: VNode): { render: VRender, size: Size } {
     const [image, resolveCallback] = this.assets.getImage(src, bounds.width, bounds.height)
     if (image === undefined) {
-      throw new Error(`Could not get image for some unknown reason: ${src}`)
+      throw new Error(`Image should not ever be undefined: ${src}`)
     } else if (image === null) {
       resolveCallback(() => this.invalidate(node))
       return {
@@ -258,6 +259,7 @@ export class TerminalRendererImpl extends RendererImpl<VRender, AssetCacher> {
         size: { width: '...'.length, height: 1 }
       }
     } else {
+      // render = deepCopy(image)
       const render = image.map(row => [...row])
       VRender.translate1(render, bounds)
 

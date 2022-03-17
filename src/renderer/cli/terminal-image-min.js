@@ -1,12 +1,52 @@
+// terminal-image modified for devolve-ui
 // noinspection NpmUsedModulesInstalled
 
 import { chalk } from '@raycenity/chalk-cross'
 import * as UPNG from 'upng-js'
+import * as Sixel from 'sixel'
 import { CharColor, TRANSPARENT } from 'renderer/cli/CharColor'
 
 const ROW_OFFSET = 2
 const PIXEL = '\u2584'
 const IS_NODE = typeof window === 'undefined'
+const SAVE_CURSOR = '\x1b7'
+const RESTORE_CURSOR = '\x1b8'
+
+// See https://saitoha.github.io/libsixel#terminal-requirements
+// and https://saitoha.github.io/libsixel#terminal-requirements for terminals that support sixel
+const SIXEL_TERMINALS = [
+  'contour',
+  'mlterm',
+  'mintty',
+  'msys2',
+  'dxterm',
+  'kermit',
+  'zste',
+  'wrq',
+  'rlogin',
+  'yaft',
+  'recterm',
+  'seq2gif',
+  'cancer'
+]
+
+function getImageSupport () {
+  if (!IS_NODE) {
+    return 'fallback'
+  }
+
+  const terminal = (process.env.LC_TERMINAL ?? process.env.TERM_PROGRAM ?? '').toLowerCase()
+  const terminalVersion = process.env.LC_TERMINAL_VERSION ?? process.env.TERM_PROGRAM_VERSION ?? ''
+  if (terminal.startsWith('iterm') && terminalVersion.startsWith('3')) {
+    return 'iterm'
+  } else if (terminal.startsWith('kitty')) {
+    return 'kitty'
+  } else if (SIXEL_TERMINALS.some(prefix => terminal.startsWith(prefix))) {
+    return 'sixel'
+  } else {
+    return 'fallback'
+  }
+}
 
 function scale (width, height, originalWidth, originalHeight) {
   const originalRatio = originalWidth / originalHeight
@@ -46,7 +86,7 @@ function calculateScaledWidthHeight (imageWidth, imageHeight, { width: inputWidt
   if (inputHeight !== undefined && inputWidth !== undefined) {
     width = checkAndGetDimensionValue(inputWidth, terminalColumns)
     height = checkAndGetDimensionValue(inputHeight, terminalRows) * 2
-    if (preserveAspectRatio !== false) {
+    if (preserveAspectRatio === true) {
       ({ width, height } = scale(width, height, imageWidth, imageHeight))
     }
   } else if (inputWidth !== undefined) {
@@ -66,6 +106,46 @@ function calculateScaledWidthHeight (imageWidth, imageHeight, { width: inputWidt
   return { width, height }
 }
 
+function padRender (theImage, { width, height }) {
+  const result = []
+  for (let y = 0; y < height; y ++) {
+    const line = []
+    for (let x = 0; x < width; x++) {
+      let cell = x === 0 && y === 0 ? theImage : ''
+      if (x === 0) {
+        // Move cursor past image
+        cell += `\x1b[${Math.floor(width)}B`
+      }
+      line.push(cell)
+    }
+    result.push(line)
+  }
+  return result
+}
+
+function encodeBase64 (imageData) {
+  return Buffer.from(imageData).toString('base64')
+}
+
+function renderKitty (image, imageData, size) {
+  // Note: Kitty has better ways of writing images (it can write PNG directly and handle encoded data)
+  const { width, height } = size
+  const theImage = `${SAVE_CURSOR}\x1b_Gf=32,s=${image.width},v=${image.height},c=${Math.floor(width)},r=${Math.floor(height)},t=d;${encodeBase64(imageData)}\x1b\\${RESTORE_CURSOR}`
+  return padRender(theImage, size)
+}
+
+function renderIterm (buffer, size) {
+  // Note: iTerm also has better ways of writing images. It does not even support raw pixel data
+  const { width, height } = size
+  const theImage = `${SAVE_CURSOR}\x1b]1337;File=inline=1;width=${Math.floor(width)};height=${Math.floor(height)};preserveAspectRatio=0:${buffer.toString('base64')}\x07${RESTORE_CURSOR}`
+  return padRender(theImage, size)
+}
+
+function renderSixel (image, imageData, size) {
+  const theImage = Sixel.image2sixel(imageData, image.width, image.height)
+  return padRender(theImage, size)
+}
+
 function getRGBA (pixel) {
   return {
     r: pixel >> 16 & 255,
@@ -75,17 +155,15 @@ function getRGBA (pixel) {
   }
 }
 
-function render (buffer, options) {
-  const image = UPNG.decode(buffer)
-  const imageData = new Uint32Array(UPNG.toRGBA8(image)[0])
-  const { width, height } = calculateScaledWidthHeight(image.width, image.height, options)
+function renderFallback (image, imageData, { width, height }) {
   const ratio = {
     width: image.width / width,
     height: image.height / height
   }
   const result = []
-  for (let y1 = 0; y1 < height - 1; y1 += 2) {
+  for (let y1 = 0; y1 < height; y1++) {
     const y2 = Math.floor(y1 * ratio.height)
+    const y2p1 = Math.floor((y1 + 0.5) * ratio.height)
     const line = []
     for (let x1 = 0; x1 < width; x1++) {
       const x2 = Math.floor(x1 * ratio.width)
@@ -93,7 +171,7 @@ function render (buffer, options) {
       if (a === 0) {
         line.push(TRANSPARENT)
       } else {
-        const { r: r2, g: g2, b: b2 } = getRGBA(imageData[(y2 + 1) * image.width + x2])
+        const { r: r2, g: g2, b: b2 } = getRGBA(imageData[y2p1 * image.width + x2])
         const { openEscape: bgOpen, closeEscape: bgClose } = chalk.bgRgb(r, g, b)
         const { openEscape: fgOpen, closeEscape: fgClose } = chalk.rgb(r2, g2, b2)
         const bg = CharColor('bg', bgOpen, bgClose)
@@ -104,6 +182,22 @@ function render (buffer, options) {
     result.push(line)
   }
   return result
+}
+
+function render (buffer, options) {
+  const image = UPNG.decode(buffer)
+  const imageData = UPNG.toRGBA8(image)[0]
+  const size = calculateScaledWidthHeight(image.width, image.height, options)
+  switch (getImageSupport()) {
+    case 'sixel':
+      return renderSixel(image, new Uint8Array(imageData), size)
+    case 'kitty':
+      return renderKitty(image, imageData, size)
+    case 'iterm':
+      return renderIterm(buffer, size)
+    case 'fallback':
+      return renderFallback(image, new Uint32Array(imageData), size)
+  }
 }
 
 export const terminalImage = {

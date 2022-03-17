@@ -13,4 +13,5 @@ markdown_extensions:
   - pymdownx.superfences
   - codehilite
 extra_css:
-  - styles/pygments.css
+  - assets/styles/theme-adjustments.css
+  - assets/styles/pygments.css

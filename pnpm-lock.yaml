@@ -11,6 +11,7 @@ specifiers:
   husky: ^7.0.4
   npm-run-all: ^4.1.5
   pixi.js: ^6.2.2
+  sixel: ^0.15.0
   ts-standard: ^11.0.0
   typescript: ^4.5.4
   upng-js: ^2.1.0
@@ -18,6 +19,7 @@ specifiers:
 dependencies:
   '@raycenity/chalk-cross': link:../chalk-cross
   '@raycenity/misc-ts': link:../misc-ts
+  sixel: 0.15.0
   upng-js: 2.1.0
 
 devDependencies:
@@ -2362,6 +2364,10 @@ packages:
       get-intrinsic: 1.1.1
       object-inspect: 1.12.0
     dev: true
+
+  /sixel/0.15.0:
+    resolution: {integrity: sha512-osNcrv21tyW1IwYM36zugnW5zD2Pm/4N04jofhjq4XBcseVGLpDXJIqkXz0DFuGW1UtLYjkdcojJpvtLtw3CaA==}
+    dev: false
 
   /slash/3.0.0:
     resolution: {integrity: sha512-g9Q1haeby36OSStwb4ntCGGGaKsaVSjQ68fBxoQcutl5fS1vuY18H3wSt3jFyFtrkx+Kz0V1G85A4MyAdDMi2Q==}

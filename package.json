@@ -55,6 +55,7 @@
   "dependencies": {
     "@raycenity/chalk-cross": "link:../chalk-cross",
     "@raycenity/misc-ts": "link:../misc-ts",
+    "sixel": "^0.15.0",
     "upng-js": "^2.1.0"
   }
 }
