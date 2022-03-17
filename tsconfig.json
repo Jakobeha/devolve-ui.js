@@ -23,6 +23,6 @@
   },
   "references": [
     { "path": "../misc-ts" },
-    { "path": "../terminal-image-min" }
+    { "path": "../chalk-cross" }
   ]
 }
