@@ -6,11 +6,8 @@ import * as UPNG from 'upng-js'
 import * as Sixel from 'sixel'
 import { CharColor, TRANSPARENT } from 'renderer/cli/CharColor'
 
-const ROW_OFFSET = 2
 const PIXEL = '\u2584'
 const IS_NODE = typeof window === 'undefined'
-const SAVE_CURSOR = '\x1b7'
-const RESTORE_CURSOR = '\x1b8'
 
 // See https://saitoha.github.io/libsixel#terminal-requirements
 // and https://saitoha.github.io/libsixel#terminal-requirements for terminals that support sixel
@@ -80,12 +77,12 @@ function calculateScaledWidthHeight (imageWidth, imageHeight, { width: inputWidt
   const terminalColumns = IS_NODE ? process.stdout.columns ?? 80 : window.innerWidth / parseFloat(getComputedStyle(document.body).fontSize)
   // noinspection JSCheckFunctionSignatures
   // eslint-disable-next-line no-undef
-  const terminalRows = IS_NODE ? process.stdout.rows - ROW_OFFSET : window.innerHeight / parseFloat(getComputedStyle(document.body).fontSize)
+  const terminalRows = IS_NODE ? process.stdout.rows ?? 60 : window.innerHeight / parseFloat(getComputedStyle(document.body).fontSize)
   let width
   let height
   if (inputHeight !== undefined && inputWidth !== undefined) {
     width = checkAndGetDimensionValue(inputWidth, terminalColumns)
-    height = checkAndGetDimensionValue(inputHeight, terminalRows) * 2
+    height = checkAndGetDimensionValue(inputHeight, terminalRows)
     if (preserveAspectRatio === true) {
       ({ width, height } = scale(width, height, imageWidth, imageHeight))
     }
@@ -93,13 +90,13 @@ function calculateScaledWidthHeight (imageWidth, imageHeight, { width: inputWidt
     width = checkAndGetDimensionValue(inputWidth, terminalColumns)
     height = imageHeight * width / imageWidth
   } else if (inputHeight !== undefined) {
-    height = checkAndGetDimensionValue(inputHeight, terminalRows) * 2
+    height = checkAndGetDimensionValue(inputHeight, terminalRows)
     width = imageWidth * height / imageHeight
   } else {
-    ({ width, height } = scale(terminalColumns, terminalRows * 2, imageWidth, imageHeight))
+    ({ width, height } = scale(terminalColumns, terminalRows, imageWidth, imageHeight))
   }
   if (width > terminalColumns) {
-    ({ width, height } = scale(terminalColumns, terminalRows * 2, width, height))
+    ({ width, height } = scale(terminalColumns, terminalRows, width, height))
   }
   width = Math.round(width)
   height = Math.round(height)
@@ -108,15 +105,10 @@ function calculateScaledWidthHeight (imageWidth, imageHeight, { width: inputWidt
 
 function padRender (theImage, { width, height }) {
   const result = []
-  for (let y = 0; y < height; y ++) {
+  for (let y = 0; y < height; y++) {
     const line = []
     for (let x = 0; x < width; x++) {
-      let cell = x === 0 && y === 0 ? theImage : ''
-      if (x === 0) {
-        // Move cursor past image
-        cell += `\x1b[${Math.floor(width)}B`
-      }
-      line.push(cell)
+      line.push(x === 0 && y === 0 ? theImage : '')
     }
     result.push(line)
   }
@@ -127,17 +119,17 @@ function encodeBase64 (imageData) {
   return Buffer.from(imageData).toString('base64')
 }
 
-function renderKitty (image, imageData, size) {
-  // Note: Kitty has better ways of writing images (it can write PNG directly and handle encoded data)
+function renderIterm (buffer, size) {
+  // Note: iTerm has better ways of writing images. It does not even support raw pixel data
   const { width, height } = size
-  const theImage = `${SAVE_CURSOR}\x1b_Gf=32,s=${image.width},v=${image.height},c=${Math.floor(width)},r=${Math.floor(height)},t=d;${encodeBase64(imageData)}\x1b\\${RESTORE_CURSOR}`
+  const theImage = `\x1b]1337;File=inline=1;width=${width};height=${height};preserveAspectRatio=0:${buffer.toString('base64')}\x07`
   return padRender(theImage, size)
 }
 
-function renderIterm (buffer, size) {
-  // Note: iTerm also has better ways of writing images. It does not even support raw pixel data
+function renderKitty (image, imageData, size) {
+  // Note: Kitty has better ways of writing images (it can write PNG directly and handle encoded data)
   const { width, height } = size
-  const theImage = `${SAVE_CURSOR}\x1b]1337;File=inline=1;width=${Math.floor(width)};height=${Math.floor(height)};preserveAspectRatio=0:${buffer.toString('base64')}\x07${RESTORE_CURSOR}`
+  const theImage = `\x1b_Gf=32,s=${image.width},v=${image.height},c=${width},r=${height},t=d;${encodeBase64(imageData)}\x1b\\`
   return padRender(theImage, size)
 }
 

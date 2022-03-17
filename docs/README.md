@@ -56,6 +56,8 @@ new DevolveUI(App, { name: 'devolve-ui' }).show()
 }
 ```
 
+**Pro tip:** If you debug TUIs in IntelliJ, you can see `console` outputs in a separate tab from the terminal output!
+
 ## Installing (with pnpm)
 
 ```bash

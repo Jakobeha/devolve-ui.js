@@ -19,6 +19,8 @@ export interface TerminalRenderOptions extends CoreRenderOptions {
   input?: ReadStream
   output?: WriteStream
   interact?: Interface
+  /** Don't use terminal escapes to set character positions, just write directly. Defaults to false. */
+  fallbackPositions?: boolean
 }
 
 class AssetCacher extends CoreAssetCacher {
@@ -42,20 +44,24 @@ export class TerminalRendererImpl extends RendererImpl<VRender, AssetCacher> {
   private readonly output: WriteStream
 
   private linesOutput: number = 0
+  private readonly fallbackPositions: boolean
 
   constructor (root: () => VNode, opts: TerminalRenderOptions = {}) {
     super(new AssetCacher(), opts)
 
-    let { input, output, interact } = opts
+    let { input, output, interact, fallbackPositions } = opts
 
     input = input ?? process.stdin
     output = output ?? process.stdout
     interact = interact ?? readline.createInterface({ input, output, terminal: true })
+    fallbackPositions = fallbackPositions ?? false
 
     this.interact = interact
     this.input = input
     this.output = output
+    this.fallbackPositions = fallbackPositions
 
+    // Configure input
     this.input.setRawMode(true)
     this.input.setEncoding('utf8')
     readline.emitKeypressEvents(this.input)
@@ -65,21 +71,39 @@ export class TerminalRendererImpl extends RendererImpl<VRender, AssetCacher> {
 
   protected override clear (): void {
     if (this.linesOutput !== 0) {
-      this.output.moveCursor(0, -this.linesOutput)
-      this.output.clearScreenDown()
+      if (this.fallbackPositions) {
+        this.output.moveCursor(0, -this.linesOutput)
+        this.output.clearScreenDown()
+      }
       this.linesOutput = 0
     }
   }
 
   protected override writeRender (render: VRenderBatch<VRender>): void {
     const lines = VRender.collapse(render)
-    for (const line of lines) {
-      for (const char of line) {
-        this.output.write(char)
-      }
-      // This writes a newline without overriding stuff
-      this.output.write('\x1b[1E')
+
+    if (!this.fallbackPositions) {
+      // Clear screen and move to top left
+      this.output.write('\x1b[2J')
+      this.output.write('\x1b[H')
     }
+
+    // Write lines
+    lines.forEach((line, i) => {
+      line.forEach((char, j) => {
+        if (!this.fallbackPositions) {
+          // This moves the cursor to the exact location of the character so there aren't any issues
+          // It's expensive but terminal emulation is really varied, especially with images,
+          // and there are a lot of terminals which just don't do things the right way
+          this.output.write(`\x1b[${i + 1};${j + 1}H`)
+        }
+        this.output.write(char)
+      })
+
+      if (this.fallbackPositions) {
+        this.output.write('\n')
+      }
+    })
     this.linesOutput += lines.length
   }
 

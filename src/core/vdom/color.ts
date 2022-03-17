@@ -1,4 +1,4 @@
-import { Color as W3Color, Lab_to_XYZ, LCH_to_Lab, XYZ_to_lin_sRGB } from 'core/vdom/w3-color-conversions'
+import { Color as W3Color, gam_sRGB, Lab_to_XYZ, LCH_to_Lab, XYZ_to_lin_sRGB } from 'core/vdom/w3-color-conversions'
 
 export interface LCHColor {
   lightness: number
@@ -19,6 +19,7 @@ export type HexColor = `#${string}`
 export type ColorName =
   'red' |
   'orange' |
+  'gold' |
   'yellow' |
   'green' |
   'blue' |
@@ -95,7 +96,14 @@ export function Color (color: ColorSpec): RGBColor | LCHColor {
 export module LCHColor {
   export function toRGB (color: LCHColor): RGBColor {
     const lch: W3Color = [color.lightness, color.chroma, color.hue]
-    const [red, green, blue] = XYZ_to_lin_sRGB(Lab_to_XYZ(LCH_to_Lab(lch)))
+    const [red, green, blue] = gam_sRGB(XYZ_to_lin_sRGB(Lab_to_XYZ(LCH_to_Lab(lch))))
+
+    if (red < 0 || red > 1 || green < 0 || green > 1 || blue < 0 || blue > 1) {
+      // Raw rgb values may actually be over or under 0 and 1,
+      // if so we need to auto-correct them
+      // unfortunately I have no idea how except to lower chroma and retry :(
+      return toRGB({ ...color, chroma: color.chroma * 0.9 })
+    }
 
     return {
       red,
@@ -106,18 +114,19 @@ export module LCHColor {
   }
 
   export const FROM_STRING: Record<ColorName, LCHColor> = {
-    red: { lightness: 50, chroma: 50, hue: 0 },
-    orange: { lightness: 50, chroma: 80, hue: 30 },
-    yellow: { lightness: 50, chroma: 100, hue: 60 },
-    green: { lightness: 50, chroma: 80, hue: 120 },
-    blue: { lightness: 50, chroma: 50, hue: 240 },
-    purple: { lightness: 50, chroma: 80, hue: 270 },
-    pink: { lightness: 50, chroma: 80, hue: 300 },
-    brown: { lightness: 50, chroma: 50, hue: 30 },
+    red: { lightness: 50, chroma: 75, hue: 25 },
+    orange: { lightness: 50, chroma: 75, hue: 55 },
+    gold: { lightness: 50, chroma: 75, hue: 80 },
+    green: { lightness: 50, chroma: 75, hue: 135 },
+    blue: { lightness: 50, chroma: 75, hue: 280 },
+    purple: { lightness: 50, chroma: 75, hue: 320 },
+    pink: { lightness: 50, chroma: 75, hue: 0 },
     black: { lightness: 0, chroma: 0, hue: 0 },
     white: { lightness: 100, chroma: 0, hue: 0 },
     gray: { lightness: 50, chroma: 0, hue: 0 },
-    cyan: { lightness: 50, chroma: 100, hue: 180 }
+    cyan: { lightness: 50, chroma: 75, hue: 200 },
+    yellow: { lightness: 75, chroma: 75, hue: 80 },
+    brown: { lightness: 35, chroma: 75, hue: 80 }
   }
 }
 

@@ -1,5 +1,4 @@
 import { BoundingBox } from 'core'
-import { Strings } from '../../../../misc-ts'
 import { CharColor, TRANSPARENT } from 'renderer/cli/CharColor'
 
 /**
@@ -57,7 +56,7 @@ export module VRender {
     }
 
     // Array length not width
-    const length = Math.max(...Object.values(textMatrix).map(get2dArrayLength))
+    const length = Math.max(...Object.values(textMatrix).map(getWidth))
     const height = Math.max(...Object.values(textMatrix).map(getHeight))
     const matrixSorted = Object.entries(textMatrix).sort(([lhs], [rhs]) => Number(rhs) - Number(lhs)).map(([, lines]) => lines)
 
@@ -124,10 +123,6 @@ export module VRender {
   }
 
   function getWidth (vrender: VRender): number {
-    return Math.max(0, ...vrender.map(line => line.map(char => char === null ? 1 : Strings.width(char)).reduce((lhs, rhs) => lhs + rhs, 0)))
-  }
-
-  function get2dArrayLength (vrender: VRender): number {
     return Math.max(0, ...vrender.map(line => line.length))
   }
 
