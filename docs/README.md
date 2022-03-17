@@ -8,7 +8,7 @@
 
 devolve-ui is a super simple graphics library for canvas-based websites (games) and TUIs. A single devolve-ui app can be embedded in a website *and* run on the command line via `node`.
 
-devolve-ui is JSX-based, like React, but simpler, with fewer dependencies and size. It also allows you to manipulate the props directly, and has built-in support for the [*prompt-based GUI*](./docs/prompt-based-gui.md) pattern, where you wrap user interactions into asynchronous function calls (although this pattern can also be implemented in React or any other library).
+devolve-ui is JSX-based, like React, but simpler, with fewer dependencies and size. It also allows you to manipulate the props directly, and has built-in support for the [*prompt-based GUI*](prompt-based-gui.md) pattern, where you wrap user interactions into asynchronous function calls (although this pattern can also be implemented in React or any other library).
 
 **Important setup information:** if adding to an existing project, besides installing the, you *must* add this to your tsconfig.json or TypeScript won't work with the project:
 
@@ -84,7 +84,7 @@ Prompt-based GUI is when you write your GUI components as asynchronous functions
 
 In devolve-ui, you call `devolveUI.prompt(name, input)` with your prompt name and input. This function re-renders your UI with the `prompt.name` prop set to `input`. Your root UI component uses this prop to display the prompt. When the prompt is completed, your UI calls `prompt.name.resolve` (or `prompt.name.reject`) with the prompt output, and the `devolveUI.prompt` call returns with this value.
 
-For more info, read [*the article*](./docs/prompt-based-gui.md)
+For more info, read [*the article*](prompt-based-gui.md)
 
 ### Implementation
 
