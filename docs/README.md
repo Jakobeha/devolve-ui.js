@@ -1,6 +1,6 @@
 [![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
 
-![logo](https://github.com/Jakobeha/devolve-ui/docs/assets/logo.svg)
+![logo](https://raw.githubusercontent.com/Jakobeha/devolve-ui/master/docs/assets/logo.svg)
 
 # devolve-ui: super simple reactive graphics for browser and terminal
 
@@ -92,7 +92,7 @@ Prompt-based GUI is when you write your GUI components as asynchronous functions
 
 In devolve-ui, you call `devolveUI.prompt(name, input)` with your prompt name and input. This function re-renders your UI with the `prompt.name` prop set to `input`. Your root UI component uses this prop to display the prompt. When the prompt is completed, your UI calls `prompt.name.resolve` (or `prompt.name.reject`) with the prompt output, and the `devolveUI.prompt` call returns with this value.
 
-For more info, read [*the article*](https://github.com/Jakobeha/devolve-ui/docs/prompt-based-gui.md)
+For more info, read [*the article*](https://jakobeha.github.io/devolve-ui/docs/prompt-based-gui.md)
 
 ## Implementation
 
