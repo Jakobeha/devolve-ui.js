@@ -1,6 +1,5 @@
 {
   "include": [
-    "jsx-runtime.d.ts",
     "src/**/*.ts"
   ],
   "compilerOptions": {
