@@ -33,7 +33,6 @@ export class BrowserRendererImpl extends RendererImpl<VRender, AssetCacher> {
     this.canvas = new PIXI.Application({
       width: container.clientWidth,
       height: container.clientHeight,
-      backgroundColor: 0xffffff,
       antialias: true,
       resolution: 1,
       ...opts
@@ -73,8 +72,8 @@ export class BrowserRendererImpl extends RendererImpl<VRender, AssetCacher> {
         z: 0,
         anchorX: 0,
         anchorY: 0,
-        width: this.canvas.stage.width / columnSize.width,
-        height: this.canvas.stage.height / columnSize.height
+        width: this.canvas.view.width / columnSize.width,
+        height: this.canvas.view.height / columnSize.height
       },
       columnSize
     }
@@ -174,7 +173,7 @@ export class BrowserRendererImpl extends RendererImpl<VRender, AssetCacher> {
           rect.top * columnSize.height,
           rect.width * columnSize.width,
           rect.height * columnSize.height,
-          0.125 * Math.min(columnSize.width, columnSize.height)
+          Math.min(columnSize.width, columnSize.height)
         )
         break
       case 'dashed':
@@ -206,6 +205,17 @@ export class BrowserRendererImpl extends RendererImpl<VRender, AssetCacher> {
   protected override renderVectorImage (bounds: BoundingBox, columnSize: Size, path: string): { render: VRender, size: Size } {
     // TODO
     return null as any
+  }
+
+  protected override renderPixi (bounds: BoundingBox, columnSize: Size, pixi: DisplayObject | 'terminal', getSize: ((pixi: DisplayObject, bounds: BoundingBox, columnSize: Size) => Size) | undefined): { render: VRender, size: Size | null } {
+    if (pixi === 'terminal') {
+      throw new Error('pixi DisplayObject and getSize should not be null in browser')
+    }
+
+    return {
+      render: pixi,
+      size: getSize?.(pixi, bounds, columnSize) ?? null
+    }
   }
 
   override useInput (handler: (key: Key) => void): () => void {
@@ -243,9 +253,9 @@ function transformSpriteRender (render: Sprite, bounds: BoundingBox, columnSize:
   render.position.set(bounds.x * columnSize.width, bounds.y * columnSize.height)
   render.anchor.set(bounds.anchorX, bounds.anchorY)
   if (bounds.width !== undefined) {
-    render.width = bounds.width
+    render.width = bounds.width * columnSize.width
   }
   if (bounds.height !== undefined) {
-    render.height = bounds.height
+    render.height = bounds.height * columnSize.height
   }
 }

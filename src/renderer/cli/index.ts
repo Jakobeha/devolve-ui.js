@@ -8,6 +8,7 @@ import { CoreAssetCacher, RendererImpl, VRenderBatch } from 'renderer/common'
 import { chalk } from '@raycenity/chalk-cross'
 import { VRender } from 'renderer/cli/VRender'
 import { CharColor, TRANSPARENT } from 'renderer/cli/CharColor'
+import type { DisplayObject } from 'pixi.js'
 
 let readline: typeof import('readline')
 
@@ -302,6 +303,17 @@ export class TerminalRendererImpl extends RendererImpl<VRender, AssetCacher> {
     return {
       render: [],
       size: { width: 0, height: 0 }
+    }
+  }
+
+  protected override renderPixi (bounds: BoundingBox, columnSize: Size, pixi: DisplayObject | 'terminal'): { render: VRender, size: Size | null } {
+    if (pixi !== 'terminal') {
+      throw new Error('pixi DisplayObject should be null in terminal')
+    }
+    // Nothing
+    return {
+      render: [],
+      size: null
     }
   }
 

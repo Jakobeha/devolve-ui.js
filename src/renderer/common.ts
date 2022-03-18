@@ -3,10 +3,9 @@ import { CoreRenderOptions, Renderer } from 'core/renderer'
 import { VComponent, VRoot } from 'core/component'
 import { Key, Strings } from '@raycenity/misc-ts'
 import { BorderStyle } from 'core/vdom/border-style'
+import type { DisplayObject } from 'pixi.js'
 
 type Timer = NodeJS.Timer
-
-export type RenderDiff = VNode
 
 export abstract class CoreAssetCacher {
   private readonly assets: Map<string, any> = new Map()
@@ -149,6 +148,7 @@ export abstract class RendererImpl<VRender, AssetCacher extends CoreAssetCacher>
   protected abstract renderBorder (rect: Rectangle, columnSize: Size, color: Color | null, borderStyle: BorderStyle, node: VNode): VRender
   protected abstract renderImage (bounds: BoundingBox, columnSize: Size, src: string, node: VNode): { render: VRender, size: Size }
   protected abstract renderVectorImage (bounds: BoundingBox, columnSize: Size, src: string, node: VNode): { render: VRender, size: Size }
+  protected abstract renderPixi (bounds: BoundingBox, columnSize: Size, pixi: DisplayObject | 'terminal', getSize: ((pixi: DisplayObject, bounds: BoundingBox, columnSize: Size) => Size) | undefined, node: VNode): { render: VRender, size: Size | null }
 
   protected renderNode (parentBounds: ParentBounds, siblingBounds: Rectangle | null, node: VNode): VRenderBatch<VRender> {
     if (this.cachedRenders.has(node)) {
@@ -287,6 +287,19 @@ export abstract class RendererImpl<VRender, AssetCacher extends CoreAssetCacher>
             throw new Error('source must have an extension to determine the filetype')
           default:
             throw new Error(`unsupported source extension: ${extension}`)
+        }
+      }
+      case 'pixi': {
+        const inferredBounds = {
+          ...bounds,
+          width: bounds.width ?? parentBounds.boundingBox.width ?? siblingBounds?.width,
+          height: bounds.height ?? parentBounds.boundingBox.height ?? siblingBounds?.height
+        }
+        const { render, size } = this.renderPixi(inferredBounds, parentBounds.columnSize, node.pixi, node.getSize, node)
+        const rect = size !== null ? BoundingBox.toRectangle(bounds, size) : null
+        return {
+          rect,
+          [bounds.z]: render
         }
       }
     }

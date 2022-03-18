@@ -1,5 +1,6 @@
 import { RendererImpl } from 'renderer/common'
-import { VNode } from 'core/vdom'
+import { PLATFORM } from 'core/platform'
+import { PixiComponent, VNode } from 'core/vdom'
 
 type PendingUpdateDetails = string
 
@@ -147,6 +148,18 @@ export module VComponent {
         throw new Error('JSX components can only be nodes. Call this function normally, not with JSX')
       }
       Object.assign(vcomponent.node, constructed)
+
+      const node: VNode = vcomponent.node as VNode
+      if (node.type === 'pixi') {
+        if (PLATFORM === 'web') {
+          const pixiComponent: PixiComponent<any> = vcomponent.construct as PixiComponent<any>
+          const PIXI = (globalThis as unknown as { PIXI: typeof import('pixi.js') }).PIXI
+          node.pixi = pixiComponent.lifecycle.mkPixi(PIXI)
+          pixiComponent.pixis.push(node.pixi)
+        } else {
+          node.pixi = 'terminal'
+        }
+      }
     })
     vcomponent.isBeingCreated = false
     return vcomponent.node as VNode
@@ -168,6 +181,12 @@ export module VComponent {
       // We also need to use VComponent's renderer because the current renderer might be different
       withRenderer(vcomponent.renderer, () => doUpdate(vcomponent, () => {
         VNode.convertInto(vcomponent.node, vcomponent.construct(vcomponent.props))
+
+        const node: VNode = vcomponent.node
+        if (node.type === 'pixi' && node.pixi !== 'terminal') {
+          const pixiComponent: PixiComponent<any> = vcomponent.construct as PixiComponent<any>
+          pixiComponent.lifecycle.update?.(node.pixi)
+        }
       }))
       vcomponent.renderer.invalidate(vcomponent.node as VNode)
     }
@@ -179,6 +198,13 @@ export module VComponent {
     }
 
     vcomponent.renderer.invalidate(vcomponent.node as VNode)
+
+    const node: VNode = vcomponent.node as VNode
+    if (node.type === 'pixi' && node.pixi !== 'terminal') {
+      const pixiComponent: PixiComponent<any> = vcomponent.construct as PixiComponent<any>
+      pixiComponent.lifecycle.destroy?.(node.pixi)
+      pixiComponent.pixis.splice(pixiComponent.pixis.indexOf(node.pixi), 1)
+    }
 
     runPermanentDestructors(vcomponent)
     vcomponent.isDead = true

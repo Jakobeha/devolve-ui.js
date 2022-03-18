@@ -1,8 +1,14 @@
-import { CommonAttrs, JSXBorderAttrs, JSXBoxAttrs, JSXColorAttrs, JSXSourceAttrs, JSXTextAttrs } from 'core/vdom/attrs'
-import { Bounds, BoundsSpec, SubLayout } from 'core/vdom/bounds'
-import { Color } from 'core/vdom/color'
+import {
+  JSXBorderAttrs,
+  JSXBoxAttrs,
+  JSXColorAttrs,
+  JSXSourceAttrs,
+  JSXTextAttrs
+} from 'core/vdom/attrs'
+import { SubLayout } from 'core/vdom/bounds'
 import { VBorder, VBox, VColor, VNode, VSource, VText } from 'core/vdom/node'
 import { ExplicitPartial, IntoArray } from '@raycenity/misc-ts'
+import { jsxToNormalAttrs, jsxColorToNormalAttrs } from 'core/vdom/jsx-helpers'
 
 export type VJSX =
   VNode |
@@ -61,27 +67,4 @@ export const intrinsics: {
   color: (props: JSXColorAttrs): VNode => VColor(jsxColorToNormalAttrs(props, true)),
   border: (props: JSXBorderAttrs): VNode => VBorder(jsxColorToNormalAttrs(props, false)),
   source: (props: JSXSourceAttrs): VNode => VSource(jsxToNormalAttrs(props))
-}
-
-function jsxToNormalAttrs<T extends CommonAttrs> (jsxAttrs: T & BoundsSpec): Omit<T & BoundsSpec, 'bounds' | keyof BoundsSpec> & { bounds: Bounds } {
-  const { layout, x, y, z, anchorX, anchorY, width, height, bounds: explicitBounds, ...attrs } = jsxAttrs
-  const bounds = explicitBounds ?? Bounds({ layout, x, y, z, anchorX, anchorY, width, height })
-  return { bounds, ...attrs }
-}
-
-function jsxColorToNormalAttrs<T extends CommonAttrs & { color: Color | null }> (jsxAttrs: JSXColorAttrs<T>, requiresColor: boolean): T {
-  const { color: colorSpec, red, green, blue, lightness, chroma, hue, bounds, ...attrs } = jsxToNormalAttrs(jsxAttrs)
-  let color: Color | null = null
-  if (colorSpec !== undefined) {
-    color = Color(colorSpec)
-  } else if (red !== undefined && green !== undefined && blue !== undefined) {
-    color = Color({ red, green, blue })
-  } else if (lightness !== undefined && chroma !== undefined && hue !== undefined) {
-    color = Color({ lightness, chroma, hue })
-  }
-  if (color === null && requiresColor) {
-    throw new Error(`Can't deduce color: ${JSON.stringify(jsxAttrs)}`)
-  }
-  // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
-  return { color, bounds, ...attrs } as T
 }

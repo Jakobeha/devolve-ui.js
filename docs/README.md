@@ -46,6 +46,12 @@ new DevolveUI(App, { name: 'devolve-ui' }).show()
 // Works in node or browser (with additional pixi.js script)
 ```
 
+<div style="display:flex;overflow-x:scroll">
+  <img src="docs/assets/screenshots/terminal.png" alt="terminal" />
+  <img src="docs/assets/screenshots/iterm.png" alt="iterm" />
+  <img src="docs/assets/screenshots/browser.png" alt="browser" />
+</div>
+
 **Important setup information:** if adding to an existing project, besides installing, you *must* add this to your tsconfig.json for JSX support:
 
 ```json5
@@ -92,8 +98,7 @@ Unlike React, the **nodes** (lowercase components) which devolve-ui uses are not
 - `solid`: Renders a solid color
 - `border`: Renders a border
 - `source`: Renders an image, video, or other external graphic
-- `pixi`: Contains a custom pixi component. These are invisible in TUIs
-- `tui`: Invisible in browser
+- (WIP unstable) `pixi`: Can only be created via `PixiComponent`. These contain custom pixi components in the browser, and are invisible in TUIs.
 
 Another notable difference is the layout system. devolve-ui does not use CSS, instead all node bounds are calculated using only the parent and previous child. As a result, you must specify bounds much more explicitly. See [Bounds](#Bounds) for more.
 
