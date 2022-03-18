@@ -10,7 +10,7 @@
 
 devolve-ui is a super simple graphics library for canvas-based websites (games) and TUIs. A single devolve-ui app can be embedded in a website *and* run on the command line via `node`.
 
-devolve-ui is JSX-based like React, but renders to canvas or terminal instead of DOM. It should *not* be used for traditional web pages.
+devolve-ui is JSX-based like React, but renders to canvas or terminal instead of DOM. It should not be used for traditional web pages.
 
 Example:
 
@@ -80,35 +80,41 @@ When a devolve-ui application is run in the web browser, it uses pixi.js for ren
 
 ### Super simple
 
-devolve-ui uses JSX and React-style **components**: you write your UI declaratively and use hooks (useState, useEffect, useLazy, useInput) for local state and side-effects. Your UI is literally a function which takes the global state, and returns a render your application.
+devolve-ui uses JSX and React-style **components**: you write your UI declaratively and use hooks (useState, useEffect, useLazy, useInput) for local state and side-effects. Your UI is literally a function which takes the global state, and returns a render of your application.
 
-devolve-ui components return **nodes**, which make up the "virtual DOM" or "HTML" of your scene. Unlike real HTML there are 3 kinds of nodes: box, text, and graphic. Boxes contain children and define your layout, text contains styled (e.g. bold, colored) text, and graphics are solid backgrounds, gradients, images, videos, and custom pixi elements.
+Unlike React, the **nodes** (lowercase components) which devolve-ui uses are not HTML elements, they are:
 
-Every devolve-ui node has **bounds**, which define its position, size, and z-position (nodes with higher z-positions are rendered on top of nodes with lower z-positions). You create bounds using the function `Bounds`, e.g. `Bounds({ left: '32em', centerY: '50%', width: '250px' })`. The bounds system is very flexibld, so you can define custom layouts (see the section in [Implementation](#Bounds)).
+- `hbox`, `vbox`, `zbox`: Layout child components
+  - `hbox`: Places children horizontally
+  - `vbox`: Places children vertically
+  - `zbox`: Places children on top of each other (no position offsets)
+- `text`: Contains text
+- `solid`: Renders a solid color
+- `border`: Renders a border
+- `source`: Renders an image, video, or other external graphic
+- `pixi`: Contains a custom pixi component. These are invisible in TUIs
+- `tui`: Invisible in browser
 
-### Prompt-based GUI
+Another notable difference is the layout system. devolve-ui does not use CSS, instead all node bounds are calculated using only the parent and previous child. As a result, you must specify bounds much more explicitly. See [Bounds](#Bounds) for more.
 
-Prompt-based GUI is when you write your GUI components as asynchronous functions which display prompts, and then await the user's input before they continue execution. You can present prompts concurrently using `Promise.all` or `Promise.race`, and thus you can write entire GUI applications in this pattern. Prompt-based GUI is particularly useful if you want your application to be easily automated, or if your application's UI is stateful (as opposed to a control center where the GUI elements don't change much).
+## Prompt-based GUI
 
-In devolve-ui, you call `devolveUI.prompt(name, input)` with your prompt name and input. This function re-renders your UI with the `prompt.name` prop set to `input`. Your root UI component uses this prop to display the prompt. When the prompt is completed, your UI calls `prompt.name.resolve` (or `prompt.name.reject`) with the prompt output, and the `devolveUI.prompt` call returns with this value.
-
-For more info, read [*the article*](https://jakobeha.github.io/devolve-ui/docs/prompt-based-gui.md)
+Prompt-based GUI is a new-ish paradigm where your application interfaces with the UI via **prompts**.  devolve-ui has built-in support for prompt-based GUI via the `PromptDevolveUI` class. Read [*this article*](https://jakobeha.github.io/devolve-ui/docs/prompt-based-gui.md) for more.
 
 ## Implementation
 
 [Source](https://github.com/Jakobeha/devolve-ui)
 
-### Rendering
+### Directory overview
 
-A component is essentially a function which takes the component's props and children and returns a node.
+- `core`: The main code of devolve-ui
+  - `core/hooks`: Built-in hooks
+  - `core/vdom`: The "DOM" in devolve-ui: nodes, attributes, and JSX.
+- `renderer`: Platform-specific rendering
+- `prompt`: [Prompt-based GUI](https://jakobeha.github.io/devolve-ui/docs/prompt-based-gui.md) helpers.
 
-When the scene re-renders, devolve-ui calls each component function to reconstruct the nodes, reusing child components by matching them via their keys and function names, and preserving each component's state through hooks (which  are bound to the component).
+### Notable types
 
-Next, devolve-ui calculates each node's absolute bounding box by calling its `bounds`, using the parent node or scene's bounding box and sublayout. devolve-ui uses the position and x-position to determine the order it renders the nodes, and uses the size to affect how the node itself renders (wrapping text, scaling graphics).
-
-Finally, devolve-ui draws each node onto the scene: in Terminal devolve-ui clears the display buffer and prints each node, in pixi.js it removes all DisplayObjects from the scene and re-adds them.
-
-### Bounds
-
-Internally, every `bounds` value is actually by a function which takes the parent node's bounding
-box and sublayout, and returns the node's absolute bounding box. This means that nodes can have absolute positions or z-positions regardless of their parents,  offsets and sizes which are percentages of the parents' size, margins, padding, gaps, and even completely custom layouts. In practice, you always create bounds using the `Bounds` function.
+- `VNode`: Virtual "DOM" node, e.g. `box`, `text`, `color`
+- `VComponent`: Synchronizes a component function to a persistent `VNode` and preserves state from hooks.
+- `Bounds`: A node's bounds depend on the parent and previous component: therefore `Bounds` are literally a function from parent and previous component properties to a `BoundingBox`. See [src/core/vdom/bounds.ts](https://github.com/Jakobeha/devolve-ui/blob/tree/master/core/vdom/bounds.ts)

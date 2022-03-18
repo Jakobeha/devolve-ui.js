@@ -2,8 +2,8 @@ import { Renderer, VNode } from 'core'
 import type { TerminalRenderOptions } from 'renderer/cli'
 import type { BrowserRenderOptions } from 'renderer/web'
 import { VComponent } from 'core/component'
-import { PromptArgs, PromptReplacedError, PromptReturn, PromptSpec, PromptTimeoutError } from 'prompt'
-import { DevolveUICore } from 'DevolveUICore'
+import { PromptArgs, PromptReplacedError, PromptReturn, PromptSpec, PromptTimeoutError } from 'prompt/prompt'
+import { DevolveUICore } from 'core/DevolveUICore'
 
 export type RenderOptions =
   TerminalRenderOptions &

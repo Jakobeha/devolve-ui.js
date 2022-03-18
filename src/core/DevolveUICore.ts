@@ -1,4 +1,4 @@
-import { Renderer, VNode } from 'core'
+import { Renderer, VNode } from 'core/index'
 import type { TerminalRenderOptions } from 'renderer/cli'
 import type { BrowserRenderOptions } from 'renderer/web'
 import { VComponent } from 'core/component'

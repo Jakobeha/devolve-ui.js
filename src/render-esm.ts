@@ -1,5 +1,7 @@
-import { DevolveUICore, RenderOptions } from 'DevolveUICore'
-import { PromptDevolveUICore, PromptProps } from 'PromptDevolveUICore'
+// noinspection DuplicatedCode
+
+import { DevolveUICore, RenderOptions } from 'core/DevolveUICore'
+import { PromptDevolveUICore, PromptProps } from 'prompt/PromptDevolveUICore'
 import type { RendererImpl } from 'renderer/common'
 import { PLATFORM, Renderer, VNode } from 'core'
 
@@ -17,7 +19,7 @@ const PlatformRendererImpl: new (root: () => VNode, opts?: RenderOptions) => Ren
 /* eslint-enable @typescript-eslint/restrict-template-expressions */
 
 export type { RenderOptions, PromptProps }
-export * from 'prompt'
+export * from 'prompt/prompt'
 
 export class DevolveUI<Props extends object> extends DevolveUICore<Props> {
   protected override mkRenderer (root: () => VNode, opts?: RenderOptions): Renderer {
