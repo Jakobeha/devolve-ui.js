@@ -95,21 +95,36 @@ export function Color (color: ColorSpec): RGBColor | LCHColor {
 
 export module LCHColor {
   export function toRGB (color: LCHColor): RGBColor {
-    const lch: W3Color = [color.lightness, color.chroma, color.hue]
-    const [red, green, blue] = gam_sRGB(XYZ_to_lin_sRGB(Lab_to_XYZ(LCH_to_Lab(lch))))
+    if (color.chroma === 0) {
+      // Easy case
+      // Also the other case doesn't actually return the same as this because our converter is broken :)
+      return {
+        red: color.lightness / 100,
+        green: color.lightness / 100,
+        blue: color.lightness / 100,
+        alpha: color.alpha
+      }
+    } else {
+      const lch: W3Color = [color.lightness, color.chroma, color.hue]
+      const [red, green, blue] = gam_sRGB(XYZ_to_lin_sRGB(Lab_to_XYZ(LCH_to_Lab(lch))))
 
-    if (red < 0 || red > 1 || green < 0 || green > 1 || blue < 0 || blue > 1) {
-      // Raw rgb values may actually be over or under 0 and 1,
-      // if so we need to auto-correct them
-      // unfortunately I have no idea how except to lower chroma and retry :(
-      return toRGB({ ...color, chroma: color.chroma * 0.9 })
-    }
+      if (red < 0 || red > 1 || green < 0 || green > 1 || blue < 0 || blue > 1) {
+        // Raw rgb values may actually be over or under 0 and 1,
+        // if so we need to auto-correct them
+        // unfortunately I have no idea how except to lower chroma and retry :(
+        if (color.chroma > 0.1) {
+          return toRGB({ ...color, chroma: color.chroma * 0.9 })
+        } else {
+          return toRGB({ ...color, chroma: 0 })
+        }
+      }
 
-    return {
-      red,
-      green,
-      blue,
-      alpha: color.alpha
+      return {
+        red,
+        green,
+        blue,
+        alpha: color.alpha
+      }
     }
   }
 
