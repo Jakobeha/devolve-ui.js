@@ -102,9 +102,76 @@ Unlike React, the **nodes** (lowercase components) which devolve-ui uses are not
 
 Another notable difference is the layout system. devolve-ui does not use CSS, instead all node bounds are calculated using only the parent and previous child. As a result, you must specify bounds much more explicitly. See the [Implementation](#Implementation) section for more.
 
-## Prompt-based GUI
+Another notable difference is contexts: see the [Contexts](#Contexts) section for more.
+
+## Concepts
+
+### Prompt-based GUI
 
 Prompt-based GUI is a new-ish paradigm where your application interfaces with the UI via **prompts**.  devolve-ui has built-in support for prompt-based GUI via the `PromptDevolveUI` class. Read [*this article*](https://jakobeha.github.io/devolve-ui/docs/prompt-based-gui.md) for more.
+
+### Contexts
+
+Contexts allow you to pass props implicitly, similar to React contexts.
+However, contexts in devolve-ui work slightly different: they are hooks instead of components.
+
+```jsx
+// const fooBarContext = createContext<FooBar>() in TypeScript
+const fooBarContext = createContext()
+
+const Parent = () => {
+  fooBarContext.useProvide({ foo: 'bar' })
+  return <box><Child /></box>
+}
+
+const Child = () => {
+  const value = fooBarContext.useConsume()
+  // value is { foo: 'bar' }
+  return <text>{value.foo}</text>
+}
+```
+
+There are also **state contexts**, which combine the functionality of contexts and states: a state context is a context which provides a state instead of a value. Children can mutate the state, and the mutation will affect other children who use the same provided context, but not children who use a different provided context.
+
+```jsx
+// const fooBarContext = createStateContext<FooBar>() in TypeScript
+const fooBarContext = createStateContext()
+
+const Grandparent = () => {
+  // In the first parent, value is { foo: 'bar' } for the first 5 seconds, and { foo: 'baz' } after
+  // because MutatingChild sets it
+  // In the second parent, value remains { foo: 'bar' } because that child doesn't set it
+  return (
+    <box>
+      <Parent>
+        <MutatingChild />
+      </Parent>
+      <Parent>
+        <Child />
+      </Parent>
+    </box>
+  )
+}
+
+
+const Parent = ({ children }) => {
+  fooBarContext.useProvide({ foo: 'bar' })
+  return <box>{children}</box>
+}
+
+const MutatingChild = () => {
+  const [value, setValue] = fooBarContext.useConsume()
+  // value is { foo: 'bar' } for the first 5 seconds, and { foo: 'baz' } after
+  useDelay(5000, () => { setValue({ foo: 'baz' }) })
+  return <text>{value.foo}</text>
+}
+
+const Child = () => {
+  const [value] = fooBarContext.useConsume()
+  // value is { foo: 'bar' } forever
+  return <text>{value.foo}</text>
+}
+```
 
 ## Implementation
 
@@ -114,6 +181,8 @@ Prompt-based GUI is a new-ish paradigm where your application interfaces with th
 
 - `core`: The main code of devolve-ui
   - `core/hooks`: Built-in hooks
+    - `core/hooks/intrinsic`: Hooks requiring package-private functions and support in `VComponent`
+    - `core/hooks/extra`: Hooks that you could create from the intrinsic ones
   - `core/vdom`: The "DOM" in devolve-ui: nodes, attributes, and JSX.
 - `renderer`: Platform-specific rendering
 - `prompt`: [Prompt-based GUI](https://jakobeha.github.io/devolve-ui/docs/prompt-based-gui.md) helpers.

@@ -1,6 +1,7 @@
 import { RendererImpl } from 'renderer/common'
 import { PLATFORM } from 'core/platform'
 import { PixiComponent, VNode } from 'core/vdom'
+import { Context } from 'core/hooks/intrinsic/context'
 
 type PendingUpdateDetails = string
 
@@ -14,6 +15,7 @@ export interface VComponent<Props = any> {
   props: Props
   construct: (props: Props) => VNode
   readonly state: any[]
+  readonly contexts: Map<Context<any>, any>
   readonly effects: Array<() => void>
   readonly updateDestructors: Array<() => void>
   nextUpdateDestructors: Array<() => void>
@@ -44,6 +46,12 @@ export function getVComponent (): VComponent {
     throw new Error('No current component')
   }
   return VCOMPONENT_STACK[VCOMPONENT_STACK.length - 1]
+}
+
+export function * iterVComponentsTopDown (): Generator<VComponent> {
+  for (let i = VCOMPONENT_STACK.length - 1; i >= 0; i--) {
+    yield VCOMPONENT_STACK[i]
+  }
 }
 
 export function isDebugMode (): boolean {
@@ -111,6 +119,7 @@ export module VComponent {
       props,
       construct,
       state: [],
+      contexts: new Map(),
       effects: [],
       updateDestructors: [],
       nextUpdateDestructors: [],
@@ -176,6 +185,7 @@ export module VComponent {
       // Reset
       runUpdateDestructors(vcomponent)
       vcomponent.nextStateIndex = 0
+      vcomponent.contexts.clear()
 
       // Do construct
       // We also need to use VComponent's renderer because the current renderer might be different
