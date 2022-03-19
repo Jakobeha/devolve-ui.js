@@ -20,8 +20,11 @@ export interface TerminalRenderOptions extends CoreRenderOptions {
   input?: ReadStream
   output?: WriteStream
   interact?: Interface
-  /** Don't use terminal escapes to set character positions, just write directly. Defaults to false. */
-  fallbackPositions?: boolean
+  /** Determines how strict to enforce character positions.
+   * More strict = less screen glitches, but also slower and less compatible with stdio or older terminals.
+   * Default is 'strict', use 'loose' for simple CLI apps e.g. those without images
+   */
+  positionStrictness?: 'strict' | 'loose'
 }
 
 class AssetCacher extends CoreAssetCacher {
@@ -45,22 +48,22 @@ export class TerminalRendererImpl extends RendererImpl<VRender, AssetCacher> {
   private readonly output: WriteStream
 
   private linesOutput: number = 0
-  private readonly fallbackPositions: boolean
+  private readonly positionStrictness: 'strict' | 'loose'
 
   constructor (root: () => VNode, opts: TerminalRenderOptions = {}) {
     super(new AssetCacher(), opts)
 
-    let { input, output, interact, fallbackPositions } = opts
+    let { input, output, interact, positionStrictness } = opts
 
     input = input ?? process.stdin
     output = output ?? process.stdout
     interact = interact ?? readline.createInterface({ input, output, terminal: true })
-    fallbackPositions = fallbackPositions ?? false
+    positionStrictness = positionStrictness ?? 'strict'
 
     this.interact = interact
     this.input = input
     this.output = output
-    this.fallbackPositions = fallbackPositions
+    this.positionStrictness = positionStrictness
 
     // Configure input
     this.input.setRawMode(true)
@@ -72,7 +75,7 @@ export class TerminalRendererImpl extends RendererImpl<VRender, AssetCacher> {
 
   protected override clear (): void {
     if (this.linesOutput !== 0) {
-      if (this.fallbackPositions) {
+      if (this.positionStrictness === 'loose') {
         this.output.moveCursor(0, -this.linesOutput)
         this.output.clearScreenDown()
       }
@@ -83,7 +86,7 @@ export class TerminalRendererImpl extends RendererImpl<VRender, AssetCacher> {
   protected override writeRender (render: VRenderBatch<VRender>): void {
     const lines = VRender.collapse(render)
 
-    if (!this.fallbackPositions) {
+    if (this.positionStrictness === 'strict') {
       // Clear screen and move to top left
       this.output.write('\x1b[2J')
       this.output.write('\x1b[H')
@@ -92,7 +95,7 @@ export class TerminalRendererImpl extends RendererImpl<VRender, AssetCacher> {
     // Write lines
     lines.forEach((line, i) => {
       line.forEach((char, j) => {
-        if (!this.fallbackPositions) {
+        if (this.positionStrictness === 'strict') {
           // This moves the cursor to the exact location of the character so there aren't any issues
           // It's expensive but terminal emulation is really varied, especially with images,
           // and there are a lot of terminals which just don't do things the right way
@@ -101,7 +104,7 @@ export class TerminalRendererImpl extends RendererImpl<VRender, AssetCacher> {
         this.output.write(char)
       })
 
-      if (this.fallbackPositions) {
+      if (this.positionStrictness === 'loose') {
         this.output.write('\n')
       }
     })
