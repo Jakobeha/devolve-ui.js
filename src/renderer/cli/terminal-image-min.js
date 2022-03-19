@@ -122,7 +122,7 @@ function encodeBase64 (imageData) {
 function renderIterm (buffer, size) {
   // Note: iTerm has better ways of writing images. It does not even support raw pixel data
   const { width, height } = size
-  const theImage = `\x1b]1337;File=inline=1;width=${width};height=${height};preserveAspectRatio=0:${buffer.toString('base64')}\x07`
+  const theImage = `\x1b]1337;File=inline=1;name=${Buffer.from('devolve-ui-source-image').toString('base64')};width=${width};height=${height};preserveAspectRatio=0:${buffer.toString('base64')}\x07`
   return padRender(theImage, size)
 }
 
