@@ -2,7 +2,7 @@ import { BorderStyle, BoundingBox, Color, Rectangle, Size, VNode } from 'core/vd
 import { CoreRenderOptions } from 'core/renderer'
 import { CoreAssetCacher, RendererImpl, VRenderBatch } from 'renderer/common'
 import { Key, Strings } from '@raycenity/misc-ts'
-import type { Application, Sprite, DisplayObject, IApplicationOptions, Texture } from 'pixi.js'
+import type { Application, DisplayObject, IApplicationOptions, Sprite, Texture } from 'pixi.js'
 
 declare global {
   const PIXI: typeof import('pixi.js')
@@ -29,16 +29,24 @@ export class BrowserRendererImpl extends RendererImpl<VRender, AssetCacher> {
   constructor (root: () => VNode, opts: BrowserRenderOptions = {}) {
     super(new AssetCacher(), opts)
 
-    const container = opts.container ?? document.body
-    this.canvas = new PIXI.Application({
-      width: container.clientWidth,
-      height: container.clientHeight,
+    const commonOpts: IApplicationOptions = {
       antialias: true,
       resolution: 1,
       ...opts
-    })
+    }
+    if (opts.view === undefined) {
+      const container = opts.container ?? document.body
+      this.canvas = new PIXI.Application({
+        width: container.clientWidth,
+        height: container.clientHeight,
+        ...commonOpts,
+      })
+      container.appendChild(this.canvas.view)
+    } else {
+      // Already has container, width, and height
+      this.canvas = new PIXI.Application(commonOpts)
+    }
     this.em = opts.em ?? null
-    container.appendChild(this.canvas.view)
 
     this.finishInit(root)
   }
