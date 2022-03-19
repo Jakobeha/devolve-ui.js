@@ -39,7 +39,7 @@ export class BrowserRendererImpl extends RendererImpl<VRender, AssetCacher> {
       this.canvas = new PIXI.Application({
         width: container.clientWidth,
         height: container.clientHeight,
-        ...commonOpts,
+        ...commonOpts
       })
       container.appendChild(this.canvas.view)
     } else {
