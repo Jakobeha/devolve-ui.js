@@ -1,6 +1,6 @@
 {
   "name": "@raycenity/devolve-ui",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "write one reactive UI for browser and terminal",
   "type": "module",
   "main": "out/src/index-cjs.js",
