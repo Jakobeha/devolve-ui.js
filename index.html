@@ -1,0 +1,288 @@
+<!DOCTYPE html>
+<html lang="en">
+    <head>
+        <meta charset="utf-8">
+        <meta http-equiv="X-UA-Compatible" content="IE=edge">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <meta name="description" content="None">
+        
+        <link rel="canonical" href="https://jakobeha.github.io/devolve-ui/">
+        <link rel="shortcut icon" href="img/favicon.ico">
+        <title>devolve-ui</title>
+        <link href="css/bootstrap.min.css" rel="stylesheet">
+        <link href="css/font-awesome.min.css" rel="stylesheet">
+        <link href="css/base.css" rel="stylesheet">
+        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/10.5.0/styles/darcula.min.css">
+        <link href="assets/styles/theme-adjustments.css" rel="stylesheet">
+        <link href="assets/styles/pygments.css" rel="stylesheet">
+
+        <script src="js/jquery-1.10.2.min.js" defer></script>
+        <script src="js/bootstrap.min.js" defer></script>
+        <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/10.5.0/highlight.min.js"></script>
+        <script>hljs.initHighlightingOnLoad();</script> 
+    </head>
+
+    <body class="homepage">
+        <div class="navbar fixed-top navbar-expand-lg navbar-dark bg-primary">
+            <div class="container">
+                <a class="navbar-brand" href=".">devolve-ui</a>
+                <!-- Expander button -->
+                <button type="button" class="navbar-toggler" data-toggle="collapse" data-target="#navbar-collapse">
+                    <span class="navbar-toggler-icon"></span>
+                </button>
+
+                <!-- Expanded navigation -->
+                <div id="navbar-collapse" class="navbar-collapse collapse">
+                        <!-- Main navigation -->
+                        <ul class="nav navbar-nav">
+                            <li class="navitem active">
+                                <a href="." class="nav-link">Home</a>
+                            </li>
+                            <li class="navitem">
+                                <a href="design-decisions/" class="nav-link">Design decisions</a>
+                            </li>
+                            <li class="navitem">
+                                <a href="prompt-based-gui/" class="nav-link">Prompt-based GUI: how to define a GUI as a function</a>
+                            </li>
+                        </ul>
+
+                    <ul class="nav navbar-nav ml-auto">
+                        <li class="nav-item">
+                            <a href="#" class="nav-link" data-toggle="modal" data-target="#mkdocs_search_modal">
+                                <i class="fa fa-search"></i> Search
+                            </a>
+                        </li>
+                            <li class="nav-item">
+                                <a rel="prev" class="nav-link disabled">
+                                    <i class="fa fa-arrow-left"></i> Previous
+                                </a>
+                            </li>
+                            <li class="nav-item">
+                                <a rel="next" href="design-decisions/" class="nav-link">
+                                    Next <i class="fa fa-arrow-right"></i>
+                                </a>
+                            </li>
+                            <li class="nav-item">
+                                <a href="https://github.com/Jakobeha/devolve-ui/edit/master/docs/README.md" class="nav-link"><i class="fa fa-github"></i> Edit on GitHub</a>
+                            </li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+
+        <div class="container">
+            <div class="row">
+                    <div class="col-md-3"><div class="navbar-light navbar-expand-md bs-sidebar hidden-print affix" role="complementary">
+    <div class="navbar-header">
+        <button type="button" class="navbar-toggler collapsed" data-toggle="collapse" data-target="#toc-collapse" title="Table of Contents">
+            <span class="fa fa-angle-down"></span>
+        </button>
+    </div>
+
+    
+    <div id="toc-collapse" class="navbar-collapse collapse card bg-secondary">
+        <ul class="nav flex-column">
+            
+            <li class="nav-item" data-level="1"><a href="#devolve-ui-super-simple-reactive-graphics-for-browser-and-terminal" class="nav-link">devolve-ui: super simple reactive graphics for browser and terminal</a>
+              <ul class="nav flex-column">
+            <li class="nav-item" data-level="2"><a href="#installing-with-pnpm" class="nav-link">Installing (with pnpm)</a>
+              <ul class="nav flex-column">
+              </ul>
+            </li>
+            <li class="nav-item" data-level="2"><a href="#features" class="nav-link">Features</a>
+              <ul class="nav flex-column">
+              </ul>
+            </li>
+            <li class="nav-item" data-level="2"><a href="#prompt-based-gui" class="nav-link">Prompt-based GUI</a>
+              <ul class="nav flex-column">
+              </ul>
+            </li>
+            <li class="nav-item" data-level="2"><a href="#implementation" class="nav-link">Implementation</a>
+              <ul class="nav flex-column">
+              </ul>
+            </li>
+              </ul>
+            </li>
+        </ul>
+    </div>
+</div></div>
+                    <div class="col-md-9" role="main">
+
+<p><a href="https://opensource.org/licenses/Apache-2.0"><img alt="License" src="https://img.shields.io/badge/License-Apache_2.0-blue.svg" /></a></p>
+<p><img alt="logo" src="https://raw.githubusercontent.com/Jakobeha/devolve-ui/master/docs/assets/logo.svg" /></p>
+<h1 id="devolve-ui-super-simple-reactive-graphics-for-browser-and-terminal">devolve-ui: super simple reactive graphics for browser and terminal</h1>
+<p><em>Disclaimer: this is an early project. It's subject to change and have bugs</em></p>
+<p><strong><a href="https://jakobeha.github.io/devolve-ui-demos/index.html">Live demo</a> | <a href="https://github.com/Jakobeha/devolve-ui-demos">Clone to get started</a></strong></p>
+<p>devolve-ui is a super simple graphics library for canvas-based websites (games) and TUIs. A single devolve-ui app can be embedded in a website <em>and</em> run on the command line via <code>node</code>.</p>
+<p>devolve-ui is JSX-based like React, but renders to canvas or terminal instead of DOM. It should not be used for traditional web pages.</p>
+<p>Example:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>// https://github.com/Jakobeha/devolve-ui-demos/src/readme.tsx
+<a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>import { DevolveUI, useState, useInterval } from &#39;@raycenity/devolve-ui&#39;
+<a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>
+<a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a>const App = ({ name }) =&gt; {
+<a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a>  const [counter, setCounter] = useState(0)
+<a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a>  useInterval(1000, () =&gt; {
+<a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a>    setCounter(counter + 1)
+<a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a>  })
+<a id="__codelineno-0-9" name="__codelineno-0-9" href="#__codelineno-0-9"></a>
+<a id="__codelineno-0-10" name="__codelineno-0-10" href="#__codelineno-0-10"></a>  return (
+<a id="__codelineno-0-11" name="__codelineno-0-11" href="#__codelineno-0-11"></a>    &lt;zbox width=&#39;100%&#39;&gt;
+<a id="__codelineno-0-12" name="__codelineno-0-12" href="#__codelineno-0-12"></a>      &lt;vbox x={2} y={2} gap={1}&gt;
+<a id="__codelineno-0-13" name="__codelineno-0-13" href="#__codelineno-0-13"></a>        &lt;zbox width=&#39;100%&#39;&gt;
+<a id="__codelineno-0-14" name="__codelineno-0-14" href="#__codelineno-0-14"></a>          &lt;hbox width=&#39;100%&#39;&gt;
+<a id="__codelineno-0-15" name="__codelineno-0-15" href="#__codelineno-0-15"></a>            &lt;text color=&#39;white&#39;&gt;Hello {name}&lt;/text&gt;
+<a id="__codelineno-0-16" name="__codelineno-0-16" href="#__codelineno-0-16"></a>            &lt;text color=&#39;white&#39; x=&#39;100%&#39; anchorX={1}&gt;{counter} seconds&lt;/text&gt;
+<a id="__codelineno-0-17" name="__codelineno-0-17" href="#__codelineno-0-17"></a>          &lt;/hbox&gt;
+<a id="__codelineno-0-18" name="__codelineno-0-18" href="#__codelineno-0-18"></a>          &lt;color color=&#39;orange&#39; /&gt;
+<a id="__codelineno-0-19" name="__codelineno-0-19" href="#__codelineno-0-19"></a>        &lt;/zbox&gt;
+<a id="__codelineno-0-20" name="__codelineno-0-20" href="#__codelineno-0-20"></a>        &lt;source src=&#39;dog.png&#39; width=&#39;100%&#39; /&gt;
+<a id="__codelineno-0-21" name="__codelineno-0-21" href="#__codelineno-0-21"></a>      &lt;/vbox&gt;
+<a id="__codelineno-0-22" name="__codelineno-0-22" href="#__codelineno-0-22"></a>      &lt;border style=&#39;single&#39; color=&#39;orange&#39; width=&#39;prev + 4&#39; height=&#39;prev + 4&#39;/&gt;
+<a id="__codelineno-0-23" name="__codelineno-0-23" href="#__codelineno-0-23"></a>    &lt;/zbox&gt;
+<a id="__codelineno-0-24" name="__codelineno-0-24" href="#__codelineno-0-24"></a>  )
+<a id="__codelineno-0-25" name="__codelineno-0-25" href="#__codelineno-0-25"></a>}
+<a id="__codelineno-0-26" name="__codelineno-0-26" href="#__codelineno-0-26"></a>
+<a id="__codelineno-0-27" name="__codelineno-0-27" href="#__codelineno-0-27"></a>new DevolveUI(App, { name: &#39;devolve-ui&#39; }).show()
+<a id="__codelineno-0-28" name="__codelineno-0-28" href="#__codelineno-0-28"></a>
+<a id="__codelineno-0-29" name="__codelineno-0-29" href="#__codelineno-0-29"></a>// Works in node or browser (with additional pixi.js script)
+</code></pre></div>
+<div style="display:flex;overflow-x:scroll">
+  <img src="docs/assets/screenshots/terminal.png" alt="terminal" />
+  <img src="docs/assets/screenshots/iterm.png" alt="iterm" />
+  <img src="docs/assets/screenshots/browser.png" alt="browser" />
+</div>
+
+<p><strong>Important setup information:</strong> if adding to an existing project, besides installing, you <em>must</em> add this to your tsconfig.json for JSX support:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>{
+<a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a>  /* ... */
+<a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a>  &quot;jsx&quot;: &quot;preserve&quot;, /** if using esbuild, otherwise &quot;react&quot; */
+<a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a>  &quot;jsxImportSource&quot;: &quot;@raycenity/devolve-ui&quot;
+<a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a>}
+</code></pre></div>
+<p><strong>Pro tip:</strong> If you debug TUIs in IntelliJ, you can see <code>console</code> outputs in a separate tab from the terminal output!</p>
+<h2 id="installing-with-pnpm">Installing (with pnpm)</h2>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="c1"># if you don&#39;t have pnpm installed, uncomment the next line</span>
+<a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a><span class="c1"># curl -fsSL https://get.pnpm.io/install.sh | sh -</span>
+<a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a>pnpm add @raycenity/devolve-ui
+</code></pre></div>
+<h3 id="repository-info">Repository info</h3>
+<p>devolve-ui is built using <a href="https://esbuild.org/">esbuild</a>. The package manager used is <a href="https://pnpm.io/">pnpm</a>. Linting is done by <a href="https://standardjs.com/">standard</a>, however we use a slightly modified version removing some warnings (<code>ts-standardx.mjs</code>). Docs are generated by <a href="https://mkdocs.org">mkdocs</a>. Feel free to submit issues / pull requests on the <a href="https://github.com/Jakobeha/devolve-ui">Github</a>.</p>
+<h2 id="features">Features</h2>
+<h3 id="cross-platform">Cross-platform</h3>
+<p>devolve-ui is <em>cross-platform</em> (isomorphic): a devolve-ui application may run in both web browsers and terminals (via node.js). When the application is run in the terminal, graphics are much simpler and certain effects and animations are removed, hence the name "devolve"-ui.</p>
+<p>When a devolve-ui application is run in the web browser, it uses pixi.js for rendering.</p>
+<h3 id="super-simple">Super simple</h3>
+<p>devolve-ui uses JSX and React-style <strong>components</strong>: you write your UI declaratively and use hooks (useState, useEffect, useLazy, useInput) for local state and side-effects. Your UI is literally a function which takes the global state, and returns a render of your application.</p>
+<p>Unlike React, the <strong>nodes</strong> (lowercase components) which devolve-ui uses are not HTML elements, they are:</p>
+<ul>
+<li><code>hbox</code>, <code>vbox</code>, <code>zbox</code>: Layout child components</li>
+<li><code>hbox</code>: Places children horizontally</li>
+<li><code>vbox</code>: Places children vertically</li>
+<li><code>zbox</code>: Places children on top of each other (no position offsets)</li>
+<li><code>text</code>: Contains text</li>
+<li><code>solid</code>: Renders a solid color</li>
+<li><code>border</code>: Renders a border</li>
+<li><code>source</code>: Renders an image, video, or other external graphic</li>
+<li>(WIP unstable) <code>pixi</code>: Can only be created via <code>PixiComponent</code>. These contain custom pixi components in the browser, and are invisible in TUIs.</li>
+</ul>
+<p>Another notable difference is the layout system. devolve-ui does not use CSS, instead all node bounds are calculated using only the parent and previous child. As a result, you must specify bounds much more explicitly. See <a href="#Bounds">Bounds</a> for more.</p>
+<h2 id="prompt-based-gui">Prompt-based GUI</h2>
+<p>Prompt-based GUI is a new-ish paradigm where your application interfaces with the UI via <strong>prompts</strong>.  devolve-ui has built-in support for prompt-based GUI via the <code>PromptDevolveUI</code> class. Read <a href="https://jakobeha.github.io/devolve-ui/docs/prompt-based-gui.md"><em>this article</em></a> for more.</p>
+<h2 id="implementation">Implementation</h2>
+<p><a href="https://github.com/Jakobeha/devolve-ui">Source</a></p>
+<h3 id="directory-overview">Directory overview</h3>
+<ul>
+<li><code>core</code>: The main code of devolve-ui</li>
+<li><code>core/hooks</code>: Built-in hooks</li>
+<li><code>core/vdom</code>: The "DOM" in devolve-ui: nodes, attributes, and JSX.</li>
+<li><code>renderer</code>: Platform-specific rendering</li>
+<li><code>prompt</code>: <a href="https://jakobeha.github.io/devolve-ui/docs/prompt-based-gui.md">Prompt-based GUI</a> helpers.</li>
+</ul>
+<h3 id="notable-types">Notable types</h3>
+<ul>
+<li><code>VNode</code>: Virtual "DOM" node, e.g. <code>box</code>, <code>text</code>, <code>color</code></li>
+<li><code>VComponent</code>: Synchronizes a component function to a persistent <code>VNode</code> and preserves state from hooks.</li>
+<li><code>Bounds</code>: A node's bounds depend on the parent and previous component: therefore <code>Bounds</code> are literally a function from parent and previous component properties to a <code>BoundingBox</code>. See <a href="https://github.com/Jakobeha/devolve-ui/blob/tree/master/core/vdom/bounds.ts">src/core/vdom/bounds.ts</a></li>
+</ul></div>
+            </div>
+        </div>
+
+        <footer class="col-md-12">
+            <hr>
+            <p>Documentation built with <a href="https://www.mkdocs.org/">MkDocs</a>.</p>
+        </footer>
+        <script>
+            var base_url = ".",
+                shortcuts = {"help": 191, "next": 78, "previous": 80, "search": 83};
+        </script>
+        <script src="js/base.js" defer></script>
+        <script src="search/main.js" defer></script>
+
+        <div class="modal" id="mkdocs_search_modal" tabindex="-1" role="dialog" aria-labelledby="searchModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h4 class="modal-title" id="searchModalLabel">Search</h4>
+                <button type="button" class="close" data-dismiss="modal"><span aria-hidden="true">&times;</span><span class="sr-only">Close</span></button>
+            </div>
+            <div class="modal-body">
+                <p>From here you can search these documents. Enter your search terms below.</p>
+                <form>
+                    <div class="form-group">
+                        <input type="search" class="form-control" placeholder="Search..." id="mkdocs-search-query" title="Type search term here">
+                    </div>
+                </form>
+                <div id="mkdocs-search-results" data-no-results-text="No results found"></div>
+            </div>
+            <div class="modal-footer">
+            </div>
+        </div>
+    </div>
+</div><div class="modal" id="mkdocs_keyboard_modal" tabindex="-1" role="dialog" aria-labelledby="keyboardModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h4 class="modal-title" id="keyboardModalLabel">Keyboard Shortcuts</h4>
+                <button type="button" class="close" data-dismiss="modal"><span aria-hidden="true">&times;</span><span class="sr-only">Close</span></button>
+            </div>
+            <div class="modal-body">
+              <table class="table">
+                <thead>
+                  <tr>
+                    <th style="width: 20%;">Keys</th>
+                    <th>Action</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td class="help shortcut"><kbd>?</kbd></td>
+                    <td>Open this help</td>
+                  </tr>
+                  <tr>
+                    <td class="next shortcut"><kbd>n</kbd></td>
+                    <td>Next page</td>
+                  </tr>
+                  <tr>
+                    <td class="prev shortcut"><kbd>p</kbd></td>
+                    <td>Previous page</td>
+                  </tr>
+                  <tr>
+                    <td class="search shortcut"><kbd>s</kbd></td>
+                    <td>Search</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+            <div class="modal-footer">
+            </div>
+        </div>
+    </div>
+</div>
+
+    </body>
+</html>
+
+<!--
+MkDocs version : 1.2.3
+Build Date UTC : 2022-03-19 01:48:19.173169+00:00
+-->

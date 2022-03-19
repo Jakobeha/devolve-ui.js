@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html lang="en">
+    <head>
+        <meta charset="utf-8">
+        <meta http-equiv="X-UA-Compatible" content="IE=edge">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        
+        
+        <link rel="canonical" href="https://jakobeha.github.io/devolve-ui/prompt-based-gui/">
+        <link rel="shortcut icon" href="../img/favicon.ico">
+        <title>Prompt-based GUI: how to define a GUI as a function - devolve-ui</title>
+        <link href="../css/bootstrap.min.css" rel="stylesheet">
+        <link href="../css/font-awesome.min.css" rel="stylesheet">
+        <link href="../css/base.css" rel="stylesheet">
+        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/10.5.0/styles/darcula.min.css">
+        <link href="../assets/styles/theme-adjustments.css" rel="stylesheet">
+        <link href="../assets/styles/pygments.css" rel="stylesheet">
+
+        <script src="../js/jquery-1.10.2.min.js" defer></script>
+        <script src="../js/bootstrap.min.js" defer></script>
+        <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/10.5.0/highlight.min.js"></script>
+        <script>hljs.initHighlightingOnLoad();</script> 
+    </head>
+
+    <body>
+        <div class="navbar fixed-top navbar-expand-lg navbar-dark bg-primary">
+            <div class="container">
+                <a class="navbar-brand" href="..">devolve-ui</a>
+                <!-- Expander button -->
+                <button type="button" class="navbar-toggler" data-toggle="collapse" data-target="#navbar-collapse">
+                    <span class="navbar-toggler-icon"></span>
+                </button>
+
+                <!-- Expanded navigation -->
+                <div id="navbar-collapse" class="navbar-collapse collapse">
+                        <!-- Main navigation -->
+                        <ul class="nav navbar-nav">
+                            <li class="navitem">
+                                <a href=".." class="nav-link">Home</a>
+                            </li>
+                            <li class="navitem">
+                                <a href="../design-decisions/" class="nav-link">Design decisions</a>
+                            </li>
+                            <li class="navitem active">
+                                <a href="./" class="nav-link">Prompt-based GUI: how to define a GUI as a function</a>
+                            </li>
+                        </ul>
+
+                    <ul class="nav navbar-nav ml-auto">
+                        <li class="nav-item">
+                            <a href="#" class="nav-link" data-toggle="modal" data-target="#mkdocs_search_modal">
+                                <i class="fa fa-search"></i> Search
+                            </a>
+                        </li>
+                            <li class="nav-item">
+                                <a rel="prev" href="../design-decisions/" class="nav-link">
+                                    <i class="fa fa-arrow-left"></i> Previous
+                                </a>
+                            </li>
+                            <li class="nav-item">
+                                <a rel="next" class="nav-link disabled">
+                                    Next <i class="fa fa-arrow-right"></i>
+                                </a>
+                            </li>
+                            <li class="nav-item">
+                                <a href="https://github.com/Jakobeha/devolve-ui/edit/master/docs/prompt-based-gui.md" class="nav-link"><i class="fa fa-github"></i> Edit on GitHub</a>
+                            </li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+
+        <div class="container">
+            <div class="row">
+                    <div class="col-md-3"><div class="navbar-light navbar-expand-md bs-sidebar hidden-print affix" role="complementary">
+    <div class="navbar-header">
+        <button type="button" class="navbar-toggler collapsed" data-toggle="collapse" data-target="#toc-collapse" title="Table of Contents">
+            <span class="fa fa-angle-down"></span>
+        </button>
+    </div>
+
+    
+    <div id="toc-collapse" class="navbar-collapse collapse card bg-secondary">
+        <ul class="nav flex-column">
+            
+            <li class="nav-item" data-level="1"><a href="#prompt-based-gui-how-to-define-a-gui-as-a-function" class="nav-link">Prompt-based GUI: how to define a GUI as a function</a>
+              <ul class="nav flex-column">
+              </ul>
+            </li>
+        </ul>
+    </div>
+</div></div>
+                    <div class="col-md-9" role="main">
+
+<h1 id="prompt-based-gui-how-to-define-a-gui-as-a-function">Prompt-based GUI: how to define a GUI as a function</h1>
+<p>In GUI-based applications users are often presented with <strong>prompts</strong>, like dialog boxes. The user must click "ok" or "cancel" in order to continue.</p>
+<p>However, "prompt" can be generalized into more UI elements. A form is a prompt, where a user must fill out the fields and click "submit". A menu is a prompt, where a user must click one of the menu items.</p>
+<p>We define "prompt" as "<em>a series of interactions a user must complete in order for something to occur</em>". Going to the extreme, <em>any</em> GUI element can be represented a prompt, and any application can be considered a concurrent set of prompts.</p>
+<p>But why is this important? Because a "prompt" can be represented as an asynchronous function. In turn, we can leverage the power of functional programming and general function composition when writing GUIs, and even <em>define entire GUI-based applications as functions</em>. If you're a fan of functional programming, this may be significant.</p>
+<p>-- Henceforth we refer to a function which presents a "prompt", as defined above, as a <strong>prompt-function</strong>.</p>
+<h3 id="gui-implemented-as-a-function">GUI implemented as a function</h3>
+<p>TODO example</p>
+<p>Here is a simple social media site represented as a function in Haskell, a functional programming language, using prompt-based GUI.</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="kt">TODO</span><span class="w"> </span><span class="n">example</span><span class="w"></span>
+</code></pre></div>
+<h3 id="when-to-use-prompt-based-gui">When to use prompt-based GUI</h3>
+<p>In practice, you shouldn't necessarily implement <em>every</em> GUI as a prompt-function. But prompt-functions have some benefits over "traditional" (e.g. React-Redux) components. Ideally, you will implement "prompt-like" UI, like dialog boxes, as prompt-functions, and continuous UI, like menus and the main screen, as standard components.</p>
+<h4 id="automation">Automation</h4>
+<p>Prompt-functions are <em>especially</em> better if you want your application to be easily automated. Automating a prompt-function is as simple as replacing the function implementation with a calls to your automator, be it a neural network or remote client or sequence of GUI actions recorded into a text file. Automating a component-based application, especially if it listens for complex mouse or touch gestures, is harder.</p>
+<h4 id="gui-as-a-state-machine">GUI as a state machine</h4>
+<p>Prompt-functions are also better at handling state transitions. If you model your application as a state or activity diagram, it's much easier and more straightforward to convert that diagram into a prompt-function than a component. In the component, you need a property to represent the current location in the diagram; in a prompt-function, the location is automatic because it's simply the location inside the function's code.</p></div>
+            </div>
+        </div>
+
+        <footer class="col-md-12">
+            <hr>
+            <p>Documentation built with <a href="https://www.mkdocs.org/">MkDocs</a>.</p>
+        </footer>
+        <script>
+            var base_url = "..",
+                shortcuts = {"help": 191, "next": 78, "previous": 80, "search": 83};
+        </script>
+        <script src="../js/base.js" defer></script>
+        <script src="../search/main.js" defer></script>
+
+        <div class="modal" id="mkdocs_search_modal" tabindex="-1" role="dialog" aria-labelledby="searchModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h4 class="modal-title" id="searchModalLabel">Search</h4>
+                <button type="button" class="close" data-dismiss="modal"><span aria-hidden="true">&times;</span><span class="sr-only">Close</span></button>
+            </div>
+            <div class="modal-body">
+                <p>From here you can search these documents. Enter your search terms below.</p>
+                <form>
+                    <div class="form-group">
+                        <input type="search" class="form-control" placeholder="Search..." id="mkdocs-search-query" title="Type search term here">
+                    </div>
+                </form>
+                <div id="mkdocs-search-results" data-no-results-text="No results found"></div>
+            </div>
+            <div class="modal-footer">
+            </div>
+        </div>
+    </div>
+</div><div class="modal" id="mkdocs_keyboard_modal" tabindex="-1" role="dialog" aria-labelledby="keyboardModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h4 class="modal-title" id="keyboardModalLabel">Keyboard Shortcuts</h4>
+                <button type="button" class="close" data-dismiss="modal"><span aria-hidden="true">&times;</span><span class="sr-only">Close</span></button>
+            </div>
+            <div class="modal-body">
+              <table class="table">
+                <thead>
+                  <tr>
+                    <th style="width: 20%;">Keys</th>
+                    <th>Action</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td class="help shortcut"><kbd>?</kbd></td>
+                    <td>Open this help</td>
+                  </tr>
+                  <tr>
+                    <td class="next shortcut"><kbd>n</kbd></td>
+                    <td>Next page</td>
+                  </tr>
+                  <tr>
+                    <td class="prev shortcut"><kbd>p</kbd></td>
+                    <td>Previous page</td>
+                  </tr>
+                  <tr>
+                    <td class="search shortcut"><kbd>s</kbd></td>
+                    <td>Search</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+            <div class="modal-footer">
+            </div>
+        </div>
+    </div>
+</div>
+
+    </body>
+</html>
