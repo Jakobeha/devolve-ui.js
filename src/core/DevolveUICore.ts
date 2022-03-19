@@ -54,8 +54,11 @@ export abstract class DevolveUICore<Props extends object> {
     return new Proxy(props, {
       get: (target: T, p: string | symbol): any => {
         const value = (target as any)[p]
-        if (typeof value === 'object' || typeof value === 'function') {
+        if (typeof value === 'object') {
           return this.propsProxy(value)
+        } else if (typeof value === 'function') {
+          // Answer to https://stackoverflow.com/questions/43236329/why-is-proxy-to-a-map-object-in-es2015-not-working?noredirect=1&lq=1
+          return this.propsProxy(value.bind(target))
         } else {
           return value
         }
