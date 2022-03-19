@@ -1,6 +1,6 @@
 [![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
 
-![logo](https://raw.githubusercontent.com/Jakobeha/devolve-ui/master/docs/assets/logo.svg)
+<img src="https://raw.githubusercontent.com/Jakobeha/devolve-ui/master/docs/assets/logo.svg" alt="logo" width='256'/>
 
 # devolve-ui: super simple reactive graphics for browser and terminal
 
@@ -47,9 +47,9 @@ new DevolveUI(App, { name: 'devolve-ui' }).show()
 ```
 
 <div style="display:flex;overflow-x:scroll">
-  <img src="docs/assets/screenshots/terminal.png" alt="terminal" />
-  <img src="docs/assets/screenshots/iterm.png" alt="iterm" />
-  <img src="docs/assets/screenshots/browser.png" alt="browser" />
+  <img width='682' height='483' src="https://raw.githubusercontent.com/Jakobeha/devolve-ui/master/docs/assets/screenshots/terminal.png" alt="terminal" />
+  <img width='682' height='553' src="https://raw.githubusercontent.com/Jakobeha/devolve-ui/master/docs/assets/screenshots/iterm.png" alt="iterm" />
+  <img width='686' height='485' src="https://raw.githubusercontent.com/Jakobeha/devolve-ui/master/docs/assets/screenshots/browser.png" alt="browser" />
 </div>
 
 **Important setup information:** if adding to an existing project, besides installing, you *must* add this to your tsconfig.json for JSX support:
@@ -100,7 +100,7 @@ Unlike React, the **nodes** (lowercase components) which devolve-ui uses are not
 - `source`: Renders an image, video, or other external graphic
 - (WIP unstable) `pixi`: Can only be created via `PixiComponent`. These contain custom pixi components in the browser, and are invisible in TUIs.
 
-Another notable difference is the layout system. devolve-ui does not use CSS, instead all node bounds are calculated using only the parent and previous child. As a result, you must specify bounds much more explicitly. See [Bounds](#Bounds) for more.
+Another notable difference is the layout system. devolve-ui does not use CSS, instead all node bounds are calculated using only the parent and previous child. As a result, you must specify bounds much more explicitly. See the [Implementation](#Implementation) section for more.
 
 ## Prompt-based GUI
 
