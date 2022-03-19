@@ -1,12 +1,29 @@
 import { getVComponent, isDebugMode, VComponent } from 'core/component'
+import { augmentSetProp } from 'core/augment-set'
 
 /**
  * Returns a value and setter.
  *
  * If you call the setter, when the component updates, it will return the set value instead of `initialValue`.
+ *
+ * By default, if the state is an object, `get` will return a proxy which updates on set.
+ * Pass `false` to `useProxy` to disable this behavior.
  */
-export function useState<T> (initialState: T): [T, (newState: T) => void] {
+export function useState<T> (initialState: T, useProxy: boolean = true): [T, (newState: T) => void] {
   const [get, set] = _useDynamicState(initialState, true)
+  if (useProxy) {
+    const component = getVComponent()
+    const index = component.nextStateIndex - 1
+    return [
+      augmentSetProp(get(), debugPath => {
+        const stackTrace = isDebugMode()
+          ? (new Error().stack?.replace('\n', '  \n') ?? 'could not get stack, new Error().stack is undefined')
+          : 'omitted in production'
+        VComponent.update(component, `set-state-proxy-${index}-${debugPath}\n${stackTrace}`)
+      }),
+      set
+    ]
+  }
   return [get(), set]
 }
 

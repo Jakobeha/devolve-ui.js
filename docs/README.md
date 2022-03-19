@@ -56,9 +56,18 @@ new DevolveUI(App, { name: 'devolve-ui' }).show()
 
 ```json5
 {
-  /* ... */
-  "jsx": "preserve", /** if using esbuild, otherwise "react" */
-  "jsxImportSource": "@raycenity/devolve-ui"
+  "include": [
+    /* you probably have this */
+    "src/**/*.ts",
+    /* but make sure to also add this */
+    "src/**/*.tsx"
+  ],
+  "compilerOptions": {
+    /* ... */
+    /** if using esbuild, otherwise "jsx": "react" */
+    "jsx": "preserve",
+    "jsxImportSource": "@raycenity/devolve-ui",
+  }
 }
 ```
 

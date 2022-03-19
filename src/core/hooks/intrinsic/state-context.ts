@@ -7,8 +7,7 @@ import { RendererImpl } from 'renderer/common'
 
 /**
  * Like {@link Context}, allows you to implicitly pass a value from parent to children.
- * However, now the context is also a state and can be mutated by children, either by calling `useSet`
- * or mutating context properties.
+ * However, now the context is also a state and can be mutated by children.
  *
  * Usage:
  * ```jsx

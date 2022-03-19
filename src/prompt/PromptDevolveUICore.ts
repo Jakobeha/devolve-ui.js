@@ -4,6 +4,7 @@ import type { BrowserRenderOptions } from 'renderer/web'
 import { VComponent } from 'core/component'
 import { PromptArgs, PromptReplacedError, PromptReturn, PromptSpec, PromptTimeoutError } from 'prompt/prompt'
 import { DevolveUICore } from 'core/DevolveUICore'
+import { augmentSet } from 'core/augment-set'
 
 export type RenderOptions =
   TerminalRenderOptions &
@@ -71,5 +72,14 @@ export abstract class PromptDevolveUICore<Props extends PromptProps<PromptKeys>,
       this.updateProps()
     })
     return await Promise.race([promptPromise, earlyCancelPromise])
+  }
+
+  protected override propsProxy<T extends object>(props: T): T {
+    return augmentSet(props, path => {
+      if (path === '.prompts') {
+        throw new Error('can\'t set prompts')
+      }
+      this.updateProps()
+    })
   }
 }

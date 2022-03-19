@@ -1,7 +1,8 @@
+import { augmentSet } from 'core/augment-set'
+import { VComponent } from 'core/component'
 import { Renderer, VNode } from 'core/index'
 import type { TerminalRenderOptions } from 'renderer/cli'
 import type { BrowserRenderOptions } from 'renderer/web'
-import { VComponent } from 'core/component'
 import { DeepReadonly } from '@raycenity/misc-ts'
 
 export type RenderOptions =
@@ -27,7 +28,7 @@ export abstract class DevolveUICore<Props extends object> {
     // Idk why the cast is necessary
     this.props = { ...props }
     this.instance = this.mkRenderer(() => VComponent('RootComponent', this.props, RootComponent), opts)
-    this.p = this.propsProxy(this.props, true)
+    this.p = this.propsProxy(this.props)
   }
 
   getProps (): DeepReadonly<Props> {
@@ -50,33 +51,9 @@ export abstract class DevolveUICore<Props extends object> {
     this.instance.dispose()
   }
 
-  private propsProxy<T extends object>(props: T, isRoot: boolean = false): T {
-    return new Proxy(props, {
-      get: (target: T, p: string | symbol): any => {
-        const value = (target as any)[p]
-        if (typeof value === 'object') {
-          return this.propsProxy(value)
-        } else if (typeof value === 'function') {
-          // Answer to https://stackoverflow.com/questions/43236329/why-is-proxy-to-a-map-object-in-es2015-not-working?noredirect=1&lq=1
-          return this.propsProxy(value.bind(target))
-        } else {
-          return value
-        }
-      },
-      set: (target: T, p: string | symbol, value: any): boolean => {
-        if (isRoot && (p === 'prompts')) {
-          throw new Error('can\'t set prompts')
-        }
-        (target as any)[p] = value
-        this.updateProps()
-        return true
-      },
-      apply: (target: T, thisArg: any, args: any[]): any => {
-        // Function might change stuff, so we reroot (e.g. in arrays)
-        // Worst case scenario we just reroot when not necessary
-        this.updateProps()
-        return Reflect.apply(target as Function, thisArg, args)
-      }
+  protected propsProxy<T extends object>(props: T): T {
+    return augmentSet(props, () => {
+      this.updateProps()
     })
   }
 
