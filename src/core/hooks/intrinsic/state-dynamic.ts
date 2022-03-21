@@ -2,28 +2,42 @@ import { getVComponent, isDebugMode, VComponent } from 'core/component'
 import { augmentSetProp } from 'core/augment-set'
 
 /**
+ * Returns a value accessible by a proxy.
+ *
+ * If you mutate the value, it will stay mutated when the component updates.
+ */
+export function useState<T> (initialState: T): { v: T } {
+  const component = getVComponent()
+  const index = component.nextStateIndex++
+  if (component.isBeingCreated) {
+    if (component.state.length !== index) {
+      throw new Error(`sanity check failed: state length (${component.state.length}) !== index (${index})`)
+    }
+    component.state.push({ v: initialState })
+  }
+
+  const value = component.state[index]
+  return augmentSetProp(value, debugPath => {
+    const stackTrace = isDebugMode()
+      ? (new Error().stack?.replace('\n', '  \n') ?? 'could not get stack, new Error().stack is undefined')
+      : 'omitted in production'
+    VComponent.update(component, `set-state-${index}-${debugPath}\n${stackTrace}`)
+  })
+}
+
+/**
  * Returns a value and setter.
  *
  * If you call the setter, when the component updates, it will return the set value instead of `initialValue`.
  *
- * By default, if the state is an object, `get` will return a proxy which updates on set.
- * Pass `false` to `useProxy` to disable this behavior.
+ * This is faster than `useState` because it doesn't use proxies.
+ * However, it is also more prone to errors because calling the setter doesn't immediately update the value,
+ * and mutating the value internally doesn't cause any updates.
+ * `useState` avoids the former because you access the value via `.v`, which is updated,
+ * and the latter because the proxy handles deep updates.
  */
-export function useState<T> (initialState: T, useProxy: boolean = true): [T, (newState: T) => void] {
+export function useStateFast<T> (initialState: T): [T, (newState: T) => void] {
   const [get, set] = _useDynamicState(initialState, true)
-  if (useProxy) {
-    const component = getVComponent()
-    const index = component.nextStateIndex - 1
-    return [
-      augmentSetProp(get(), debugPath => {
-        const stackTrace = isDebugMode()
-          ? (new Error().stack?.replace('\n', '  \n') ?? 'could not get stack, new Error().stack is undefined')
-          : 'omitted in production'
-        VComponent.update(component, `set-state-proxy-${index}-${debugPath}\n${stackTrace}`)
-      }),
-      set
-    ]
-  }
   return [get(), set]
 }
 

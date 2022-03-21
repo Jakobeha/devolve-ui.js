@@ -315,4 +315,48 @@ export module Bounds {
     width: parent.boundingBox.width,
     height: parent.boundingBox.height
   })
+
+  export const CENTER: Bounds = parent => {
+    if (parent.boundingBox.width === undefined || parent.boundingBox.height === undefined) {
+      throw new Error('bad layout: parent has no width or height, so we can\'t center it')
+    }
+
+    return {
+      x: parent.boundingBox.x + (parent.boundingBox.width / 2),
+      y: parent.boundingBox.y + (parent.boundingBox.height / 2),
+      z: parent.boundingBox.z + BOX_Z,
+      anchorX: 0.5,
+      anchorY: 0.5
+    }
+  }
+
+  export const CENTER_X_FILL_Y: Bounds = parent => {
+    if (parent.boundingBox.width === undefined) {
+      throw new Error('bad layout: parent has no width, so we can\'t center it')
+    }
+
+    return {
+      x: parent.boundingBox.x + (parent.boundingBox.width / 2),
+      y: parent.boundingBox.y,
+      z: parent.boundingBox.z + BOX_Z,
+      anchorX: 0.5,
+      anchorY: parent.boundingBox.anchorY,
+      height: parent.boundingBox.height
+    }
+  }
+
+  export const CENTER_Y_FILL_X: Bounds = parent => {
+    if (parent.boundingBox.height === undefined) {
+      throw new Error('bad layout: parent has no height, so we can\'t center it')
+    }
+
+    return {
+      x: parent.boundingBox.x,
+      y: parent.boundingBox.y + (parent.boundingBox.height / 2),
+      z: parent.boundingBox.z + BOX_Z,
+      anchorX: parent.boundingBox.anchorX,
+      anchorY: 0.5,
+      width: parent.boundingBox.width
+    }
+  }
 }

@@ -1,6 +1,6 @@
 import { getRenderer } from 'core/component'
 import { Key } from '@raycenity/misc-ts'
-import { useDynamic, useEffect, UseEffectRerun, useState } from 'core'
+import { useDynamic, useEffect, UseEffectRerun, useStateFast } from 'core'
 
 /** Returns a function which will always be called with the latest props and state dependencies. */
 export function useDynamicFn<Parameters extends any[], Return> (
@@ -23,7 +23,7 @@ export function useLazy <T> (lazy: T | Promise<T>, loading: T): T {
   }
 
   if (lazy instanceof Promise) {
-    const [resolved, setResolved] = useState({ value: loading, isLoading: true })
+    const [resolved, setResolved] = useStateFast({ value: loading, isLoading: true })
     if (!resolved.isLoading) {
       return resolved.value
     }
@@ -36,7 +36,7 @@ export function useLazy <T> (lazy: T | Promise<T>, loading: T): T {
     return loading
   } else {
     // Still need to fill in the state
-    void useState({ value: lazy, isLoading: false })
+    void useStateFast({ value: lazy, isLoading: false })
     return lazy
   }
 }

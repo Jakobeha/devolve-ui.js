@@ -175,4 +175,13 @@ export module Color {
       throw new Error(`Invalid color: ${JSON.stringify(color)}`)
     }
   }
+
+  export function invert (color: ColorSpec): Color {
+    color = toLCH(Color(color))
+    return {
+      lightness: 100 - color.lightness,
+      chroma: color.chroma,
+      hue: color.hue
+    }
+  }
 }
