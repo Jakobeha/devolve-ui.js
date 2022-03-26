@@ -181,8 +181,8 @@ export module VComponent {
           node.pixi = 'terminal'
         }
       }
+      vcomponent.isBeingCreated = false
     })
-    vcomponent.isBeingCreated = false
     return vcomponent.node as VNode
   }
 
@@ -254,7 +254,7 @@ export module VComponent {
     if (vcomponent.hasPendingUpdates) {
       vcomponent.hasPendingUpdates = false
       if (vcomponent.recursiveUpdateStackTrace.length > MAX_RECURSIVE_UPDATES_BEFORE_LOOP_DETECTED) {
-        throw new Error(`update loop detected:\n${vcomponent.recursiveUpdateStackTrace.map(details => JSON.stringify(details)).join('\n')}`)
+        throw new Error(`update loop detected:\n${vcomponent.recursiveUpdateStackTrace.join('\n')}`)
       }
       update(vcomponent, null)
     } else if (isDebugMode()) {

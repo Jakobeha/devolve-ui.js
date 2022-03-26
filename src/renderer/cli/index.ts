@@ -264,13 +264,27 @@ export class TerminalRendererImpl extends RendererImpl<VRender, AssetCacher> {
     }
 
     const border = BorderStyle.ASCII[borderStyle]
-    const result: VRender = range(rect.height).map(i => (
-      i === 0
-        ? [border.topLeft, ...Array(rect.width - 2).fill(border.top), border.topRight]
-        : i === rect.height - 1
-          ? [border.bottomLeft, ...Array(rect.width - 2).fill(border.bottom), border.bottomRight]
-          : [border.left, ...Array(rect.width - 2).fill(TRANSPARENT), border.right]
-    ).map((char: string) => char === TRANSPARENT ? char : char + fg))
+    const result: VRender = range(rect.height).map(i => {
+      if (i === 0) {
+        if (border.topAlt !== undefined) {
+          return [border.topLeft, ...range(rect.width - 2).map(i => i % 2 === 0 ? border.top : border.topAlt), border.topRight]
+        } else {
+          return [border.topLeft, ...Array(rect.width - 2).fill(border.top), border.topRight]
+        }
+      } else if (i === rect.height - 1) {
+        if (border.bottomAlt !== undefined) {
+          return [border.bottomLeft, ...range(rect.width - 2).map(i => i % 2 === 0 ? border.bottom : border.bottomAlt), border.bottomRight]
+        } else {
+          return [border.bottomLeft, ...Array(rect.width - 2).fill(border.bottom), border.bottomRight]
+        }
+      } else {
+        if (border.leftAlt !== undefined && border.rightAlt !== undefined) {
+          return [i % 2 === 0 ? border.left : border.leftAlt, ...Array(rect.width - 2).fill(TRANSPARENT), i % 2 === 0 ? border.right : border.rightAlt]
+        } else {
+          return [border.left, ...Array(rect.width - 2).fill(TRANSPARENT), border.right]
+        }
+      }
+    }).map(row => row.map((char: string) => char === TRANSPARENT ? char : char + fg))
 
     VRender.translate2(result, rect.left, rect.top)
     return result

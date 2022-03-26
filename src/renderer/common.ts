@@ -97,6 +97,7 @@ export abstract class RendererImpl<VRender, AssetCacher extends CoreAssetCacher>
 
   show (): void {
     this.isVisible = true
+    this.forceRerender()
     this.start()
   }
 

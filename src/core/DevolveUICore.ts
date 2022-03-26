@@ -32,7 +32,7 @@ export abstract class DevolveUICore<Props extends object> {
   }
 
   getProps (): DeepReadonly<Props> {
-    return this.props
+    return this.props as DeepReadonly<Props>
   }
 
   setProps (newProps: Props): void {

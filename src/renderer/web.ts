@@ -132,6 +132,7 @@ export class BrowserRendererImpl extends RendererImpl<VRender, AssetCacher> {
     pixiColor.lineStyle(borderStyle === 'thick' ? 2 : 1, color2Number(color ?? Color('black')))
     switch (borderStyle) {
       case 'single':
+      case 'ascii':
         pixiColor.drawRect(
           rect.left * columnSize.width,
           rect.top * columnSize.height,
@@ -185,6 +186,7 @@ export class BrowserRendererImpl extends RendererImpl<VRender, AssetCacher> {
         )
         break
       case 'dashed':
+      case 'ascii-dashed':
         console.warn('TODO: dashed border style not supported by Pixi renderer')
         pixiColor.drawRect(
           rect.left * columnSize.width,

@@ -359,4 +359,20 @@ export module Bounds {
       width: parent.boundingBox.width
     }
   }
+
+  export const PREV: Bounds = (parent, prev) => {
+    if (prev === null) {
+      throw new Error('bad layout: parent has no previous sibling')
+    }
+
+    return {
+      x: prev.left,
+      y: prev.top,
+      z: parent.boundingBox.z + BOX_Z,
+      anchorX: 0,
+      anchorY: 0,
+      width: prev.width,
+      height: prev.height
+    }
+  }
 }
