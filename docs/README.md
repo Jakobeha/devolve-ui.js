@@ -19,9 +19,9 @@ Example:
 import { DevolveUI, useState, useInterval } from '@raycenity/devolve-ui'
 
 const App = ({ name }) => {
-  const [counter, setCounter] = useState(0)
+  const counter = useState(0)
   useInterval(1000, () => {
-    setCounter(counter + 1)
+    counter.v++
   })
 
   return (
@@ -30,7 +30,7 @@ const App = ({ name }) => {
         <zbox width='100%'>
           <hbox width='100%'>
             <text color='white'>Hello {name}</text>
-            <text color='white' x='100%' anchorX={1}>{counter} seconds</text>
+            <text color='white' x='100%' anchorX={1}>{counter.v} seconds</text>
           </hbox>
           <color color='orange' />
         </zbox>
@@ -111,13 +111,71 @@ Unlike React, the **nodes** (lowercase components) which devolve-ui uses are not
 
 Another notable difference is the layout system. devolve-ui does not use CSS, instead all node bounds are calculated using only the parent and previous child. As a result, you must specify bounds much more explicitly. See the [Implementation](#Implementation) section for more.
 
-Another notable difference is contexts: see the [Contexts](#Contexts) section for more.
+State and contexts are also handled differently. Essentially, `useState` returns a proxy instead of a getter / setter array. The code in React:
+
+```typescript
+const [value, setValue] = useState(0)
+setValue(value + 5)
+```
+
+translates in devolve-ui to:
+
+```typescript
+const value = useState(0)
+value.v += 5 // or value.v = value.v + 5
+```
+
+See the [State / Lenses](#State-/-Lenses) and [Contexts](#Contexts) sections for more detail.
 
 ## Concepts
 
 ### Prompt-based GUI
 
 Prompt-based GUI is a new-ish paradigm where your application interfaces with the UI via **prompts**.  devolve-ui has built-in support for prompt-based GUI via the `PromptDevolveUI` class. Read [*this article*](https://jakobeha.github.io/devolve-ui/docs/prompt-based-gui.md) for more.
+
+### State / Lenses
+
+Instead of `useState` returning a getter/setter array (`[value, setValue]`), it returns a **lens**. You can get the value of the lens with `lens.v`, and set the value with `lens.v = newValue`.
+
+The key advantage of lenses is that if the lens contains an object, you can get a lens to its property `foo` via `lens.foo`. For example:
+
+```typescript
+const parentLens = useState({ foo: { bar: { baz: 0 } } })
+parentLens = { foo: { bar: { baz: 5 } } }
+```
+
+is equivalent to
+
+```typescript
+const parentLens = useState({ foo: { bar: { baz: 0 } } })
+const childLens = parentLens.foo.bar.baz
+childLens.v = 5
+```
+
+This is particularly useful when you pass the child lens to a child component, like so:
+
+```jsx
+const Parent = () => {
+  const lens = useState({foo: {bar: {baz: 'hello'}}})
+  // This prints 'hello world' for 2 seconds,
+  // then prints 'goodbye world'
+  return (
+      <vbox>
+        <text>{lens.foo.bar.baz.v}</text>
+        <Child lens={lens.foo.bar.baz}/>
+      </vbox>
+  )
+}
+
+const Child = ({lens}) => {
+    useDelay(2000, () => {
+        lens.v = 'goodbye'
+    })
+    return (
+        <text>world</text>
+    )
+}
+```
 
 ### Contexts
 
@@ -140,7 +198,7 @@ const Child = () => {
 }
 ```
 
-There are also **state contexts**, which combine the functionality of contexts and states: a state context is a context which provides a state instead of a value. Children can mutate the state, and the mutation will affect other children who use the same provided context, but not children who use a different provided context.
+There are also **state contexts**, which combine the functionality of contexts and states: a state context is a context which provides a **[state lens](#State-/-Lenses)** instead of a value. Children can mutate the state, and the mutation will affect other children who use the same provided context, but not children who use a different provided context.
 
 ```jsx
 // const fooBarContext = createStateContext<FooBar>() in TypeScript
@@ -169,16 +227,16 @@ const Parent = ({ children }) => {
 }
 
 const MutatingChild = () => {
-  const [value, setValue] = fooBarContext.useConsume()
+  const value = fooBarContext.useConsume()
   // value is { foo: 'bar' } for the first 5 seconds, and { foo: 'baz' } after
-  useDelay(5000, () => { setValue({ foo: 'baz' }) })
-  return <text>{value.foo}</text>
+  useDelay(5000, () => { value.foo.v = 'baz' })
+  return <text>{value.foo.v}</text>
 }
 
 const Child = () => {
-  const [value] = fooBarContext.useConsume()
+  const value = fooBarContext.useConsume()
   // value is { foo: 'bar' } forever
-  return <text>{value.foo}</text>
+  return <text>{value.foo.v}</text>
 }
 ```
 

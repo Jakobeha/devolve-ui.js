@@ -1,28 +1,31 @@
 import { getVComponent, isDebugMode, VComponent } from 'core/component'
-import { augmentSetProp } from 'core/augment-set'
+import { Lens } from 'core/lens'
 
 /**
- * Returns a value accessible by a proxy.
+ * Returns a {@link Lens} to a persistent value. The first time this is called, the lens will be set to `initialValue`.
+ * Subsequent calls will return a lens with a different value if you mutate it,
+ * as it persists within the component.
  *
  * If you mutate the value, it will stay mutated when the component updates.
  */
-export function useState<T> (initialState: T): { v: T } {
+export function useState<T> (initialValue: T): Lens<T> {
   const component = getVComponent()
   const index = component.nextStateIndex++
   if (component.isBeingCreated) {
     if (component.state.length !== index) {
       throw new Error(`sanity check failed: state length (${component.state.length}) !== index (${index})`)
     }
-    component.state.push({ v: initialState })
+    const state = Lens(initialValue)
+    Lens.onSet(state, (newValue, debugPath) => {
+      const stackTrace = isDebugMode()
+        ? (new Error().stack?.replace('\n', '  \n') ?? 'could not get stack, new Error().stack is undefined')
+        : 'omitted in production'
+      VComponent.update(component, `set-state-${index}-${debugPath}\n${stackTrace}`)
+    })
+    component.state.push(state)
   }
 
-  const value = component.state[index]
-  return augmentSetProp(value, debugPath => {
-    const stackTrace = isDebugMode()
-      ? (new Error().stack?.replace('\n', '  \n') ?? 'could not get stack, new Error().stack is undefined')
-      : 'omitted in production'
-    VComponent.update(component, `set-state-${index}-${debugPath}\n${stackTrace}`)
-  })
+  return component.state[index]
 }
 
 /**

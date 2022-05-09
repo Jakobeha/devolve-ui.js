@@ -1,10 +1,10 @@
-import { augmentSet } from 'core/augment-set'
 import { getRenderer, getVComponent, isDebugMode, iterVComponentsTopDown, VComponent } from 'core/component'
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
 import type { Context } from 'core/hooks/intrinsic/context'
-import { useState, useStateFast } from 'core/hooks/intrinsic/state-dynamic'
+import { useState } from 'core/hooks/intrinsic/state-dynamic'
 import { RendererImpl } from 'renderer/common'
 import { rec } from '@raycenity/misc-ts'
+import { Lens } from 'core/lens'
 
 /**
  * Like {@link Context}, allows you to implicitly pass a value from parent to children.
@@ -31,25 +31,15 @@ import { rec } from '@raycenity/misc-ts'
  *
  * @see {@link Context}
  */
-export type StateContext<T> = _StateContext<T, { v: T }>
-
-/**
- * {@link StateContext} but with `useStateFast` instead of `useState`,
- * so improved performance (no proxy) but additional rules to avoid stale values.
- *
- * @see {@link StateContext}
- */
-export type FastStateContext<T> = _StateContext<T, [T, (value: T) => void]>
-
-interface _StateContext<T, State> {
-  /** Like `useState` but in child components, `useConsume` will return the same state
-   * (as in, when the child modifies the state it also modifies the parent state) */
-  useProvide: (value: T) => State
+export interface StateContext<T> {
+  /** children `useConsume` will point to this state context.
+   * Kind of like `useState(initialValue)` but accessible to children. */
+  useProvide: (initialValue: T) => Lens<T>
   /** Returns the state from `useProvide` in the nearest parent component,
    * or the context's root state if no `useProvide`,
    * or throws an error if there is no root state
    */
-  useConsume: () => State
+  useConsume: () => Lens<T>
 }
 
 let STATE_CONTEXT_DEBUG_ID = 0
@@ -57,59 +47,26 @@ let STATE_CONTEXT_DEBUG_ID = 0
 /**
  * Creates a state context.
  *
- * If `defaultValue` is provided (*not undefined*), that will be the root state (root is per renderer).
+ * If `defaultInitialValue` is provided (*not undefined*), that will be the root initial value (root is per renderer).
  * Otherwise, `useConsume` without a provided state will throw an error.
  */
-export function createStateContext<T> (initialValue?: T): StateContext<T> {
-  return _createStateContext(
-    initialValue,
-    useState,
-    (renderer: RendererImpl<any, any>): { v: T } => augmentSet({ v: initialValue! }, path => {
+export function createStateContext<T> (defaultInitialValue?: T): StateContext<T> {
+  const mkRootState = (renderer: RendererImpl<any, any>): Lens<T> => {
+    const rootState = Lens<T>(defaultInitialValue!)
+    Lens.onSet(rootState, (newValue, debugPath) => {
       const stackTrace = isDebugMode()
         ? (new Error().stack?.replace('\n', '  \n') ?? 'could not get stack, new Error().stack is undefined')
         : 'omitted in production'
-      VComponent.update(renderer.rootComponent!, `set-context-root-state-${STATE_CONTEXT_DEBUG_ID}-${path}\n${stackTrace}`)
+      VComponent.update(renderer.rootComponent!, `set-context-root-state-${STATE_CONTEXT_DEBUG_ID}-${debugPath}\n${stackTrace}`)
     })
-  )
-}
-
-/**
- * Creates a fast state context.
- *
- * If `defaultValue` is provided (*not undefined*), that will be the root state (root is per renderer).
- * Otherwise, `useConsume` without a provided state will throw an error.
- */
-export function createFastStateContext<T> (initialValue?: T): FastStateContext<T> {
-  return _createStateContext(
-    initialValue,
-    useStateFast,
-    (renderer: RendererImpl<any, any>): [T, (value: T) => void] => {
-      const rootState: [T, (value: T) => void] = [
-        initialValue!,
-        value => {
-          rootState[0] = value
-          const stackTrace = isDebugMode()
-            ? (new Error().stack?.replace('\n', '  \n') ?? 'could not get stack, new Error().stack is undefined')
-            : 'omitted in production'
-          VComponent.update(renderer.rootComponent!, `set-context-root-state-${STATE_CONTEXT_DEBUG_ID}\n${stackTrace}`)
-        }
-      ]
-      return rootState
-    }
-  )
-}
-
-function _createStateContext<T, State> (
-  initialValue: T | undefined,
-  useState: (initialValue: T) => State,
-  mkRootState: (renderer: RendererImpl<any, any>) => State
-): _StateContext<T, State> {
-  const rootStates: Map<RendererImpl<any, any>, State> | undefined = initialValue === undefined ? undefined : new Map()
+    return rootState
+  }
+  const rootStates: Map<RendererImpl<any, any>, Lens<T>> | undefined = defaultInitialValue === undefined ? undefined : new Map()
 
   STATE_CONTEXT_DEBUG_ID++
 
-  return rec<_StateContext<T, State>>(context => ({
-    useProvide: (value: T): State => {
+  return rec<StateContext<T>>(context => ({
+    useProvide: (value: T): Lens<T> => {
       const component = getVComponent()
       if (component.contexts.has(context)) {
         throw new Error('This context was already provided in this component')
@@ -118,7 +75,7 @@ function _createStateContext<T, State> (
       component.contexts.set(context, state)
       return state
     },
-    useConsume: (): State => {
+    useConsume: (): Lens<T> => {
       for (const component of iterVComponentsTopDown()) {
         if (component.contexts.has(context)) {
           return component.contexts.get(context)

@@ -1,4 +1,4 @@
-import { augmentSet } from 'core/augment-set'
+import { Lens } from 'core/lens'
 import { VComponent } from 'core/component'
 import { Renderer, VNode } from 'core/index'
 import type { TerminalRenderOptions } from 'renderer/cli'
@@ -15,7 +15,7 @@ export abstract class DevolveUICore<Props extends object> {
   private readonly instance: Renderer
   protected readonly props: Props
   /** A proxy which sets the given property */
-  readonly p: Props
+  readonly p: Lens<Props>
 
   /** Renders a HUD with the given content and doesn't clear, useful for logging */
   protected static _renderSnapshot<Props>(mkRenderer: (root: () => VNode, opts?: RenderOptions) => Renderer, RootComponent: (props: Props) => VNode, props: Props, opts?: RenderOptions): void {
@@ -28,7 +28,7 @@ export abstract class DevolveUICore<Props extends object> {
     // Idk why the cast is necessary
     this.props = { ...props }
     this.instance = this.mkRenderer(() => VComponent('RootComponent', this.props, RootComponent), opts)
-    this.p = this.propsProxy(this.props)
+    this.p = this.propsLens(this.props)
   }
 
   getProps (): DeepReadonly<Props> {
@@ -51,10 +51,12 @@ export abstract class DevolveUICore<Props extends object> {
     this.instance.dispose()
   }
 
-  protected propsProxy<T extends object>(props: T): T {
-    return augmentSet(props, () => {
+  protected propsLens<T extends object>(props: T): Lens<T> {
+    const lens = Lens(props)
+    Lens.onSet(lens, () => {
       this.updateProps()
     })
+    return lens
   }
 
   protected updateProps (): void {

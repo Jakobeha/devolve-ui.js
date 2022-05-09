@@ -1,9 +1,7 @@
-import { augmentSetProp } from 'core/augment-set'
 import { Context } from 'core/hooks/intrinsic/context'
 import { PLATFORM } from 'core/platform'
 import { PixiComponent, VNode } from 'core/vdom'
 import { RendererImpl } from 'renderer/common'
-import { rec } from '@raycenity/misc-ts'
 
 type PendingUpdateDetails = string
 
@@ -88,16 +86,6 @@ export function VRoot<T extends VNode> (renderer: RendererImpl<any, any>, constr
   return node
 }
 
-function augmentSetProps<Props> (vcomponent: VComponent, props: Props): Props {
-  return augmentSetProp(props, path => {
-    const stackTrace = isDebugMode()
-      ? (new Error().stack?.replace('\n', '  \n') ?? 'could not get stack, new Error().stack is undefined')
-      : 'omitted in production'
-    // TODO include vcomponent uid somehow
-    VComponent.update(vcomponent, `set-props-${path}\n${stackTrace}`)
-  })
-}
-
 export function VComponent<Props> (key: string, props: Props, construct: (props: Props) => VNode): VNode {
   if (VCOMPONENT_STACK.length !== 0) {
     const parent = getVComponent()
@@ -107,7 +95,7 @@ export function VComponent<Props> (key: string, props: Props, construct: (props:
         const vcomponent = parent.children[key]
         // If the componennt was already reused this update, it's a conflict. We fallthrough to newVComponent which throws the error
         if (!vcomponent.isFresh) {
-          vcomponent.props = augmentSetProps(vcomponent, props)
+          vcomponent.props = props
           vcomponent.construct = construct
           vcomponent.isFresh = true
           VComponent.update(vcomponent, `child ${key}`)
@@ -123,12 +111,12 @@ export function VComponent<Props> (key: string, props: Props, construct: (props:
 export module VComponent {
   export function create<Props> (key: string, props: Props, construct: (props: Props) => VNode): VNode {
     // Create JS object
-    const vcomponent: VComponent<Props> = rec(vcomponent => ({
+    const vcomponent: VComponent<Props> = {
       node: {},
       children: {},
       renderer: getRenderer(),
 
-      props: augmentSetProps(vcomponent, props),
+      props,
       construct,
       state: [],
       contexts: new Map(),
@@ -144,7 +132,7 @@ export module VComponent {
       hasPendingUpdates: false,
       recursiveUpdateStackTrace: [],
       nextStateIndex: 0
-    }))
+    }
 
     // Set parent
     if (VCOMPONENT_STACK.length === 0) {
