@@ -1,6 +1,17 @@
+import { assert } from '@raycenity/misc-ts'
+
 // Idk whether to put this in a misc folder, or even misc-ts...
 
 const AUGMENT_SET_RAW: unique symbol = Symbol.for('augment-set-raw')
+const AUGMENT_SET_AUGMENTATIONS: unique symbol = Symbol.for('augment-set-augmentations')
+
+interface AugmentedProxy {
+  [AUGMENT_SET_RAW]: AugmentedTarget
+}
+
+interface AugmentedTarget {
+  [AUGMENT_SET_AUGMENTATIONS]: ((path: string) => void)[]
+}
 
 /** Call `onSet` every time a property might be set, if `value` is an object or function */
 export function augmentSetProp<T> (value: T, onSet: (path: string) => void, path: string = ''): T {
@@ -13,19 +24,30 @@ export function augmentSetProp<T> (value: T, onSet: (path: string) => void, path
 
 /** Call `onSet` every time a property might be set */
 export function augmentSet<T extends object | Function> (object: T, onSet: (path: string) => void, path: string = ''): T {
+  if (AUGMENT_SET_RAW in object) {
+    const target = (object as AugmentedProxy)[AUGMENT_SET_RAW]
+    target[AUGMENT_SET_AUGMENTATIONS].push(onSet)
+    return object
+  }
+
+  assert(!(AUGMENT_SET_AUGMENTATIONS in object), `didn't expect to get target of previous augmentSet (not the proxy) passed to another augmentSet. TODO implement`);
+  (object as AugmentedTarget)[AUGMENT_SET_AUGMENTATIONS] = [onSet]
+
   return new Proxy(object, {
     get: (target: T, p: string | number | symbol): any => {
       if (p === AUGMENT_SET_RAW) {
         return object
       } else {
         const subpath = typeof p === 'string' ? `${path}.${p}` : `${path}[${p.toString()}]`
-        return augmentSetProp((target as any)[p], onSet, subpath, target)
+        return augmentSetProp((target as any)[p], onSet, subpath)
       }
     },
     set: (target: T, p: string | number | symbol, value: any): boolean => {
       const subpath = typeof p === 'string' ? `${path}.${p}` : `${path}[${p.toString()}]`;
       (target as any)[p] = value
-      onSet(subpath)
+      for (const onSet of (target as AugmentedTarget)[AUGMENT_SET_AUGMENTATIONS]) {
+        onSet(subpath)
+      }
       return true
     },
     apply: (target: T, thisArg: any, args: any[]): any => {
@@ -135,6 +157,7 @@ registerIntrinsicPrototype([Set.prototype], [
   ['clear', false],
   ['add', false]
 ])
+
 registerIntrinsicPrototype(Map.prototype, [
   ['set', false],
   ['get', true],
