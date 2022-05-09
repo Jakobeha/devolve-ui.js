@@ -1,4 +1,4 @@
-import { getRenderer, getVComponent, isDebugMode, iterVComponentsTopDown, VComponent } from 'core/component'
+import { getRenderer, getVComponent, isDebugMode, VComponent } from 'core/component'
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
 import type { Context } from 'core/hooks/intrinsic/context'
 import { useState } from 'core/hooks/intrinsic/state-dynamic'
@@ -35,11 +35,18 @@ export interface StateContext<T> {
   /** children `useConsume` will point to this state context.
    * Kind of like `useState(initialValue)` but accessible to children. */
   useProvide: (initialValue: T) => Lens<T>
-  /** Returns the state from `useProvide` in the nearest parent component,
-   * or the context's root state if no `useProvide`,
-   * or throws an error if there is no root state
+  /**
+   * Returns the state from `useProvide` in the nearest parent component.
+   * This is guaranteed to be `null` the first time the component is created,
+   * because it's created before its parent.
+   * If the child changes parents, it will be updated and useConsume will return the new parent's context.
    */
-  useConsume: () => Lens<T>
+  useConsume: () => Lens<T> | null
+  /**
+   * If the component was created with a default initial value, returns the context's root state (dependent on renderer).
+   * Otherwise there is no root state and this throws an error
+   */
+  useConsumeRoot: () => Lens<T>
 }
 
 let STATE_CONTEXT_DEBUG_ID = 0
@@ -51,36 +58,40 @@ let STATE_CONTEXT_DEBUG_ID = 0
  * Otherwise, `useConsume` without a provided state will throw an error.
  */
 export function createStateContext<T> (defaultInitialValue?: T): StateContext<T> {
+  const contextId = STATE_CONTEXT_DEBUG_ID++
   const mkRootState = (renderer: RendererImpl<any, any>): Lens<T> => {
     const rootState = Lens<T>(defaultInitialValue!)
     Lens.onSet(rootState, (newValue, debugPath) => {
       const stackTrace = isDebugMode()
         ? (new Error().stack?.replace('\n', '  \n') ?? 'could not get stack, new Error().stack is undefined')
         : 'omitted in production'
-      VComponent.update(renderer.rootComponent!, `set-context-root-state-${STATE_CONTEXT_DEBUG_ID}-${debugPath}\n${stackTrace}`)
+      VComponent.update(renderer.rootComponent!, `set-context-root-state-${contextId}-${debugPath}\n${stackTrace}`)
     })
     return rootState
   }
   const rootStates: Map<RendererImpl<any, any>, Lens<T>> | undefined = defaultInitialValue === undefined ? undefined : new Map()
 
-  STATE_CONTEXT_DEBUG_ID++
-
   return rec<StateContext<T>>(context => ({
     useProvide: (value: T): Lens<T> => {
       const component = getVComponent()
-      if (component.contexts.has(context)) {
+      if (component.providedContexts.has(context)) {
         throw new Error('This context was already provided in this component')
       }
       const state = useState(value)
-      component.contexts.set(context, state)
+      VComponent.setProvidedContext(component, context, state, true, `state-context-${contextId}`)
       return state
     },
-    useConsume: (): Lens<T> => {
-      for (const component of iterVComponentsTopDown()) {
-        if (component.contexts.has(context)) {
-          return component.contexts.get(context)
-        }
+    useConsume: (): Lens<T> | null => {
+      const component = getVComponent()
+      if (component.consumedContexts.has(context)) {
+        return component.consumedContexts.get(context)
       }
+      /* // Current component needs explicit trackState since it didn't create the state
+      VComponent.trackState(component, state, `consumed-context-changed-${contextId}`) */
+      component.consumedContexts.set(context, null)
+      return null
+    },
+    useConsumeRoot: (): Lens<T> => {
       if (rootStates !== undefined) {
         const renderer = getRenderer()
         if (rootStates.has(renderer)) {
@@ -91,7 +102,7 @@ export function createStateContext<T> (defaultInitialValue?: T): StateContext<T>
           return rootState
         }
       }
-      throw new Error('This context was not provided in any parent component, and has no root state')
+      throw new Error('This context was not created with a defaultInitialValue, so it has no root state')
     }
   }))
 }

@@ -49,10 +49,10 @@ export function useEffect (effect: () => void | (() => void), rerun: UseEffectRe
       if (component.isBeingCreated) {
         doEffect = true
       } else {
-        if (memo.length !== ourMemo.length) {
-          throw new Error('number of dependencies changed in between component update (you can\'t do that)')
+        if (memo().length !== ourMemo.length) {
+          throw new Error(`number of dependencies changed in between component update (you can't do that): ${memo.length} to ${ourMemo.length}`)
         }
-        for (let i = 0; i < memo.length; i++) {
+        for (let i = 0; i < memo().length; i++) {
           if (!compare(memo()[i], ourMemo[i])) {
             doEffect = true
             break

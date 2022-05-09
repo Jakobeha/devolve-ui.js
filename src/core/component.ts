@@ -2,6 +2,8 @@ import { Context } from 'core/hooks/intrinsic/context'
 import { PLATFORM } from 'core/platform'
 import { PixiComponent, VNode } from 'core/vdom'
 import { RendererImpl } from 'renderer/common'
+import { Lens } from 'core/lens'
+import { assert } from '@raycenity/misc-ts'
 
 type PendingUpdateDetails = string
 
@@ -15,7 +17,10 @@ export interface VComponent<Props = any> {
   props: Props
   construct: (props: Props) => VNode
   readonly state: any[]
-  readonly contexts: Map<Context<any>, any>
+  readonly providedContexts: Map<Context<any>, any>
+  /** We can cache the ancestor's provided context because parents / ancestors don't change */
+  readonly consumedContexts: Map<Context<any>, any>
+  readonly stateTrackers: Map<Lens<any>, (newValue: any, debugPath: string) => void>
   readonly effects: Array<() => void>
   readonly updateDestructors: Array<() => void>
   nextUpdateDestructors: Array<() => void>
@@ -46,12 +51,6 @@ export function getVComponent (): VComponent {
     throw new Error('No current component')
   }
   return VCOMPONENT_STACK[VCOMPONENT_STACK.length - 1]
-}
-
-export function * iterVComponentsTopDown (): Generator<VComponent> {
-  for (let i = VCOMPONENT_STACK.length - 1; i >= 0; i--) {
-    yield VCOMPONENT_STACK[i]
-  }
 }
 
 export function isDebugMode (): boolean {
@@ -119,7 +118,9 @@ export module VComponent {
       props,
       construct,
       state: [],
-      contexts: new Map(),
+      providedContexts: new Map(),
+      consumedContexts: new Map(),
+      stateTrackers: new Map(),
       effects: [],
       updateDestructors: [],
       nextUpdateDestructors: [],
@@ -185,7 +186,7 @@ export module VComponent {
       // Reset
       runUpdateDestructors(vcomponent)
       vcomponent.nextStateIndex = 0
-      vcomponent.contexts.clear()
+      vcomponent.providedContexts.clear()
 
       // Do construct
       // We also need to use VComponent's renderer because the current renderer might be different
@@ -290,5 +291,47 @@ export module VComponent {
       destructor()
     }
     // Child permanent destructors are taken care of
+  }
+
+  /** Makes the given component update when the given state changes. hookId is used for the stack trace on update loop */
+  export function trackState<T> (vcomponent: VComponent, state: Lens<T>, hookId: string): void {
+    assert(!vcomponent.stateTrackers.has(state), `state ${hookId} is already tracked`)
+    const stateTracker = (newValue: T, debugPath: string): void => {
+      const stackTrace = isDebugMode()
+        ? (new Error().stack?.replace('\n', '  \n') ?? 'could not get stack, new Error().stack is undefined')
+        : 'omitted in production'
+      update(vcomponent, `${hookId}-${debugPath}\n${stackTrace}`)
+    }
+    vcomponent.stateTrackers.set(state, stateTracker)
+    Lens.onSet(state, stateTracker)
+  }
+
+  /** Makes the given component no longer update when the given state changes. */
+  export function untrackState<T> (vcomponent: VComponent, state: Lens<T>): void {
+    assert(vcomponent.stateTrackers.has(state), 'state \'[omitted]\' is not tracked')
+    Lens.removeOnSet(state, vcomponent.stateTrackers.get(state)!)
+  }
+
+  /** Sets the value of the provided context in the component, and consumed context in child components */
+  export function setProvidedContext (vcomponent: VComponent, context: Context<any>, value: any, valueIsState: boolean, contextId: string): void {
+    assert(!vcomponent.providedContexts.has(context), 'setProvidedContext called multiple times with the same provided context in the same update')
+    vcomponent.providedContexts.set(context, value)
+    const setConsumedContextsRecursively = (vcomponent: VComponent): void => {
+      for (const child of Object.values(vcomponent.children)) {
+        if (child.consumedContexts.has(context) && child.consumedContexts.get(context) !== value) {
+          if (valueIsState) {
+            const oldValue = child.consumedContexts.get(context)
+            if (oldValue !== null) {
+              untrackState(child, oldValue)
+            }
+            trackState(child, value, `changed-provided-state${contextId}`)
+          }
+          child.consumedContexts.set(context, value)
+          update(child, `changed-provided-to-${contextId}`)
+        }
+        setConsumedContextsRecursively(child)
+      }
+    }
+    setConsumedContextsRecursively(vcomponent)
   }
 }

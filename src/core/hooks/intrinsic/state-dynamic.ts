@@ -16,12 +16,7 @@ export function useState<T> (initialValue: T): Lens<T> {
       throw new Error(`sanity check failed: state length (${component.state.length}) !== index (${index})`)
     }
     const state = Lens(initialValue)
-    Lens.onSet(state, (newValue, debugPath) => {
-      const stackTrace = isDebugMode()
-        ? (new Error().stack?.replace('\n', '  \n') ?? 'could not get stack, new Error().stack is undefined')
-        : 'omitted in production'
-      VComponent.update(component, `set-state-${index}-${debugPath}\n${stackTrace}`)
-    })
+    VComponent.trackState(component, state, `set-state-${index}`)
     component.state.push(state)
   }
 

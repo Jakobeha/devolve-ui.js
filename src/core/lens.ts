@@ -39,13 +39,13 @@ export module Lens {
     observers.push(onSet)
   }
 
-  /* export function removeOnSet<T> (lens: Lens<T>, onSet: (value: T, debugPath: string) => void): void {
+  export function removeOnSet<T> (lens: Lens<T>, onSet: (value: T, debugPath: string) => void): void {
     const observers = lens[LENS_OBSERVERS]
-    assert(observers !== undefined, `not a valid lens`)
+    assert(observers !== undefined, 'not a valid lens')
     const index = observers.indexOf(onSet)
-    assert(index !== -1, `setter not added to lens`)
+    assert(index !== -1, 'setter not added to lens')
     observers.splice(index, 1)
-  } */
+  }
 }
 
 function lensPrimitive<T extends Primitive> (value: T, debugPath: string): Lens<T> {
@@ -76,7 +76,9 @@ function lensPrimitive<T extends Primitive> (value: T, debugPath: string): Lens<
         case 'v':
           // 1) Set value
           value = prop
-          for (const onSet of observers) {
+          // We use [...observers] because if we add new observers,
+          // they should already know the new value, so we don't want to call them as well.
+          for (const onSet of [...observers]) {
             onSet(value, debugPath)
           }
           return true
@@ -141,7 +143,7 @@ function lensObject<T extends Object> (value: T, debugPath: string): Lens<T> {
                     case true:
                       break
                     case false:
-                      for (const onSet of observers) {
+                      for (const onSet of [...observers]) {
                         onSet(value, subpathApply)
                       }
                       break
@@ -149,7 +151,7 @@ function lensObject<T extends Object> (value: T, debugPath: string): Lens<T> {
                       // This lint error is wrong
                       // eslint-disable-next-line @typescript-eslint/no-base-to-string
                       console.warn(`Unknown purity for intrinsic function, please add: ${prototype.toString()}.${p.toString()}`)
-                      for (const onSet of observers) {
+                      for (const onSet of [...observers]) {
                         onSet(value, subpathApply)
                       }
                       break
@@ -164,7 +166,7 @@ function lensObject<T extends Object> (value: T, debugPath: string): Lens<T> {
             const sublens = Lens(initialSubvalue, subpath)
             Lens.onSet(sublens, newSubvalue => {
               Reflect.set(value, p, newSubvalue)
-              for (const onSet of observers) {
+              for (const onSet of [...observers]) {
                 onSet(value, subpath)
               }
             })
@@ -179,7 +181,7 @@ function lensObject<T extends Object> (value: T, debugPath: string): Lens<T> {
         case 'v':
           // 1) Set value
           value = prop
-          for (const onSet of observers) {
+          for (const onSet of [...observers]) {
             onSet(value, debugPath)
           }
           return true
@@ -223,7 +225,7 @@ function lensObject<T extends Object> (value: T, debugPath: string): Lens<T> {
           cache.delete(p)
           const didDelete = Reflect.deleteProperty(value as any, p)
           if (didDelete) {
-            for (const onSet of observers) {
+            for (const onSet of [...observers]) {
               onSet(value, subpath)
             }
           }
