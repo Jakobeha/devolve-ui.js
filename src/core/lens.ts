@@ -133,12 +133,12 @@ function lensObject<T extends Object> (value: T, debugPath: string): Lens<T> {
                           : null
             const isIntrinsic = prototype !== null && INTRINSIC_PROTOTYPES.has(prototype)
             if (isIntrinsic) {
-              const intrinsicFunction = Reflect.get(value, p, receiver)
-              const isPure = typeof p !== 'string' ? undefined : INTRINSIC_PROTOTYPES.get(prototype)!.get(p)
-              if (typeof intrinsicFunction === 'function') {
+              const intrinsic = Reflect.get(value, p, receiver)
+              if (typeof intrinsic === 'function') {
+                const isPure = typeof p !== 'string' ? undefined : INTRINSIC_PROTOTYPES.get(prototype)!.get(p)
                 const subpathApply = `${subpath}(...)`
                 return (...args: any[]): any => {
-                  const result = intrinsicFunction.apply(value, args)
+                  const result = intrinsic.apply(value, args)
                   switch (isPure) {
                     case true:
                       break
@@ -158,6 +158,8 @@ function lensObject<T extends Object> (value: T, debugPath: string): Lens<T> {
                   }
                   return result
                 }
+              } else {
+                return intrinsic
               }
             }
 
