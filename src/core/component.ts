@@ -270,15 +270,7 @@ export module VComponent {
       clearFreshAndRemoveStaleChildren(vcomponent)
 
       // Add indirect children (children in the VNode tree but not component build tree)
-      // Also need to assign their providers
-      const node = vcomponent.node as VNode
-      if (node.type === 'box') {
-        for (const child of node.children) {
-          if (child.component !== undefined) {
-            vcomponent.indirectChildren.push(child.component)
-          }
-        }
-      }
+      addIndirectChildren(vcomponent)
 
       // Update contexts in old / new indirect children
       const oldIndirectChildren = prevIndirectChildren.filter(child => !vcomponent.indirectChildren.includes(child))
@@ -365,6 +357,17 @@ export module VComponent {
   export function untrackState<T> (vcomponent: VComponent, state: Lens<T>): void {
     assert(vcomponent.stateTrackers.has(state), 'state \'[omitted]\' is not tracked')
     Lens.removeOnSet(state, vcomponent.stateTrackers.get(state)!)
+  }
+
+  function addIndirectChildren (vcomponent: VComponent, node: VNode = vcomponent.node as VNode): void {
+    if (node.type === 'box') {
+      for (const child of node.children) {
+        if (child.component !== undefined) {
+          vcomponent.indirectChildren.push(child.component)
+        }
+        addIndirectChildren(vcomponent, child)
+      }
+    }
   }
 
   function setConsumedContexts (vcomponent: VComponent, context: Context, value: any): void {
