@@ -41,14 +41,19 @@ export function useEffect (effect: () => void | (() => void), rerun: UseEffectRe
       })
     }
   } else if ('onChange' in rerun) {
+    const isCreated = component.isBeingCreated
     const ourMemo = rerun.onChange
     const compare = rerun.compare ?? ((lhs: any, rhs: any) => lhs === rhs)
     const [getMemo, setMemo] = _useDynamicState(ourMemo, false)
     const [getDestructor, setDestructor] = _useDynamicState<(() => void) | null>(null, false)
     const memo = getMemo()
+    if (!isCreated) {
+      setMemo(ourMemo)
+    }
+
     component.effects.push(() => {
       let doEffect = false
-      if (component.isBeingCreated) {
+      if (isCreated) {
         doEffect = true
       } else {
         if (memo.length !== ourMemo.length) {
@@ -74,9 +79,6 @@ export function useEffect (effect: () => void | (() => void), rerun: UseEffectRe
         }
       }
     })
-    if (!component.isBeingCreated) {
-      setMemo(ourMemo)
-    }
   } else if ('onDefine' in rerun) {
     const deps = rerun.onDefine
     const depsWereDefined = !deps.some(dep => dep === undefined)

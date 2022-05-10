@@ -1,5 +1,5 @@
 import { BoundingBox, Bounds, Color, ParentBounds, Rectangle, Size, VNode } from 'core/vdom'
-import { CoreRenderOptions, Renderer } from 'core/renderer'
+import { CoreRenderOptions, DEFAULT_CORE_RENDER_OPTIONS, DEFAULT_COLUMN_SIZE, Renderer } from 'core/renderer'
 import { VComponent, VRoot } from 'core/component'
 import { Key, Strings } from '@raycenity/misc-ts'
 import { BorderStyle } from 'core/vdom/border-style'
@@ -46,12 +46,6 @@ interface CachedRenderInfo {
 }
 
 export abstract class RendererImpl<VRender, AssetCacher extends CoreAssetCacher> implements Renderer {
-  static readonly DEFAULT_FPS: number = 20
-  static readonly DEFAULT_COLUMN_SIZE: Size = {
-    width: 7,
-    height: 14
-  }
-
   private readonly defaultFps: number
   private root: VNode | null = null
   rootComponent: VComponent | null = null
@@ -63,7 +57,7 @@ export abstract class RendererImpl<VRender, AssetCacher extends CoreAssetCacher>
   private isVisible: boolean = false
 
   protected constructor (assetCacher: AssetCacher, { fps }: CoreRenderOptions) {
-    this.defaultFps = fps ?? RendererImpl.DEFAULT_FPS
+    this.defaultFps = fps ?? DEFAULT_CORE_RENDER_OPTIONS.fps
     this.assets = assetCacher
   }
 
@@ -113,9 +107,9 @@ export abstract class RendererImpl<VRender, AssetCacher extends CoreAssetCacher>
       this.cachedRenders.delete(nextNode)
       nextNode = nextNode.parent!
     }
-    // if (nextNode === 'none') {
-    this.needsRerender = true
-    // }
+    if (nextNode === 'none') {
+      this.needsRerender = true
+    }
   }
 
   reroot<Props> (props?: Props, root?: (props: Props) => VNode): void {
@@ -173,7 +167,7 @@ export abstract class RendererImpl<VRender, AssetCacher extends CoreAssetCacher>
   private getRootParentBounds (): ParentBounds {
     return {
       ...this.getRootDimensions(),
-      columnSize: RendererImpl.DEFAULT_COLUMN_SIZE,
+      columnSize: DEFAULT_COLUMN_SIZE,
       sublayout: {}
     }
   }

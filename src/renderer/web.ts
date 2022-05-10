@@ -1,5 +1,5 @@
 import { BorderStyle, BoundingBox, Color, Rectangle, Size, VNode } from 'core/vdom'
-import { CoreRenderOptions } from 'core/renderer'
+import { CoreRenderOptions, DEFAULT_COLUMN_SIZE } from 'core/renderer'
 import { CoreAssetCacher, RendererImpl, VRenderBatch } from 'renderer/common'
 import { Key, Strings } from '@raycenity/misc-ts'
 import type { Application, DisplayObject, IApplicationOptions, Sprite, Texture } from 'pixi.js'
@@ -72,7 +72,7 @@ export class BrowserRendererImpl extends RendererImpl<VRender, AssetCacher> {
           width: this.em / 2,
           height: this.em
         }
-      : RendererImpl.DEFAULT_COLUMN_SIZE
+      : DEFAULT_COLUMN_SIZE
     return {
       boundingBox: {
         x: 0,

@@ -7,14 +7,12 @@ import { Context } from 'core/hooks/intrinsic/context'
 
 type PendingUpdateDetails = string
 
-const MAX_RECURSIVE_UPDATES_BEFORE_LOOP_DETECTED = 100
-
 export interface VComponent<Props = any> {
   readonly node: Partial<VNode>
   /** children in the `VComponent` build tree (and `VNode` tree) */
   readonly children: Map<string, VComponent>
   /** Siblings in the `VComponent` build tree, but children in the `VNode` tree */
-  indirectChildren: VComponent[]
+  indirectChildren: VComponent[] | null
   readonly renderer: RendererImpl<any, any>
 
   props: Props
@@ -40,7 +38,6 @@ export interface VComponent<Props = any> {
 
 const RENDERER_STACK: Array<RendererImpl<any, any>> = []
 const VCOMPONENT_STACK: VComponent[] = []
-let IS_DEBUG_MODE: boolean = true
 
 export function getRenderer (): RendererImpl<any, any> {
   if (RENDERER_STACK.length === 0) {
@@ -63,14 +60,6 @@ export function * iterVComponentsStackTopDown (): Generator<VComponent> {
   for (let i = VCOMPONENT_STACK.length - 1; i >= 0; i--) {
     yield VCOMPONENT_STACK[i]
   }
-}
-
-export function isDebugMode (): boolean {
-  return IS_DEBUG_MODE
-}
-
-export function setDebugMode (debugMode: boolean): void {
-  IS_DEBUG_MODE = debugMode
 }
 
 function withVComponent<T> (vcomponent: VComponent, body: () => T): T {
@@ -124,7 +113,7 @@ export module VComponent {
     const vcomponent: VComponent<Props> = {
       node: {},
       children: new Map(),
-      indirectChildren: [],
+      indirectChildren: GLOBAL_COMPONENT_OPTS.useIndirectChildren ? [] : null,
       renderer: getRenderer(),
 
       props,
@@ -170,8 +159,8 @@ export module VComponent {
       if (typeof constructed !== 'object' || Array.isArray(constructed)) {
         throw new Error('JSX components can only be nodes. Call this function normally, not with JSX')
       }
-      Object.assign(vcomponent.node, constructed)
-      const node: VNode = vcomponent.node as VNode
+      VNode.convertInto(vcomponent.node, constructed)
+      const node: VNode = vcomponent.node
 
       // Track if pixi component and on web
       if (node.type === 'pixi') {
@@ -249,37 +238,45 @@ export module VComponent {
     }
 
     withVComponent(vcomponent, () => {
+      const useIndirectChildren = vcomponent.indirectChildren !== null
+
       // Mark component as being updated
       vcomponent.isBeingUpdated = true
 
-      // Clear indirect children and remember old
-      const prevIndirectChildren: VComponent[] = vcomponent.indirectChildren
-      vcomponent.indirectChildren = []
+      const prevIndirectChildren: VComponent[] | null = vcomponent.indirectChildren
+      if (useIndirectChildren) {
+        // Clear indirect children and remember old
+        vcomponent.indirectChildren = []
 
-      // Remove the node's vcomponent (FUTURE: make a list if we allow multiple components to share a node)
-      delete vcomponent.node.component
+        // Remove the node's vcomponent (FUTURE: make a list if we allow multiple components to share a node)
+        delete vcomponent.node.component
+      }
 
       // This will update state, add events, etc.
       body()
 
-      // Set the node's vcomponent (FUTURE: make a list if we allow multiple components to share a node)
-      // This is necessary to find indirect children
-      vcomponent.node.component = vcomponent
+      if (useIndirectChildren) {
+        // Set the node's vcomponent (FUTURE: make a list if we allow multiple components to share a node)
+        // This is necessary to find indirect children
+        vcomponent.node.component = vcomponent
+      }
 
       // Remove stale children
       clearFreshAndRemoveStaleChildren(vcomponent)
 
-      // Add indirect children (children in the VNode tree but not component build tree)
-      addIndirectChildren(vcomponent)
+      if (useIndirectChildren) {
+        // Add indirect children (children in the VNode tree but not component build tree)
+        addIndirectChildren(vcomponent)
 
-      // Update contexts in old / new indirect children
-      const oldIndirectChildren = prevIndirectChildren.filter(child => !vcomponent.indirectChildren.includes(child))
-      const newIndirectChildren = vcomponent.indirectChildren.filter(child => !prevIndirectChildren.includes(child))
-      for (const child of oldIndirectChildren) {
-        removeProvidedContexts(vcomponent, child)
-      }
-      for (const child of newIndirectChildren) {
-        addProvidedContexts(vcomponent, child)
+        // Update contexts in old / new indirect children
+        const oldIndirectChildren = prevIndirectChildren!.filter(child => !vcomponent.indirectChildren!.includes(child))
+        const newIndirectChildren = vcomponent.indirectChildren!.filter(child => !prevIndirectChildren!.includes(child))
+        for (const child of oldIndirectChildren) {
+          removeProvidedContexts(vcomponent, child)
+        }
+        for (const child of newIndirectChildren) {
+          addProvidedContexts(vcomponent, child)
+        }
       }
 
       vcomponent.isBeingUpdated = false
@@ -288,7 +285,7 @@ export module VComponent {
     })
     if (vcomponent.hasPendingUpdates) {
       vcomponent.hasPendingUpdates = false
-      if (vcomponent.recursiveUpdateStackTrace.length > MAX_RECURSIVE_UPDATES_BEFORE_LOOP_DETECTED) {
+      if (vcomponent.recursiveUpdateStackTrace.length > GLOBAL_COMPONENT_OPTS.maxRecursiveUpdatesBeforeLoopDetected) {
         throw new Error(`update loop detected:\n${vcomponent.recursiveUpdateStackTrace.join('\n')}`)
       }
       update(vcomponent, null)
@@ -360,6 +357,7 @@ export module VComponent {
   }
 
   function addIndirectChildren (vcomponent: VComponent, node: VNode = vcomponent.node as VNode): void {
+    assert(vcomponent.indirectChildren !== null, 'addIndirectChildren: component isn\'t using indirect children')
     if (node.type === 'box') {
       for (const child of node.children) {
         if (child.component !== undefined) {
@@ -371,8 +369,9 @@ export module VComponent {
   }
 
   function setConsumedContexts (vcomponent: VComponent, context: Context, value: any): void {
+    const isUsingIndirectChildren = vcomponent.indirectChildren !== null
     if (vcomponent.consumedContexts.has(context) && vcomponent.consumedContexts.get(context) !== value) {
-      if (context.isStateContext) {
+      if (context.isStateContext && isUsingIndirectChildren) {
         const oldValue = vcomponent.consumedContexts.get(context)
         if (oldValue !== null) {
           untrackState(vcomponent, oldValue)
@@ -388,9 +387,10 @@ export module VComponent {
   }
 
   function unsetConsumedContexts (vcomponent: VComponent, context: Context, value: any): void {
+    const isUsingIndirectChildren = vcomponent.indirectChildren !== null
     if (vcomponent.consumedContexts.has(context)) {
       assert(vcomponent.consumedContexts.get(context) === value, `broken invariant: context ${context.debugId} is not set to ${value.toString() as string} (being unset but we want to make sure we're unsetting the right context)`)
-      if (context.isStateContext) {
+      if (context.isStateContext && isUsingIndirectChildren) {
         const oldValue = vcomponent.consumedContexts.get(context)
         if (oldValue !== null) {
           untrackState(vcomponent, oldValue)
@@ -426,4 +426,26 @@ export module VComponent {
       setConsumedContexts(child, context, value)
     }
   }
+}
+
+export interface GlobalComponentOpts {
+  maxRecursiveUpdatesBeforeLoopDetected: number
+  useIndirectChildren: boolean
+  isDebugMode: boolean
+}
+
+export const DEFAULT_GLOBAL_COMPONENT_OPTS: GlobalComponentOpts = {
+  maxRecursiveUpdatesBeforeLoopDetected: 100,
+  useIndirectChildren: true,
+  isDebugMode: true
+}
+
+const GLOBAL_COMPONENT_OPTS: GlobalComponentOpts = { ...DEFAULT_GLOBAL_COMPONENT_OPTS }
+
+export function setGlobalComponentOpts (opts: Partial<GlobalComponentOpts>): void {
+  Object.assign(GLOBAL_COMPONENT_OPTS, opts)
+}
+
+export function isDebugMode (): boolean {
+  return GLOBAL_COMPONENT_OPTS.isDebugMode
 }

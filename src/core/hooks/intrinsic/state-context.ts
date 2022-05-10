@@ -1,5 +1,5 @@
 import { Context } from 'core/hooks/intrinsic/context'
-import { getRenderer, getVComponent, isDebugMode, iterVComponentsStackTopDown, VComponent } from 'core/component'
+import { getRenderer, getVComponent, iterVComponentsStackTopDown, VComponent } from 'core/component'
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
 import type { PropsContext } from 'core/hooks/intrinsic/props-context'
 import { useState } from 'core/hooks/intrinsic/state-dynamic'
@@ -60,16 +60,7 @@ let STATE_CONTEXT_DEBUG_ID = 0
  */
 export function createStateContext<T> (defaultInitialValue?: T): StateContext<T> {
   const contextId = STATE_CONTEXT_DEBUG_ID++
-  const mkRootState = (renderer: RendererImpl<any, any>): Lens<T> => {
-    const rootState = Lens<T>(defaultInitialValue!)
-    Lens.onSet(rootState, (newValue, debugPath) => {
-      const stackTrace = isDebugMode()
-        ? (new Error().stack?.replace('\n', '  \n') ?? 'could not get stack, new Error().stack is undefined')
-        : 'omitted in production'
-      VComponent.update(renderer.rootComponent!, `set-context-root-state-${contextId}-${debugPath}\n${stackTrace}`)
-    })
-    return rootState
-  }
+  const mkRootState = (): Lens<T> => Lens<T>(defaultInitialValue!)
   const rootStates: Map<RendererImpl<any, any>, Lens<T>> | undefined = defaultInitialValue === undefined ? undefined : new Map()
 
   return rec<StateContext<T>>(context => ({
@@ -94,8 +85,11 @@ export function createStateContext<T> (defaultInitialValue?: T): StateContext<T>
         if (parent.providedContexts.has(context)) {
           const state = parent.providedContexts.get(context)
           component.consumedContexts.set(context, state)
-          // Need to explicitly track state since it isn't ours
-          VComponent.trackState(component, state, `consumed-context-changed-${contextId}`)
+          if (parent.indirectChildren !== null) {
+            // Need to explicitly track state since it isn't ours
+            // (if we're not using indirect children we don't, because the parent update will guarantee child updates)
+            VComponent.trackState(component, state, `consumed-context-changed-${contextId}`)
+          }
           return state
         }
       }
@@ -117,11 +111,13 @@ export function createStateContext<T> (defaultInitialValue?: T): StateContext<T>
           rootState = rootStates.get(renderer)!
         } else {
           // First time anyone accessed root so we need to create it
-          rootState = mkRootState(renderer)
+          rootState = mkRootState()
           rootStates.set(renderer, rootState)
         }
         component.consumedContexts.set(context, rootState)
         // Need to explicitly track state since it isn't ours
+        // (even without indirect children, since the state doesn't belong to our parent,
+        //  it doesn't belong to any component)
         VComponent.trackState(component, rootState, `consumed-context-changed-${contextId}`)
         return rootState
       }

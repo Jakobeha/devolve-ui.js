@@ -66,7 +66,9 @@ export class TerminalRendererImpl extends RendererImpl<VRender, AssetCacher> {
     this.positionStrictness = positionStrictness
 
     // Configure input
-    this.input.setRawMode(true)
+    if (this.input.isTTY) {
+      this.input.setRawMode(true)
+    }
     this.input.setEncoding('utf8')
     readline.emitKeypressEvents(this.input)
 
