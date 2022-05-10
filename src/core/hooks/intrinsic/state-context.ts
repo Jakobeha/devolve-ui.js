@@ -1,13 +1,14 @@
-import { getRenderer, getVComponent, isDebugMode, VComponent } from 'core/component'
+import { Context } from 'core/hooks/intrinsic/context'
+import { getRenderer, getVComponent, isDebugMode, iterVComponentsStackTopDown, VComponent } from 'core/component'
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
-import type { Context } from 'core/hooks/intrinsic/context'
+import type { PropsContext } from 'core/hooks/intrinsic/props-context'
 import { useState } from 'core/hooks/intrinsic/state-dynamic'
 import { RendererImpl } from 'renderer/common'
 import { rec } from '@raycenity/misc-ts'
 import { Lens } from 'core/lens'
 
 /**
- * Like {@link Context}, allows you to implicitly pass a value from parent to children.
+ * Like {@link PropsContext}, allows you to implicitly pass a value from parent to children.
  * However, now the context is also a state and can be mutated by children.
  *
  * Usage:
@@ -31,7 +32,7 @@ import { Lens } from 'core/lens'
  *
  * @see {@link Context}
  */
-export interface StateContext<T> {
+export interface StateContext<T> extends Context {
   /** children `useConsume` will point to this state context.
    * Kind of like `useState(initialValue)` but accessible to children. */
   useProvide: (initialValue: T) => Lens<T>
@@ -77,32 +78,57 @@ export function createStateContext<T> (defaultInitialValue?: T): StateContext<T>
       if (component.providedContexts.has(context)) {
         throw new Error('This context was already provided in this component')
       }
+      // Don't need to explicitly track state since it's ours, so state is tracked implicitly
       const state = useState(value)
-      VComponent.setProvidedContext(component, context, state, true, `state-context-${contextId}`)
+      VComponent.setProvidedContext(component, context, state)
       return state
     },
     useConsume: (): Lens<T> | null => {
+      // Use assigned
       const component = getVComponent()
       if (component.consumedContexts.has(context)) {
         return component.consumedContexts.get(context)
       }
-      /* // Current component needs explicit trackState since it didn't create the state
-      VComponent.trackState(component, state, `consumed-context-changed-${contextId}`) */
+      // Try to find in hierarchy
+      for (const parent of iterVComponentsStackTopDown()) {
+        if (parent.providedContexts.has(context)) {
+          const state = parent.providedContexts.get(context)
+          component.consumedContexts.set(context, state)
+          // Need to explicitly track state since it isn't ours
+          VComponent.trackState(component, state, `consumed-context-changed-${contextId}`)
+          return state
+        }
+      }
+      // Not found
       component.consumedContexts.set(context, null)
       return null
     },
     useConsumeRoot: (): Lens<T> => {
+      // Use assigned
+      const component = getVComponent()
+      if (component.consumedContexts.has(context)) {
+        return component.consumedContexts.get(context)
+      }
+      // Get root state
       if (rootStates !== undefined) {
         const renderer = getRenderer()
+        let rootState: Lens<T>
         if (rootStates.has(renderer)) {
-          return rootStates.get(renderer)!
+          rootState = rootStates.get(renderer)!
         } else {
-          const rootState = mkRootState(renderer)
+          // First time anyone accessed root so we need to create it
+          rootState = mkRootState(renderer)
           rootStates.set(renderer, rootState)
-          return rootState
         }
+        component.consumedContexts.set(context, rootState)
+        // Need to explicitly track state since it isn't ours
+        VComponent.trackState(component, rootState, `consumed-context-changed-${contextId}`)
+        return rootState
       }
+      // There is no root state
       throw new Error('This context was not created with a defaultInitialValue, so it has no root state')
-    }
+    },
+    isStateContext: true,
+    debugId: `state-#${contextId}`
   }))
 }

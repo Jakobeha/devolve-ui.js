@@ -240,6 +240,8 @@ const Child = () => {
 }
 ```
 
+Regular (non-state) contexts are called **props contexts** and are essentially implicit `props` passed from parents to their children. State contexts are essentially implicit `state` passed from parents to their children. See [this article](https://jakobeha.github.io/devolve-ui/docs/model-in-ui.md) for more explanation.
+
 ## Implementation
 
 [Source](https://github.com/Jakobeha/devolve-ui)

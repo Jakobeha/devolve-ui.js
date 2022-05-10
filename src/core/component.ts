@@ -1,9 +1,9 @@
-import { Context } from 'core/hooks/intrinsic/context'
 import { PLATFORM } from 'core/platform'
 import { PixiComponent, VNode } from 'core/vdom'
 import { RendererImpl } from 'renderer/common'
 import { Lens } from 'core/lens'
 import { assert } from '@raycenity/misc-ts'
+import { Context } from 'core/hooks/intrinsic/context'
 
 type PendingUpdateDetails = string
 
@@ -11,15 +11,18 @@ const MAX_RECURSIVE_UPDATES_BEFORE_LOOP_DETECTED = 100
 
 export interface VComponent<Props = any> {
   readonly node: Partial<VNode>
-  children: Record<string, VComponent>
+  /** children in the `VComponent` build tree (and `VNode` tree) */
+  readonly children: Map<string, VComponent>
+  /** Siblings in the `VComponent` build tree, but children in the `VNode` tree */
+  indirectChildren: VComponent[]
   readonly renderer: RendererImpl<any, any>
 
   props: Props
   construct: (props: Props) => VNode
   readonly state: any[]
-  readonly providedContexts: Map<Context<any>, any>
+  readonly providedContexts: Map<Context, any>
   /** We can cache the ancestor's provided context because parents / ancestors don't change */
-  readonly consumedContexts: Map<Context<any>, any>
+  readonly consumedContexts: Map<Context, any>
   readonly stateTrackers: Map<Lens<any>, (newValue: any, debugPath: string) => void>
   readonly effects: Array<() => void>
   readonly updateDestructors: Array<() => void>
@@ -51,6 +54,15 @@ export function getVComponent (): VComponent {
     throw new Error('No current component')
   }
   return VCOMPONENT_STACK[VCOMPONENT_STACK.length - 1]
+}
+
+/** **Warning:** While vcomponents higher in the stack are guaranteed to be ancestors of vcomponents lower,
+ * there may be gaps, since indirect children aren't part of the stack.
+ */
+export function * iterVComponentsStackTopDown (): Generator<VComponent> {
+  for (let i = VCOMPONENT_STACK.length - 1; i >= 0; i--) {
+    yield VCOMPONENT_STACK[i]
+  }
 }
 
 export function isDebugMode (): boolean {
@@ -90,8 +102,7 @@ export function VComponent<Props> (key: string, props: Props, construct: (props:
     const parent = getVComponent()
     // parent is being created = if there are any existing children, they're not being reused, they're a conflict
     if (!parent.isBeingCreated) {
-      if (key in parent.children) {
-        const vcomponent = parent.children[key]
+      for (const [key, vcomponent] of parent.children) {
         // If the componennt was already reused this update, it's a conflict. We fallthrough to newVComponent which throws the error
         if (!vcomponent.isFresh) {
           vcomponent.props = props
@@ -112,7 +123,8 @@ export module VComponent {
     // Create JS object
     const vcomponent: VComponent<Props> = {
       node: {},
-      children: {},
+      children: new Map(),
+      indirectChildren: [],
       renderer: getRenderer(),
 
       props,
@@ -145,21 +157,23 @@ export module VComponent {
       vcomponent.isFresh = false
     } else {
       const parent = getVComponent()
-      if (key in parent.children) {
+      if (parent.children.has(key)) {
         throw new Error(`multiple components with the same parent and key: ${key}. Please assign different keys so that devolve-ui can distinguish the components in updates`)
       }
-      parent.children[key] = vcomponent
+      parent.children.set(key, vcomponent)
     }
 
     // Do construct (component and renderer are already set)
     doUpdate(vcomponent, () => {
+      // Actually do construct and set vcomponent.node
       const constructed = construct(vcomponent.props)
       if (typeof constructed !== 'object' || Array.isArray(constructed)) {
         throw new Error('JSX components can only be nodes. Call this function normally, not with JSX')
       }
       Object.assign(vcomponent.node, constructed)
-
       const node: VNode = vcomponent.node as VNode
+
+      // Track if pixi component and on web
       if (node.type === 'pixi') {
         if (PLATFORM === 'web') {
           const pixiComponent: PixiComponent<any> = vcomponent.construct as PixiComponent<any>
@@ -170,6 +184,8 @@ export module VComponent {
           node.pixi = 'terminal'
         }
       }
+
+      // Mark done being created
       vcomponent.isBeingCreated = false
     })
     return vcomponent.node as VNode
@@ -233,11 +249,49 @@ export module VComponent {
     }
 
     withVComponent(vcomponent, () => {
+      // Mark component as being updated
       vcomponent.isBeingUpdated = true
+
+      // Clear indirect children and remember old
+      const prevIndirectChildren: VComponent[] = vcomponent.indirectChildren
+      vcomponent.indirectChildren = []
+
+      // Remove the node's vcomponent (FUTURE: make a list if we allow multiple components to share a node)
+      delete vcomponent.node.component
+
       // This will update state, add events, etc.
       body()
+
+      // Set the node's vcomponent (FUTURE: make a list if we allow multiple components to share a node)
+      // This is necessary to find indirect children
+      vcomponent.node.component = vcomponent
+
+      // Remove stale children
       clearFreshAndRemoveStaleChildren(vcomponent)
+
+      // Add indirect children (children in the VNode tree but not component build tree)
+      // Also need to assign their providers
+      const node = vcomponent.node as VNode
+      if (node.type === 'box') {
+        for (const child of node.children) {
+          if (child.component !== undefined) {
+            vcomponent.indirectChildren.push(child.component)
+          }
+        }
+      }
+
+      // Update contexts in old / new indirect children
+      const oldIndirectChildren = prevIndirectChildren.filter(child => !vcomponent.indirectChildren.includes(child))
+      const newIndirectChildren = vcomponent.indirectChildren.filter(child => !prevIndirectChildren.includes(child))
+      for (const child of oldIndirectChildren) {
+        removeProvidedContexts(vcomponent, child)
+      }
+      for (const child of newIndirectChildren) {
+        addProvidedContexts(vcomponent, child)
+      }
+
       vcomponent.isBeingUpdated = false
+
       runEffects(vcomponent)
     })
     if (vcomponent.hasPendingUpdates) {
@@ -252,12 +306,13 @@ export module VComponent {
   }
 
   function clearFreshAndRemoveStaleChildren (vcomponent: VComponent): void {
-    for (const [childKey, child] of Object.entries(vcomponent.children)) {
+    // Need to copy map because we're going to remove some entries
+    for (const [childKey, child] of new Map(vcomponent.children)) {
       if (child.isFresh) {
         child.isFresh = false
       } else {
         destroy(child)
-        delete vcomponent.children[childKey]
+        vcomponent.children.delete(childKey)
       }
     }
   }
@@ -312,26 +367,60 @@ export module VComponent {
     Lens.removeOnSet(state, vcomponent.stateTrackers.get(state)!)
   }
 
+  function setConsumedContexts (vcomponent: VComponent, context: Context, value: any): void {
+    if (vcomponent.consumedContexts.has(context) && vcomponent.consumedContexts.get(context) !== value) {
+      if (context.isStateContext) {
+        const oldValue = vcomponent.consumedContexts.get(context)
+        if (oldValue !== null) {
+          untrackState(vcomponent, oldValue)
+        }
+        trackState(vcomponent, value, `changed-provided-state-of-${context.debugId}`)
+      }
+      vcomponent.consumedContexts.set(context, value)
+      update(vcomponent, `changed-provided-context-to-${context.debugId}`)
+    }
+    for (const child of vcomponent.children.values()) {
+      setConsumedContexts(child, context, value)
+    }
+  }
+
+  function unsetConsumedContexts (vcomponent: VComponent, context: Context, value: any): void {
+    if (vcomponent.consumedContexts.has(context)) {
+      assert(vcomponent.consumedContexts.get(context) === value, `broken invariant: context ${context.debugId} is not set to ${value.toString() as string} (being unset but we want to make sure we're unsetting the right context)`)
+      if (context.isStateContext) {
+        const oldValue = vcomponent.consumedContexts.get(context)
+        if (oldValue !== null) {
+          untrackState(vcomponent, oldValue)
+        }
+      }
+      vcomponent.consumedContexts.delete(context)
+      update(vcomponent, `unset-provided-context-${context.debugId}`)
+    }
+    for (const child of vcomponent.children.values()) {
+      unsetConsumedContexts(child, context, value)
+    }
+  }
+
+  /** Sets this component's provided contexts in the given child */
+  function addProvidedContexts (vcomponent: VComponent, child: VComponent): void {
+    for (const [context, value] of vcomponent.providedContexts) {
+      setConsumedContexts(child, context, value)
+    }
+  }
+
+  /** Unsets this component's provided contexts in the given child */
+  function removeProvidedContexts (vcomponent: VComponent, child: VComponent): void {
+    for (const [context, value] of vcomponent.providedContexts) {
+      unsetConsumedContexts(child, context, value)
+    }
+  }
+
   /** Sets the value of the provided context in the component, and consumed context in child components */
-  export function setProvidedContext (vcomponent: VComponent, context: Context<any>, value: any, valueIsState: boolean, contextId: string): void {
+  export function setProvidedContext (vcomponent: VComponent, context: Context, value: any): void {
     assert(!vcomponent.providedContexts.has(context), 'setProvidedContext called multiple times with the same provided context in the same update')
     vcomponent.providedContexts.set(context, value)
-    const setConsumedContextsRecursively = (vcomponent: VComponent): void => {
-      for (const child of Object.values(vcomponent.children)) {
-        if (child.consumedContexts.has(context) && child.consumedContexts.get(context) !== value) {
-          if (valueIsState) {
-            const oldValue = child.consumedContexts.get(context)
-            if (oldValue !== null) {
-              untrackState(child, oldValue)
-            }
-            trackState(child, value, `changed-provided-state${contextId}`)
-          }
-          child.consumedContexts.set(context, value)
-          update(child, `changed-provided-to-${contextId}`)
-        }
-        setConsumedContextsRecursively(child)
-      }
+    for (const child of Object.values(vcomponent.children)) {
+      setConsumedContexts(child, context, value)
     }
-    setConsumedContextsRecursively(vcomponent)
   }
 }

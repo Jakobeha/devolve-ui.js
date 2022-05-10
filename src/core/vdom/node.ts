@@ -1,11 +1,13 @@
 import { BorderAttrs, BoxAttrs, ColorAttrs, PixiAttrs, SourceAttrs, TextAttrs } from 'core/vdom/attrs'
 import type { DisplayObject } from 'pixi.js'
+import { VComponent } from 'core/component'
 
 export type VNode = VBox | VText | VColor | VBorder | VSource | VPixi<any>
 
 interface VNodeCommon {
   // Really don't want to use both null and undefined
   parent?: VBox | 'none'
+  component?: VComponent
 }
 
 export interface VBox extends BoxAttrs, VNodeCommon {
