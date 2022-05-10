@@ -24,36 +24,38 @@ export function useEffect (effect: () => void | (() => void), rerun: UseEffectRe
   const component = getVComponent()
   if (rerun === 'on-update') {
     component.effects.push(() => {
-      const result = effect()
-      if (typeof result === 'function') {
-        component.updateDestructors.push(result)
+      const destructor = effect()
+      if (typeof destructor === 'function') {
+        component.updateDestructors.push(destructor)
         // Update destructors aren't run on permanent destruct
-        component.permanentDestructors.push(result)
+        component.permanentDestructors.push(destructor)
       }
     })
   } else if (rerun === 'on-create') {
     if (component.isBeingCreated) {
       component.effects.push(() => {
-        const result = effect()
-        if (typeof result === 'function') {
-          component.permanentDestructors.push(result)
+        const destructor = effect()
+        if (typeof destructor === 'function') {
+          component.permanentDestructors.push(destructor)
         }
       })
     }
   } else if ('onChange' in rerun) {
     const ourMemo = rerun.onChange
     const compare = rerun.compare ?? ((lhs: any, rhs: any) => lhs === rhs)
-    const [memo, setMemo] = _useDynamicState(ourMemo, false)
+    const [getMemo, setMemo] = _useDynamicState(ourMemo, false)
+    const [getDestructor, setDestructor] = _useDynamicState<(() => void) | null>(null, false)
+    const memo = getMemo()
     component.effects.push(() => {
       let doEffect = false
       if (component.isBeingCreated) {
         doEffect = true
       } else {
-        if (memo().length !== ourMemo.length) {
+        if (memo.length !== ourMemo.length) {
           throw new Error(`number of dependencies changed in between component update (you can't do that): ${memo.length} to ${ourMemo.length}`)
         }
-        for (let i = 0; i < memo().length; i++) {
-          if (!compare(memo()[i], ourMemo[i])) {
+        for (let i = 0; i < memo.length; i++) {
+          if (!compare(memo[i], ourMemo[i])) {
             doEffect = true
             break
           }
@@ -61,9 +63,14 @@ export function useEffect (effect: () => void | (() => void), rerun: UseEffectRe
       }
 
       if (doEffect) {
-        const result = effect()
-        if (typeof result === 'function') {
-          throw new Error('you can\'t have a destructor in an update with dependencies, because we don\'t know when the dependencies will change! Put your destructor code directly in useEffect and track the dependency change for something similar')
+        const oldDestructor = getDestructor()
+        if (oldDestructor !== null) {
+          component.permanentDestructors.splice(component.permanentDestructors.indexOf(oldDestructor), 1)
+        }
+        const destructor = effect()
+        if (typeof destructor === 'function') {
+          setDestructor(destructor)
+          component.permanentDestructors.push(destructor)
         }
       }
     })
@@ -76,18 +83,18 @@ export function useEffect (effect: () => void | (() => void), rerun: UseEffectRe
     const [lastDepsWereDefined, setLastDepsWereDefined] = _useDynamicState(false, false)
     if (depsWereDefined && !lastDepsWereDefined()) {
       component.effects.push(() => {
-        const result = effect()
-        if (typeof result === 'function') {
+        const destructor = effect()
+        if (typeof destructor === 'function') {
           const updateDestructor = (): void => {
             if (!lastDepsWereDefined()) {
-              result()
+              destructor()
             } else {
               component.nextUpdateDestructors.push(updateDestructor)
             }
           }
           component.updateDestructors.push(updateDestructor)
           // Update destructors aren't run on permanent destruct (we take advantage of that here w/ different update destructor)
-          component.permanentDestructors.push(result)
+          component.permanentDestructors.push(destructor)
         }
       })
     }

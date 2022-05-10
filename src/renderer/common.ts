@@ -113,9 +113,9 @@ export abstract class RendererImpl<VRender, AssetCacher extends CoreAssetCacher>
       this.cachedRenders.delete(nextNode)
       nextNode = nextNode.parent!
     }
-    if (nextNode === 'none') {
-      this.needsRerender = true
-    }
+    // if (nextNode === 'none') {
+    this.needsRerender = true
+    // }
   }
 
   reroot<Props> (props?: Props, root?: (props: Props) => VNode): void {

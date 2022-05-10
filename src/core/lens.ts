@@ -13,7 +13,7 @@ type Object = object | Function
 
 export type Lens<T> =
   (T extends object ? { readonly [K in keyof T]: Lens<T[K]> } : {})
-  & (T extends Array<infer E> ? E[] : {})
+  & (T extends Array<infer E> ? Array<Omit<E, number>> : {})
   & (T extends Set<infer E> ? Set<E> : {})
   & (T extends Map<infer K, infer V> ? Map<K, V> : {}) & {
     readonly [LENS_TARGET]: T
@@ -132,7 +132,9 @@ function lensObject<T extends Object> (value: T, debugPath: string): Lens<T> {
                           ? Set.prototype
                           : null
             const isIntrinsic = prototype !== null && INTRINSIC_PROTOTYPES.has(prototype)
-            if (isIntrinsic) {
+            // Index into array is treated as a normal property
+            const isArrayIndex = Array.isArray(value) && typeof p === 'number'
+            if (isIntrinsic && !isArrayIndex) {
               const intrinsic = Reflect.get(value, p, receiver)
               if (typeof intrinsic === 'function') {
                 const isPure = typeof p !== 'string' ? undefined : INTRINSIC_PROTOTYPES.get(prototype)!.get(p)
