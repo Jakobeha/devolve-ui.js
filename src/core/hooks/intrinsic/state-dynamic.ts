@@ -11,7 +11,7 @@ import { Lens } from 'core/lens'
 export function useState<T> (initialValue: T): Lens<T> {
   const component = getVComponent()
   const index = component.nextStateIndex++
-  if (component.isBeingCreated) {
+  if (VComponent.isBeingCreated(component)) {
     if (component.state.length !== index) {
       throw new Error(`sanity check failed: state length (${component.state.length}) !== index (${index})`)
     }
@@ -55,7 +55,7 @@ export function useDynamic<T> (value: T): () => T {
 export function _useDynamicState<T> (initialState: T, doUpdate: boolean): [() => T, (newState: T) => void] {
   const component = getVComponent()
   const index = component.nextStateIndex++
-  if (component.isBeingCreated) {
+  if (VComponent.isBeingCreated(component)) {
     if (component.state.length !== index) {
       throw new Error(`sanity check failed: state length (${component.state.length}) !== index (${index})`)
     }

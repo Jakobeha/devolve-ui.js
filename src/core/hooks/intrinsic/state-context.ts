@@ -85,11 +85,6 @@ export function createStateContext<T> (defaultInitialValue?: T): StateContext<T>
         if (parent.providedContexts.has(context)) {
           const state = parent.providedContexts.get(context)
           component.consumedContexts.set(context, state)
-          if (parent.indirectChildren !== null) {
-            // Need to explicitly track state since it isn't ours
-            // (if we're not using indirect children we don't, because the parent update will guarantee child updates)
-            VComponent.trackState(component, state, `consumed-context-changed-${contextId}`)
-          }
           return state
         }
       }

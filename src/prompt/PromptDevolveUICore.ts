@@ -15,10 +15,10 @@ export interface PromptProps<PromptKeys extends string | number | symbol> {
 }
 
 export abstract class PromptDevolveUICore<Props extends PromptProps<PromptKeys>, PromptKeys extends string | number | symbol> extends DevolveUICore<Props> {
-  protected abstract mkRenderer (root: () => VNode, opts?: RenderOptions): Renderer
+  protected abstract mkRenderer (root: () => VComponent, opts?: RenderOptions): Renderer
 
   /** Renders a HUD with the given content and doesn't clear, useful for logging */
-  protected static _renderSnapshot<Props>(mkRenderer: (root: () => VNode, opts?: RenderOptions) => Renderer, RootComponent: (props: Props) => VNode, props: Props, opts?: RenderOptions): void {
+  protected static _renderSnapshot<Props>(mkRenderer: (root: () => VComponent, opts?: RenderOptions) => Renderer, RootComponent: (props: Props) => VNode, props: Props, opts?: RenderOptions): void {
     const renderer = mkRenderer(() => VComponent('RootComponent', props, RootComponent), opts)
     renderer.forceRerender()
     renderer.dispose()

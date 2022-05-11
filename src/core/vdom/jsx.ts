@@ -6,18 +6,18 @@ import {
   JSXTextAttrs
 } from 'core/vdom/attrs'
 import { SubLayout } from 'core/vdom/bounds'
-import { VBorder, VBox, VColor, VNode, VSource, VText } from 'core/vdom/node'
+import { VBorder, VBox, VColor, VNode, VNodeNode, VSource, VText } from 'core/vdom/node'
 import { ExplicitPartial, IntoArray } from '@raycenity/misc-ts'
 import { jsxToNormalAttrs, jsxColorToNormalAttrs } from 'core/vdom/jsx-helpers'
 
 export type VJSX =
-  VNode |
+  VNodeNode |
   null |
   undefined |
   VJSX[]
 
 export module VJSX {
-  export function collapse (jsx: VJSX): VNode[] {
+  export function collapse (jsx: VJSX): VNodeNode[] {
     if (Array.isArray(jsx)) {
       return jsx.flatMap(collapse)
     } else if (jsx === null || jsx === undefined) {

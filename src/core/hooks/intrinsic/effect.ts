@@ -1,4 +1,4 @@
-import { getVComponent } from 'core/component'
+import { getVComponent, VComponent } from 'core/component'
 import { _useDynamicState } from 'core/hooks/intrinsic/state-dynamic'
 
 export interface UseEffectRerunOnChange<Dep> { onChange: Dep[], compare?: (lhs: Dep, rhs: Dep) => boolean }
@@ -32,7 +32,7 @@ export function useEffect (effect: () => void | (() => void), rerun: UseEffectRe
       }
     })
   } else if (rerun === 'on-create') {
-    if (component.isBeingCreated) {
+    if (VComponent.isBeingCreated(component)) {
       component.effects.push(() => {
         const destructor = effect()
         if (typeof destructor === 'function') {
@@ -41,7 +41,7 @@ export function useEffect (effect: () => void | (() => void), rerun: UseEffectRe
       })
     }
   } else if ('onChange' in rerun) {
-    const isCreated = component.isBeingCreated
+    const isCreated = VComponent.isBeingCreated(component)
     const ourMemo = rerun.onChange
     const compare = rerun.compare ?? ((lhs: any, rhs: any) => lhs === rhs)
     const [getMemo, setMemo] = _useDynamicState(ourMemo, false)

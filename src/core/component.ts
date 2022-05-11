@@ -1,5 +1,5 @@
 import { PLATFORM } from 'core/platform'
-import { PixiComponent, VNode } from 'core/vdom'
+import { PixiComponent, VNode, VNodeNode } from 'core/vdom'
 import { RendererImpl } from 'renderer/common'
 import { Lens } from 'core/lens'
 import { assert } from '@raycenity/misc-ts'
@@ -8,15 +8,12 @@ import { Context } from 'core/hooks/intrinsic/context'
 type PendingUpdateDetails = string
 
 export interface VComponent<Props = any> {
-  readonly node: Partial<VNode>
-  /** children in the `VComponent` build tree (and `VNode` tree) */
-  readonly children: Map<string, VComponent>
-  /** Siblings in the `VComponent` build tree, but children in the `VNode` tree */
-  indirectChildren: VComponent[] | null
-  readonly renderer: RendererImpl<any, any>
+  readonly type: 'component'
+  readonly key: string
 
   props: Props
   construct: (props: Props) => VNode
+  node: VNode | null
   readonly state: any[]
   readonly providedContexts: Map<Context, any>
   /** We can cache the ancestor's provided context because parents / ancestors don't change */
@@ -27,7 +24,10 @@ export interface VComponent<Props = any> {
   nextUpdateDestructors: Array<() => void>
   readonly permanentDestructors: Array<() => void>
 
-  isBeingCreated: boolean
+  /** children in the `VComponent` build tree (and `VNode` tree) */
+  readonly children: Map<string, VComponent>
+  readonly renderer: RendererImpl<any, any>
+
   isBeingUpdated: boolean
   isFresh: boolean
   isDead: boolean
@@ -37,7 +37,7 @@ export interface VComponent<Props = any> {
 }
 
 const RENDERER_STACK: Array<RendererImpl<any, any>> = []
-const VCOMPONENT_STACK: VComponent[] = []
+let VCOMPONENT_STACK: VComponent[] = []
 
 export function getRenderer (): RendererImpl<any, any> {
   if (RENDERER_STACK.length === 0) {
@@ -80,17 +80,20 @@ function withRenderer<T> (vrenderer: RendererImpl<any, any>, body: () => T): T {
   }
 }
 
-export function VRoot<T extends VNode> (renderer: RendererImpl<any, any>, construct: () => T): T {
+export function VRoot<T extends VNodeNode> (renderer: RendererImpl<any, any>, construct: () => T): T {
+  const stack = VCOMPONENT_STACK
+  VCOMPONENT_STACK = []
   const node = withRenderer(renderer, construct)
-  node.parent = 'none'
+  VNodeNode.update(node, 'init:')
+  VCOMPONENT_STACK = stack
   return node
 }
 
-export function VComponent<Props> (key: string, props: Props, construct: (props: Props) => VNode): VNode {
+export function VComponent<Props> (key: string, props: Props, construct: (props: Props) => VNode): VComponent {
   if (VCOMPONENT_STACK.length !== 0) {
     const parent = getVComponent()
     // parent is being created = if there are any existing children, they're not being reused, they're a conflict
-    if (!parent.isBeingCreated) {
+    if (!VComponent.isBeingCreated(parent)) {
       for (const [key, vcomponent] of parent.children) {
         // If the componennt was already reused this update, it's a conflict. We fallthrough to newVComponent which throws the error
         if (!vcomponent.isFresh) {
@@ -98,7 +101,7 @@ export function VComponent<Props> (key: string, props: Props, construct: (props:
           vcomponent.construct = construct
           vcomponent.isFresh = true
           VComponent.update(vcomponent, `child ${key}`)
-          return vcomponent.node as VNode
+          return vcomponent
         }
       }
     }
@@ -108,16 +111,15 @@ export function VComponent<Props> (key: string, props: Props, construct: (props:
 }
 
 export module VComponent {
-  export function create<Props> (key: string, props: Props, construct: (props: Props) => VNode): VNode {
+  export function create<Props> (key: string, props: Props, construct: (props: Props) => VNode): VComponent {
     // Create JS object
     const vcomponent: VComponent<Props> = {
-      node: {},
-      children: new Map(),
-      indirectChildren: GLOBAL_COMPONENT_OPTS.useIndirectChildren ? [] : null,
-      renderer: getRenderer(),
+      type: 'component',
+      key,
 
       props,
       construct,
+      node: null,
       state: [],
       providedContexts: new Map(),
       consumedContexts: new Map(),
@@ -127,7 +129,9 @@ export module VComponent {
       nextUpdateDestructors: [],
       permanentDestructors: [],
 
-      isBeingCreated: true,
+      children: new Map(),
+      renderer: getRenderer(),
+
       isBeingUpdated: false,
       isFresh: true,
       isDead: false,
@@ -139,10 +143,10 @@ export module VComponent {
     // Set parent
     if (VCOMPONENT_STACK.length === 0) {
       const currentRenderer = getRenderer()
-      if (currentRenderer.rootComponent !== null) {
+      if (currentRenderer.root !== null) {
         throw new Error('there can only be one root component')
       }
-      currentRenderer.rootComponent = vcomponent
+      currentRenderer.root = vcomponent
       vcomponent.isFresh = false
     } else {
       const parent = getVComponent()
@@ -152,32 +156,7 @@ export module VComponent {
       parent.children.set(key, vcomponent)
     }
 
-    // Do construct (component and renderer are already set)
-    doUpdate(vcomponent, () => {
-      // Actually do construct and set vcomponent.node
-      const constructed = construct(vcomponent.props)
-      if (typeof constructed !== 'object' || Array.isArray(constructed)) {
-        throw new Error('JSX components can only be nodes. Call this function normally, not with JSX')
-      }
-      VNode.convertInto(vcomponent.node, constructed)
-      const node: VNode = vcomponent.node
-
-      // Track if pixi component and on web
-      if (node.type === 'pixi') {
-        if (PLATFORM === 'web') {
-          const pixiComponent: PixiComponent<any> = vcomponent.construct as PixiComponent<any>
-          const PIXI = (globalThis as unknown as { PIXI: typeof import('pixi.js') }).PIXI
-          node.pixi = pixiComponent.lifecycle.mkPixi(PIXI)
-          pixiComponent.pixis.push(node.pixi)
-        } else {
-          node.pixi = 'terminal'
-        }
-      }
-
-      // Mark done being created
-      vcomponent.isBeingCreated = false
-    })
-    return vcomponent.node as VNode
+    return vcomponent
   }
 
   export function update (vcomponent: VComponent, details: PendingUpdateDetails | null): void {
@@ -187,6 +166,28 @@ export module VComponent {
       if (isDebugMode() && details !== null) {
         vcomponent.recursiveUpdateStackTrace.push(details)
       }
+    } else if (vcomponent.node === null) {
+      // Do construct (component and renderer are already set)
+      withRenderer(vcomponent.renderer, () => doUpdate(vcomponent, () => {
+        // Actually do construct and set vcomponent.node
+        const node = vcomponent.construct(vcomponent.props)
+        vcomponent.node = node
+        if (typeof node !== 'object' || Array.isArray(node)) {
+          throw new Error('JSX components can only be nodes. Call this function normally, not with JSX')
+        }
+
+        // Create pixi if pixi component and on web
+        if (node.type === 'pixi') {
+          if (PLATFORM === 'web') {
+            const pixiComponent: PixiComponent<any> = vcomponent.construct as PixiComponent<any>
+            const PIXI = (globalThis as unknown as { PIXI: typeof import('pixi.js') }).PIXI
+            node.pixi = pixiComponent.lifecycle.mkPixi(PIXI)
+            pixiComponent.pixis.push(node.pixi)
+          } else {
+            node.pixi = 'terminal'
+          }
+        }
+      }))
     } else {
       // Reset
       runUpdateDestructors(vcomponent)
@@ -196,15 +197,16 @@ export module VComponent {
       // Do construct
       // We also need to use VComponent's renderer because the current renderer might be different
       withRenderer(vcomponent.renderer, () => doUpdate(vcomponent, () => {
-        VNode.convertInto(vcomponent.node, vcomponent.construct(vcomponent.props))
+        const node = vcomponent.construct(vcomponent.props)
+        vcomponent.node = node
 
-        const node: VNode = vcomponent.node
+        // Update pixi if pixi component and on web
         if (node.type === 'pixi' && node.pixi !== 'terminal') {
           const pixiComponent: PixiComponent<any> = vcomponent.construct as PixiComponent<any>
           pixiComponent.lifecycle.update?.(node.pixi)
         }
       }))
-      vcomponent.renderer.invalidate(vcomponent.node as VNode)
+      vcomponent.renderer.invalidate(vcomponent.node)
     }
   }
 
@@ -238,49 +240,13 @@ export module VComponent {
     }
 
     withVComponent(vcomponent, () => {
-      const useIndirectChildren = vcomponent.indirectChildren !== null
-
-      // Mark component as being updated
       vcomponent.isBeingUpdated = true
-
-      const prevIndirectChildren: VComponent[] | null = vcomponent.indirectChildren
-      if (useIndirectChildren) {
-        // Clear indirect children and remember old
-        vcomponent.indirectChildren = []
-
-        // Remove the node's vcomponent (FUTURE: make a list if we allow multiple components to share a node)
-        delete vcomponent.node.component
-      }
 
       // This will update state, add events, etc.
       body()
 
-      if (useIndirectChildren) {
-        // Set the node's vcomponent (FUTURE: make a list if we allow multiple components to share a node)
-        // This is necessary to find indirect children
-        vcomponent.node.component = vcomponent
-      }
-
-      // Remove stale children
       clearFreshAndRemoveStaleChildren(vcomponent)
-
-      if (useIndirectChildren) {
-        // Add indirect children (children in the VNode tree but not component build tree)
-        addIndirectChildren(vcomponent)
-
-        // Update contexts in old / new indirect children
-        const oldIndirectChildren = prevIndirectChildren!.filter(child => !vcomponent.indirectChildren!.includes(child))
-        const newIndirectChildren = vcomponent.indirectChildren!.filter(child => !prevIndirectChildren!.includes(child))
-        for (const child of oldIndirectChildren) {
-          removeProvidedContexts(vcomponent, child)
-        }
-        for (const child of newIndirectChildren) {
-          addProvidedContexts(vcomponent, child)
-        }
-      }
-
       vcomponent.isBeingUpdated = false
-
       runEffects(vcomponent)
     })
     if (vcomponent.hasPendingUpdates) {
@@ -350,71 +316,13 @@ export module VComponent {
     Lens.onSet(state, stateTracker)
   }
 
-  /** Makes the given component no longer update when the given state changes. */
-  export function untrackState<T> (vcomponent: VComponent, state: Lens<T>): void {
-    assert(vcomponent.stateTrackers.has(state), 'state \'[omitted]\' is not tracked')
-    Lens.removeOnSet(state, vcomponent.stateTrackers.get(state)!)
-  }
-
-  function addIndirectChildren (vcomponent: VComponent, node: VNode = vcomponent.node as VNode): void {
-    assert(vcomponent.indirectChildren !== null, 'addIndirectChildren: component isn\'t using indirect children')
-    if (node.type === 'box') {
-      for (const child of node.children) {
-        if (child.component !== undefined) {
-          vcomponent.indirectChildren.push(child.component)
-        }
-        addIndirectChildren(vcomponent, child)
-      }
-    }
-  }
-
   function setConsumedContexts (vcomponent: VComponent, context: Context, value: any): void {
-    const isUsingIndirectChildren = vcomponent.indirectChildren !== null
     if (vcomponent.consumedContexts.has(context) && vcomponent.consumedContexts.get(context) !== value) {
-      if (context.isStateContext && isUsingIndirectChildren) {
-        const oldValue = vcomponent.consumedContexts.get(context)
-        if (oldValue !== null) {
-          untrackState(vcomponent, oldValue)
-        }
-        trackState(vcomponent, value, `changed-provided-state-of-${context.debugId}`)
-      }
       vcomponent.consumedContexts.set(context, value)
       update(vcomponent, `changed-provided-context-to-${context.debugId}`)
     }
     for (const child of vcomponent.children.values()) {
       setConsumedContexts(child, context, value)
-    }
-  }
-
-  function unsetConsumedContexts (vcomponent: VComponent, context: Context, value: any): void {
-    const isUsingIndirectChildren = vcomponent.indirectChildren !== null
-    if (vcomponent.consumedContexts.has(context)) {
-      assert(vcomponent.consumedContexts.get(context) === value, `broken invariant: context ${context.debugId} is not set to ${value.toString() as string} (being unset but we want to make sure we're unsetting the right context)`)
-      if (context.isStateContext && isUsingIndirectChildren) {
-        const oldValue = vcomponent.consumedContexts.get(context)
-        if (oldValue !== null) {
-          untrackState(vcomponent, oldValue)
-        }
-      }
-      vcomponent.consumedContexts.delete(context)
-      update(vcomponent, `unset-provided-context-${context.debugId}`)
-    }
-    for (const child of vcomponent.children.values()) {
-      unsetConsumedContexts(child, context, value)
-    }
-  }
-
-  /** Sets this component's provided contexts in the given child */
-  function addProvidedContexts (vcomponent: VComponent, child: VComponent): void {
-    for (const [context, value] of vcomponent.providedContexts) {
-      setConsumedContexts(child, context, value)
-    }
-  }
-
-  /** Unsets this component's provided contexts in the given child */
-  function removeProvidedContexts (vcomponent: VComponent, child: VComponent): void {
-    for (const [context, value] of vcomponent.providedContexts) {
-      unsetConsumedContexts(child, context, value)
     }
   }
 
@@ -426,17 +334,19 @@ export module VComponent {
       setConsumedContexts(child, context, value)
     }
   }
+
+  export function isBeingCreated (vcomponent: VComponent): boolean {
+    return vcomponent.node === null
+  }
 }
 
 export interface GlobalComponentOpts {
   maxRecursiveUpdatesBeforeLoopDetected: number
-  useIndirectChildren: boolean
   isDebugMode: boolean
 }
 
 export const DEFAULT_GLOBAL_COMPONENT_OPTS: GlobalComponentOpts = {
   maxRecursiveUpdatesBeforeLoopDetected: 100,
-  useIndirectChildren: true,
   isDebugMode: true
 }
 

@@ -4,31 +4,31 @@ import { Color, ColorSpec, LCHColor, RGBColor } from 'core/vdom/color'
 import type { DisplayObject } from 'pixi.js'
 
 export interface CommonAttrs {
-  bounds?: Bounds
-  visible?: boolean
-  key?: string
+  readonly bounds?: Bounds
+  readonly visible?: boolean
+  readonly key?: string
 }
 
 export interface BoxAttrs extends CommonAttrs {
-  sublayout?: SubLayout
+  readonly sublayout?: SubLayout
 }
 
 export interface TextAttrs extends CommonAttrs {
-  color: Color | null
-  wrapMode?: 'word' | 'char' | 'clip'
+  readonly color: Color | null
+  readonly wrapMode?: 'word' | 'char' | 'clip'
 }
 
 export interface ColorAttrs extends CommonAttrs {
-  color: Color
+  readonly color: Color
 }
 
 export interface BorderAttrs extends CommonAttrs {
-  color: Color | null
-  style: BorderStyle
+  readonly color: Color | null
+  readonly style: BorderStyle
 }
 
 export interface SourceAttrs extends CommonAttrs {
-  src: string
+  readonly src: string
 }
 
 export interface PixiAttrs<Pixi extends DisplayObject> extends CommonAttrs {
@@ -37,7 +37,7 @@ export interface PixiAttrs<Pixi extends DisplayObject> extends CommonAttrs {
    * *and* allows you to update the {@link DisplayObject}'s size from the bounding box,
    * which includes inferred size (you can return a different size), and column size.
    */
-  getSize?: (pixi: Pixi, bounds: BoundingBox, columnSize: Size) => Size
+  readonly getSize?: (pixi: Pixi, bounds: BoundingBox, columnSize: Size) => Size
 }
 
 export type JSXTextAttrs = JSXColorAttrs<TextAttrs>

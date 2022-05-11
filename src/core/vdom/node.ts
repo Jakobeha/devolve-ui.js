@@ -1,79 +1,74 @@
 import { BorderAttrs, BoxAttrs, ColorAttrs, PixiAttrs, SourceAttrs, TextAttrs } from 'core/vdom/attrs'
 import type { DisplayObject } from 'pixi.js'
 import { VComponent } from 'core/component'
+import { assert } from '@raycenity/misc-ts'
+
+// TODO: Rename VNode to VView
+export type VNodeNode = VNode | VComponent
+
+export module VNodeNode {
+  export function update (node: VNodeNode, updatePath: string): void {
+    updatePath += `/${node.key ?? ''}`
+    if (node.type === 'component') {
+      VComponent.update(node, updatePath)
+    } else if (node.type === 'box') {
+      node.children.forEach((child, index) => {
+        const updateSubpath = `${updatePath}[${index}]`
+        update(child, updateSubpath)
+      })
+    }
+  }
+
+  export function view (node: VNodeNode): VNode {
+    if (node.type === 'component') {
+      assert(node.node !== null, `tried to get view from uninitialized component: ${node.key}. It should've been initialized earlier`)
+      return node.node
+    } else {
+      return node
+    }
+  }
+}
 
 export type VNode = VBox | VText | VColor | VBorder | VSource | VPixi<any>
 
 interface VNodeCommon {
-  // Really don't want to use both null and undefined
-  parent?: VBox | 'none'
-  component?: VComponent
+  readonly type: string
 }
 
 export interface VBox extends BoxAttrs, VNodeCommon {
-  type: 'box'
-  children: VNode[]
+  readonly type: 'box'
+  readonly children: readonly VNodeNode[]
 }
 
 export interface VText extends TextAttrs, VNodeCommon {
-  type: 'text'
-  text: string
+  readonly type: 'text'
+  readonly text: string
 }
 
 export interface VColor extends ColorAttrs, VNodeCommon {
-  type: 'color'
+  readonly type: 'color'
 }
 
 export interface VBorder extends BorderAttrs, VNodeCommon {
-  type: 'border'
+  readonly type: 'border'
 }
 
 export interface VSource extends SourceAttrs, VNodeCommon {
-  type: 'source'
+  readonly type: 'source'
 }
 
 export interface VPixi<Pixi extends DisplayObject> extends PixiAttrs<Pixi>, VNodeCommon {
-  type: 'pixi'
+  readonly type: 'pixi'
   // Not doing null | undefined
-  pixi?: Pixi | 'terminal'
-}
-
-export module VNode {
-  export function convertInto<T extends VNode> (target: Partial<VNode>, newData: T): asserts target is T {
-    for (const prop in target) {
-      if (prop !== 'parent' && prop !== 'pixi') {
-        // eslint-disable-next-line @typescript-eslint/no-dynamic-delete
-        delete (target as any)[prop]
-      }
-    }
-    for (const prop in newData) {
-      if (prop === 'parent') {
-        throw new Error('new data cannot have parent')
-      } else if (prop === 'pixi') {
-        throw new Error('new data cannot have pixi')
-      } else {
-        (target as T)[prop] = newData[prop]
-        if (prop === 'children') {
-          const children = (target as VBox).children
-          for (const child of children) {
-            child.parent = target as VBox
-          }
-        }
-      }
-    }
-  }
+  pixi: Pixi | 'terminal' | null
 }
 
 export function VText (text: string, attrs: TextAttrs): VText {
   return { type: 'text', text, ...attrs }
 }
 
-export function VBox (children: VNode[], attrs: BoxAttrs): VBox {
-  const box: VBox = { type: 'box', children, ...attrs }
-  for (const child of box.children) {
-    child.parent = box
-  }
-  return box
+export function VBox (children: VNodeNode[], attrs: BoxAttrs): VBox {
+  return { type: 'box', children, ...attrs }
 }
 
 export function VColor (attrs: ColorAttrs): VColor {
@@ -89,5 +84,5 @@ export function VSource (attrs: SourceAttrs): VSource {
 }
 
 export function VPixi<Pixi extends DisplayObject> (attrs: PixiAttrs<Pixi>): VPixi<Pixi> {
-  return { type: 'pixi', ...attrs }
+  return { type: 'pixi', ...attrs, pixi: null }
 }

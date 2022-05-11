@@ -2,6 +2,7 @@ import type { Interface } from 'readline'
 import type { ReadStream, WriteStream } from 'tty'
 import { BorderStyle, BoundingBox, Color, Rectangle, Size, VNode } from 'core/vdom'
 import { CoreRenderOptions } from 'core/renderer'
+import { VComponent } from 'core/component'
 import { Key, range, Strings } from '@raycenity/misc-ts'
 import { terminalImage } from 'renderer/cli/terminal-image-min'
 import { CoreAssetCacher, RendererImpl, VRenderBatch } from 'renderer/common'
@@ -50,7 +51,7 @@ export class TerminalRendererImpl extends RendererImpl<VRender, AssetCacher> {
   private linesOutput: number = 0
   private readonly positionStrictness: 'strict' | 'loose'
 
-  constructor (root: () => VNode, opts: TerminalRenderOptions = {}) {
+  constructor (root: () => VComponent, opts: TerminalRenderOptions = {}) {
     super(new AssetCacher(), opts)
 
     let { input, output, interact, positionStrictness } = opts

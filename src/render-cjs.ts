@@ -3,9 +3,9 @@
 import { DevolveUICore, RenderOptions } from 'core/DevolveUICore'
 import { PromptDevolveUICore, PromptProps } from 'prompt/PromptDevolveUICore'
 import type { RendererImpl } from 'renderer/common'
-import { PLATFORM, Renderer, VNode } from 'core'
+import { PLATFORM, Renderer, VComponent, VNode } from 'core'
 
-let PlatformRendererImpl: new (root: () => VNode, opts?: RenderOptions) => RendererImpl<any, any>
+let PlatformRendererImpl: new (root: () => VComponent, opts?: RenderOptions) => RendererImpl<any, any>
 /* eslint-disable no-useless-catch */
 /* eslint-disable @typescript-eslint/restrict-template-expressions */
 /* eslint-disable @typescript-eslint/no-var-requires */
@@ -32,7 +32,7 @@ export type { RenderOptions, PromptProps }
 export * from 'prompt/prompt'
 
 export class DevolveUI<Props extends object> extends DevolveUICore<Props> {
-  protected override mkRenderer (root: () => VNode, opts?: RenderOptions): Renderer {
+  protected override mkRenderer (root: () => VComponent, opts?: RenderOptions): Renderer {
     return new PlatformRendererImpl(root, opts)
   }
 
@@ -45,7 +45,7 @@ export class PromptDevolveUI<
   Props extends PromptProps<PromptKeys>,
   PromptKeys extends string | number | symbol = keyof Props['prompts']
 > extends PromptDevolveUICore<Props, PromptKeys> {
-  protected override mkRenderer (root: () => VNode, opts?: RenderOptions): Renderer {
+  protected override mkRenderer (root: () => VComponent, opts?: RenderOptions): Renderer {
     return new PlatformRendererImpl(root, opts)
   }
 

@@ -1,8 +1,9 @@
-import { BorderStyle, BoundingBox, Color, Rectangle, Size, VNode } from 'core/vdom'
+import { BorderStyle, BoundingBox, Color, Rectangle, Size } from 'core/vdom'
 import { CoreRenderOptions, DEFAULT_COLUMN_SIZE } from 'core/renderer'
 import { CoreAssetCacher, RendererImpl, VRenderBatch } from 'renderer/common'
 import { Key, Strings } from '@raycenity/misc-ts'
 import type { Application, DisplayObject, IApplicationOptions, Sprite, Texture } from 'pixi.js'
+import { VComponent } from 'core/component'
 
 declare global {
   const PIXI: typeof import('pixi.js')
@@ -26,7 +27,7 @@ export class BrowserRendererImpl extends RendererImpl<VRender, AssetCacher> {
 
   private readonly em: number | null
 
-  constructor (root: () => VNode, opts: BrowserRenderOptions = {}) {
+  constructor (root: () => VComponent, opts: BrowserRenderOptions = {}) {
     super(new AssetCacher(), opts)
 
     const commonOpts: IApplicationOptions = {

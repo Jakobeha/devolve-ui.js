@@ -3,10 +3,10 @@
 import { DevolveUICore, RenderOptions } from 'core/DevolveUICore'
 import { PromptDevolveUICore, PromptProps } from 'prompt/PromptDevolveUICore'
 import type { RendererImpl } from 'renderer/common'
-import { PLATFORM, Renderer, VNode } from 'core'
+import { PLATFORM, Renderer, VComponent, VNode } from 'core'
 
 /* eslint-disable @typescript-eslint/restrict-template-expressions */
-const PlatformRendererImpl: new (root: () => VNode, opts?: RenderOptions) => RendererImpl<any, any> = await (
+const PlatformRendererImpl: new (root: () => VComponent, opts?: RenderOptions) => RendererImpl<any, any> = await (
   PLATFORM === 'web'
     ? import('renderer/web').then(module => module.BrowserRendererImpl)
     : PLATFORM === 'cli'
@@ -22,7 +22,7 @@ export type { RenderOptions, PromptProps }
 export * from 'prompt/prompt'
 
 export class DevolveUI<Props extends object> extends DevolveUICore<Props> {
-  protected override mkRenderer (root: () => VNode, opts?: RenderOptions): Renderer {
+  protected override mkRenderer (root: () => VComponent, opts?: RenderOptions): Renderer {
     return new PlatformRendererImpl(root, opts)
   }
 
@@ -35,7 +35,7 @@ export class PromptDevolveUI<
   Props extends PromptProps<PromptKeys>,
   PromptKeys extends string | number | symbol = keyof Props['prompts']
   > extends PromptDevolveUICore<Props, PromptKeys> {
-  protected override mkRenderer (root: () => VNode, opts?: RenderOptions): Renderer {
+  protected override mkRenderer (root: () => VComponent, opts?: RenderOptions): Renderer {
     return new PlatformRendererImpl(root, opts)
   }
 

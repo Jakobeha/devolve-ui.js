@@ -1,7 +1,7 @@
-import { BoundingBox, Bounds, Color, ParentBounds, Rectangle, Size, VNode } from 'core/vdom'
+import { BoundingBox, Bounds, Color, ParentBounds, Rectangle, Size, VNode, VNodeNode } from 'core/vdom'
 import { CoreRenderOptions, DEFAULT_CORE_RENDER_OPTIONS, DEFAULT_COLUMN_SIZE, Renderer } from 'core/renderer'
 import { VComponent, VRoot } from 'core/component'
-import { Key, Strings } from '@raycenity/misc-ts'
+import { assert, Key, Strings } from '@raycenity/misc-ts'
 import { BorderStyle } from 'core/vdom/border-style'
 import type { DisplayObject } from 'pixi.js'
 
@@ -43,12 +43,12 @@ export interface VRenderBatch<VRender> {
 interface CachedRenderInfo {
   parentBounds: ParentBounds
   siblingBounds: Rectangle | null
+  parent: VNode | null
 }
 
 export abstract class RendererImpl<VRender, AssetCacher extends CoreAssetCacher> implements Renderer {
   private readonly defaultFps: number
-  private root: VNode | null = null
-  rootComponent: VComponent | null = null
+  root: VComponent | null = null
   protected readonly assets: AssetCacher
 
   private readonly cachedRenders: Map<VNode, VRenderBatch<VRender> & CachedRenderInfo> = new Map()
@@ -61,11 +61,10 @@ export abstract class RendererImpl<VRender, AssetCacher extends CoreAssetCacher>
     this.assets = assetCacher
   }
 
-  protected finishInit (root: () => VNode): void {
-    this.root = VRoot(this, root)
-    if (this.rootComponent?.node !== this.root) {
-      throw new Error('sanity check failed: root component node does not match root node')
-    }
+  protected finishInit (mkRoot: () => VComponent): void {
+    const root = VRoot(this, mkRoot)
+    assert(this.root === root, 'sanity check failed: root component assigned during build tree doesn\'t match root component from VRoot')
+    assert(this.root.node !== null, 'sanity check failed: root\'s node not created after VRoot')
   }
 
   start (fps?: number): void {
@@ -102,24 +101,27 @@ export abstract class RendererImpl<VRender, AssetCacher extends CoreAssetCacher>
   }
 
   invalidate (node: VNode): void {
-    let nextNode: VNode | 'none' = node
-    while (nextNode !== 'none' && nextNode !== undefined) {
-      this.cachedRenders.delete(nextNode)
-      nextNode = nextNode.parent!
+    let nextNode: VNode | null = node
+    while (nextNode !== null) {
+      if (this.cachedRenders.has(nextNode)) {
+        const node = nextNode
+        nextNode = this.cachedRenders.get(nextNode)!.parent
+        this.cachedRenders.delete(node)
+      } else {
+        break
+      }
     }
-    if (nextNode === 'none') {
-      this.needsRerender = true
-    }
+    this.needsRerender = true
   }
 
-  reroot<Props> (props?: Props, root?: (props: Props) => VNode): void {
+  reroot<Props> (props?: Props, mkRoot?: (props: Props) => VNode): void {
     if (props !== undefined) {
-      this.rootComponent!.props = props
+      this.root!.props = props
     }
-    if (root !== undefined) {
-      this.rootComponent!.construct = root
+    if (mkRoot !== undefined) {
+      this.root!.construct = mkRoot
     }
-    VComponent.update(this.rootComponent!, root !== undefined ? 'set-root' : props !== undefined ? 'set-props' : 'manual')
+    VComponent.update(this.root!, mkRoot !== undefined ? 'set-root' : props !== undefined ? 'set-props' : 'manual')
     this.cachedRenders.clear()
     this.needsRerender = true
   }
@@ -127,7 +129,8 @@ export abstract class RendererImpl<VRender, AssetCacher extends CoreAssetCacher>
   forceRerender (): void {
     this.needsRerender = false
     this.clear()
-    this.writeRender(this.renderNode(this.getRootParentBounds(), null, this.root!))
+    assert(this.root!.node !== null, 'sanity check failed: root not created by the time forceRender is called')
+    this.writeRender(this.renderNode(this.getRootParentBounds(), null, this.root!.node))
   }
 
   abstract useInput (handler: (key: Key) => void): () => void
@@ -191,7 +194,7 @@ export abstract class RendererImpl<VRender, AssetCacher extends CoreAssetCacher>
         const children = []
         let lastChild = null
         for (const child of node.children) {
-          const childRender = this.renderNode(bounds2, lastChild?.rect ?? null, child)
+          const childRender = this.renderNode(bounds2, lastChild?.rect ?? null, VNodeNode.view(child))
           children.push(childRender)
           lastChild = childRender
         }
@@ -305,7 +308,7 @@ export abstract class RendererImpl<VRender, AssetCacher extends CoreAssetCacher>
       this.stop()
     }
 
-    VComponent.destroy(this.rootComponent!)
-    this.rootComponent = null
+    VComponent.destroy(this.root!)
+    this.root = null
   }
 }

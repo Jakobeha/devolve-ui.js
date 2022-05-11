@@ -1,4 +1,4 @@
-import { VNode } from 'core/vdom/node'
+import { VNode, VNodeNode } from 'core/vdom/node'
 import { intrinsics, JSXIntrinsics, VJSX } from 'core/vdom/jsx'
 import { VComponent } from 'core/component'
 import { IntoArray } from '@raycenity/misc-ts'
@@ -7,7 +7,7 @@ function createElement (
   element: undefined,
   props: {},
   ...children: VJSX[]
-): VNode[]
+): VNodeNode[]
 function createElement <Key extends keyof JSXIntrinsics> (
   element: Key,
   props: Omit<JSXIntrinsics[Key], 'children'>,
@@ -17,12 +17,12 @@ function createElement <T extends VNode, Props, Children extends any[]> (
   element: (props: Props & { children?: Children }) => T,
   props: Props & { key?: string },
   ...children: Children
-): VNode
+): VComponent & { node: T }
 function createElement <T extends VNode, Props extends { key?: string }, Children extends any[]> (
   element: undefined | keyof JSXIntrinsics | ((props: Props & { children?: Children }) => T),
   props: Props & { key?: string },
   ...children: Children
-): VNode | VNode[] {
+): VNodeNode | VNodeNode[] {
   // idk why jsx generates this code
   if (props === null || props === undefined) {
     // eslint-disable-next-line @typescript-eslint/consistent-type-assertions

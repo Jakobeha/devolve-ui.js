@@ -10,7 +10,7 @@ export type RenderOptions =
   BrowserRenderOptions
 
 export abstract class DevolveUICore<Props extends object> {
-  protected abstract mkRenderer (root: () => VNode, opts?: RenderOptions): Renderer
+  protected abstract mkRenderer (root: () => VComponent, opts?: RenderOptions): Renderer
 
   private readonly instance: Renderer
   protected readonly props: Props
@@ -18,7 +18,7 @@ export abstract class DevolveUICore<Props extends object> {
   readonly p: Lens<Props>
 
   /** Renders a HUD with the given content and doesn't clear, useful for logging */
-  protected static _renderSnapshot<Props>(mkRenderer: (root: () => VNode, opts?: RenderOptions) => Renderer, RootComponent: (props: Props) => VNode, props: Props, opts?: RenderOptions): void {
+  protected static _renderSnapshot<Props>(mkRenderer: (root: () => VComponent, opts?: RenderOptions) => Renderer, RootComponent: (props: Props) => VNode, props: Props, opts?: RenderOptions): void {
     const renderer = mkRenderer(() => VComponent('RootComponent', props, RootComponent), opts)
     renderer.forceRerender()
     renderer.dispose()
