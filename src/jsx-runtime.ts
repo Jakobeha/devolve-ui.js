@@ -1,10 +1,10 @@
 // noinspection JSUnusedGlobalSymbols
 
-import { JSXIntrinsicAttributes, JSXIntrinsics, VView } from 'core'
+import { JSXIntrinsicAttributes, JSXIntrinsics, VNode } from 'core'
 
 /* eslint-disable @typescript-eslint/no-unused-vars */
 export namespace JSX {
-  export type Element = VView
+  export type Element = VNode
   export type IntrinsicElements = JSXIntrinsics
   export type IntrinsicAttributes = JSXIntrinsicAttributes
 }

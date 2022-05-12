@@ -20,8 +20,8 @@ export module VNode {
 
   export function view (node: VNode): VView {
     if (node.type === 'component') {
-      assert(node.view !== null, `tried to get view from uninitialized component: ${node.key}. It should've been initialized earlier`)
-      return node.view
+      assert(node.node !== null, `tried to get view from uninitialized component: ${node.key}. It should've been initialized earlier`)
+      return view(node.node)
     } else {
       return node
     }

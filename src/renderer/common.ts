@@ -64,7 +64,7 @@ export abstract class RendererImpl<VRender, AssetCacher extends CoreAssetCacher>
   protected finishInit (mkRoot: () => VComponent): void {
     const root = VRoot(this, mkRoot)
     assert(this.root === root, 'sanity check failed: root component assigned during build tree doesn\'t match root component from VRoot')
-    assert(this.root.view !== null, 'sanity check failed: root\'s node not created after VRoot')
+    assert(this.root.node !== null, 'sanity check failed: root\'s node not created after VRoot')
   }
 
   start (fps?: number): void {
@@ -129,8 +129,8 @@ export abstract class RendererImpl<VRender, AssetCacher extends CoreAssetCacher>
   forceRerender (): void {
     this.needsRerender = false
     this.clear()
-    assert(this.root!.view !== null, 'sanity check failed: root not created by the time forceRender is called')
-    this.writeRender(this.renderNode(this.getRootParentBounds(), null, this.root!.view))
+    assert(this.root!.node !== null, 'sanity check failed: root not created by the time forceRender is called')
+    this.writeRender(this.renderNode(null, this.getRootParentBounds(), null, this.root!.node))
   }
 
   abstract useInput (handler: (key: Key) => void): () => void
@@ -148,7 +148,12 @@ export abstract class RendererImpl<VRender, AssetCacher extends CoreAssetCacher>
   protected abstract renderVectorImage (bounds: BoundingBox, columnSize: Size, src: string, node: VView): { render: VRender, size: Size }
   protected abstract renderPixi (bounds: BoundingBox, columnSize: Size, pixi: DisplayObject | 'terminal', getSize: ((pixi: DisplayObject, bounds: BoundingBox, columnSize: Size) => Size) | undefined, node: VView): { render: VRender, size: Size | null }
 
-  protected renderNode (parentBounds: ParentBounds, siblingBounds: Rectangle | null, node: VView): VRenderBatch<VRender> {
+  protected renderNode (parent: VView | null, parentBounds: ParentBounds, siblingBounds: Rectangle | null, node: VNode): VRenderBatch<VRender> {
+    if (node.type === 'component') {
+      assert(node.node !== null, 'sanity check: renderNode called on node with an uninitialized child')
+      return this.renderNode(parent, parentBounds, siblingBounds, node.node)
+    }
+
     if (this.cachedRenders.has(node)) {
       const cachedRender = this.cachedRenders.get(node)!
       if (
@@ -163,6 +168,7 @@ export abstract class RendererImpl<VRender, AssetCacher extends CoreAssetCacher>
     const render: VRenderBatch<VRender> & CachedRenderInfo = this.renderNodeImpl(parentBounds, siblingBounds, node) as any
     render.parentBounds = parentBounds
     render.siblingBounds = siblingBounds
+    render.parent = parent
     this.cachedRenders.set(node, render)
     return render
   }
@@ -194,7 +200,7 @@ export abstract class RendererImpl<VRender, AssetCacher extends CoreAssetCacher>
         const children = []
         let lastChild = null
         for (const child of node.children) {
-          const childRender = this.renderNode(bounds2, lastChild?.rect ?? null, VNode.view(child))
+          const childRender = this.renderNode(node, bounds2, lastChild?.rect ?? null, VNode.view(child))
           children.push(childRender)
           lastChild = childRender
         }

@@ -12,8 +12,8 @@ export interface VComponent<Props = any> {
   readonly key: string
 
   props: Props
-  construct: (props: Props) => VView
-  view: VView | null
+  construct: (props: Props) => VNode
+  node: VNode | null
   readonly state: any[]
   readonly providedContexts: Map<Context, any>
   /** We can cache the ancestor's provided context because parents / ancestors don't change */
@@ -88,7 +88,7 @@ export function VRoot<T extends VNode> (renderer: RendererImpl<any, any>, constr
   return node
 }
 
-export function VComponent<Props> (key: string, props: Props, construct: (props: Props) => VView): VComponent {
+export function VComponent<Props> (key: string, props: Props, construct: (props: Props) => VNode): VComponent {
   if (VCOMPONENT_STACK.length !== 0) {
     const parent = getVComponent()
     // parent is being created = if there are any existing children, they're not being reused, they're a conflict
@@ -110,7 +110,7 @@ export function VComponent<Props> (key: string, props: Props, construct: (props:
 }
 
 export module VComponent {
-  export function create<Props> (key: string, props: Props, construct: (props: Props) => VView): VComponent {
+  export function create<Props> (key: string, props: Props, construct: (props: Props) => VNode): VComponent {
     // Create JS object
     const component: VComponent<Props> = {
       type: 'component',
@@ -118,7 +118,7 @@ export module VComponent {
 
       props,
       construct,
-      view: null,
+      node: null,
       state: [],
       providedContexts: new Map(),
       consumedContexts: new Map(),
@@ -165,27 +165,30 @@ export module VComponent {
       if (isDebugMode() && details !== null) {
         component.recursiveUpdateStackTrace.push(details)
       }
-    } else if (component.view === null) {
+    } else if (component.node === null) {
       // Do construct
       withRenderer(component.renderer, () => doUpdate(component, () => {
         // Actually do construct and set component.node
-        const view = component.construct(component.props)
-        component.view = view
-        if (typeof view !== 'object' || Array.isArray(view)) {
-          throw new Error('JSX components can only return views. Call this function normally, not with JSX')
+        const node = component.construct(component.props)
+        component.node = node
+        if (typeof node !== 'object' || Array.isArray(node) || !('type' in node)) {
+          throw new Error('JSX components can only return nodes (views or other components). Call this function normally, not with JSX')
         }
 
         // Create pixi if pixi component and on web
-        if (view.type === 'pixi') {
+        if (node.type === 'pixi') {
           if (PLATFORM === 'web') {
             const pixiComponent: PixiComponent<any> = component.construct as PixiComponent<any>
             const PIXI = (globalThis as unknown as { PIXI: typeof import('pixi.js') }).PIXI
-            view.pixi = pixiComponent.lifecycle.mkPixi(PIXI)
-            pixiComponent.pixis.push(view.pixi)
+            node.pixi = pixiComponent.lifecycle.mkPixi(PIXI)
+            pixiComponent.pixis.push(node.pixi)
           } else {
-            view.pixi = 'terminal'
+            node.pixi = 'terminal'
           }
         }
+
+        // Update children (if box or another component)
+        VNode.update(node, details ?? '')
       }))
     } else {
       // Reset
@@ -197,38 +200,39 @@ export module VComponent {
       // We also need to use VComponent's renderer because the current renderer might be different
       withRenderer(component.renderer, () => doUpdate(component, () => {
         const node = component.construct(component.props)
-        component.view = node
+        component.node = node
 
         // Update pixi if pixi component and on web
         if (node.type === 'pixi' && node.pixi !== 'terminal') {
           const pixiComponent: PixiComponent<any> = component.construct as PixiComponent<any>
           pixiComponent.lifecycle.update?.(node.pixi)
         }
+
+        // Update children (if box or another component)
+        VNode.update(node, details ?? '')
       }))
-      component.renderer.invalidate(component.view)
+      component.renderer.invalidate(view(component))
     }
   }
 
   export function destroy (component: VComponent): void {
-    if (component.isDead) {
-      throw new Error('sanity check: tried to destroy already dead component')
-    }
+    assert(!component.isDead, 'sanity check: tried to destroy already dead component')
+    assert(component.node !== null, 'sanity check: tried to destroy uninitialized component')
 
-    component.renderer.invalidate(component.view as VView)
+    component.renderer.invalidate(view(component))
 
-    const node: VView = component.view as VView
+    const node = component.node
     if (node.type === 'pixi' && node.pixi !== 'terminal') {
       const pixiComponent: PixiComponent<any> = component.construct as PixiComponent<any>
       pixiComponent.lifecycle.destroy?.(node.pixi)
       pixiComponent.pixis.splice(pixiComponent.pixis.indexOf(node.pixi), 1)
     }
-
     runPermanentDestructors(component)
+
     component.isDead = true
+    component.node = null
 
     for (const child of Object.values(component.children)) {
-      // set parent to undefined before destroy so it doesn't invalidate the parent again
-      child.node.parent = undefined
       destroy(child)
     }
   }
@@ -334,8 +338,12 @@ export module VComponent {
     }
   }
 
+  function view (component: VComponent): VView {
+    return VNode.view(component)
+  }
+
   export function isBeingCreated (component: VComponent): boolean {
-    return component.view === null
+    return component.node === null
   }
 }
 
