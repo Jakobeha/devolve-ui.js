@@ -3,7 +3,7 @@
 import { DevolveUICore, RenderOptions } from 'core/DevolveUICore'
 import { PromptDevolveUICore, PromptProps } from 'prompt/PromptDevolveUICore'
 import type { RendererImpl } from 'renderer/common'
-import { PLATFORM, Renderer, VComponent, VNode } from 'core'
+import { PLATFORM, Renderer, VComponent, VView } from 'core'
 
 /* eslint-disable @typescript-eslint/restrict-template-expressions */
 const PlatformRendererImpl: new (root: () => VComponent, opts?: RenderOptions) => RendererImpl<any, any> = await (
@@ -26,7 +26,7 @@ export class DevolveUI<Props extends object> extends DevolveUICore<Props> {
     return new PlatformRendererImpl(root, opts)
   }
 
-  static renderSnapshot<Props> (RootComponent: (props: Props) => VNode, props: Props, opts?: RenderOptions): void {
+  static renderSnapshot<Props> (RootComponent: (props: Props) => VView, props: Props, opts?: RenderOptions): void {
     return DevolveUICore._renderSnapshot((root, opts) => new PlatformRendererImpl(root, opts), RootComponent, props, opts)
   }
 }
@@ -39,7 +39,7 @@ export class PromptDevolveUI<
     return new PlatformRendererImpl(root, opts)
   }
 
-  static renderSnapshot<Props> (RootComponent: (props: Props) => VNode, props: Props, opts?: RenderOptions): void {
+  static renderSnapshot<Props> (RootComponent: (props: Props) => VView, props: Props, opts?: RenderOptions): void {
     return DevolveUICore._renderSnapshot((root, opts) => new PlatformRendererImpl(root, opts), RootComponent, props, opts)
   }
 }

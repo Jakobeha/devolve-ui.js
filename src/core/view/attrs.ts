@@ -1,6 +1,6 @@
-import { BoundingBox, Bounds, BoundsSpec, Size, SubLayout } from 'core/vdom/bounds'
-import { BorderStyle } from 'core/vdom/border-style'
-import { Color, ColorSpec, LCHColor, RGBColor } from 'core/vdom/color'
+import { BoundingBox, Bounds, BoundsSpec, Size, SubLayout } from 'core/view/bounds'
+import { BorderStyle } from 'core/view/border-style'
+import { Color, ColorSpec, LCHColor, RGBColor } from 'core/view/color'
 import type { DisplayObject } from 'pixi.js'
 
 export interface CommonAttrs {

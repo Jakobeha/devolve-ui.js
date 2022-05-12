@@ -4,20 +4,20 @@ import {
   JSXColorAttrs,
   JSXSourceAttrs,
   JSXTextAttrs
-} from 'core/vdom/attrs'
-import { SubLayout } from 'core/vdom/bounds'
-import { VBorder, VBox, VColor, VNode, VNodeNode, VSource, VText } from 'core/vdom/node'
+} from 'core/view/attrs'
+import { SubLayout } from 'core/view/bounds'
+import { VBorder, VBox, VColor, VView, VNode, VSource, VText } from 'core/view/view'
 import { ExplicitPartial, IntoArray } from '@raycenity/misc-ts'
-import { jsxToNormalAttrs, jsxColorToNormalAttrs } from 'core/vdom/jsx-helpers'
+import { jsxToNormalAttrs, jsxColorToNormalAttrs } from 'core/view/jsx-helpers'
 
 export type VJSX =
-  VNodeNode |
+  VNode |
   null |
   undefined |
   VJSX[]
 
 export module VJSX {
-  export function collapse (jsx: VJSX): VNodeNode[] {
+  export function collapse (jsx: VJSX): VNode[] {
     if (Array.isArray(jsx)) {
       return jsx.flatMap(collapse)
     } else if (jsx === null || jsx === undefined) {
@@ -44,15 +44,15 @@ export interface JSXIntrinsicAttributes {
 }
 
 export const intrinsics: {
-  [Key in keyof JSXIntrinsics]: (props: Omit<JSXIntrinsics[Key], 'children'>, ...children: IntoArray<JSXIntrinsics[Key]['children']>) => VNode
+  [Key in keyof JSXIntrinsics]: (props: Omit<JSXIntrinsics[Key], 'children'>, ...children: IntoArray<JSXIntrinsics[Key]['children']>) => VView
 } = {
-  hbox: (props: Omit<JSXBoxAttrs, 'direction'>, ...children: VJSX[]): VNode =>
+  hbox: (props: Omit<JSXBoxAttrs, 'direction'>, ...children: VJSX[]): VView =>
     intrinsics.box({ ...props, direction: 'horizontal' }, ...children),
-  vbox: (props: Omit<JSXBoxAttrs, 'direction'>, ...children: VJSX[]): VNode =>
+  vbox: (props: Omit<JSXBoxAttrs, 'direction'>, ...children: VJSX[]): VView =>
     intrinsics.box({ ...props, direction: 'vertical' }, ...children),
-  zbox: (props: Omit<JSXBoxAttrs, 'direction'>, ...children: VJSX[]): VNode =>
+  zbox: (props: Omit<JSXBoxAttrs, 'direction'>, ...children: VJSX[]): VView =>
     intrinsics.box({ ...props, direction: 'overlap' }, ...children),
-  box: (props: JSXBoxAttrs, ...children: VJSX[]): VNode => {
+  box: (props: JSXBoxAttrs, ...children: VJSX[]): VView => {
     const { visible, key, bounds, direction, gap, custom, ...attrs } = jsxToNormalAttrs(props)
     const sublayout: ExplicitPartial<SubLayout> = { direction, gap, custom }
 
@@ -63,8 +63,8 @@ export const intrinsics: {
 
     return VBox(children_, { bounds, visible, key, sublayout, ...attrs })
   },
-  text: (props: JSXTextAttrs, ...text: string[]): VNode => VText(text.join(''), jsxColorToNormalAttrs(props, false)),
-  color: (props: JSXColorAttrs): VNode => VColor(jsxColorToNormalAttrs(props, true)),
-  border: (props: JSXBorderAttrs): VNode => VBorder(jsxColorToNormalAttrs(props, false)),
-  source: (props: JSXSourceAttrs): VNode => VSource(jsxToNormalAttrs(props))
+  text: (props: JSXTextAttrs, ...text: string[]): VView => VText(text.join(''), jsxColorToNormalAttrs(props, false)),
+  color: (props: JSXColorAttrs): VView => VColor(jsxColorToNormalAttrs(props, true)),
+  border: (props: JSXBorderAttrs): VView => VBorder(jsxColorToNormalAttrs(props, false)),
+  source: (props: JSXSourceAttrs): VView => VSource(jsxToNormalAttrs(props))
 }

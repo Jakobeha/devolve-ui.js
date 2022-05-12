@@ -1,4 +1,4 @@
-import { Color as W3Color, gam_sRGB, Lab_to_XYZ, LCH_to_Lab, XYZ_to_lin_sRGB } from 'core/vdom/w3-color-conversions'
+import { Color as W3Color, gam_sRGB, Lab_to_XYZ, LCH_to_Lab, XYZ_to_lin_sRGB } from 'core/view/w3-color-conversions'
 
 export interface LCHColor {
   lightness: number

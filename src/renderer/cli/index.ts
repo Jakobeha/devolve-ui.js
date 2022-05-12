@@ -1,6 +1,6 @@
 import type { Interface } from 'readline'
 import type { ReadStream, WriteStream } from 'tty'
-import { BorderStyle, BoundingBox, Color, Rectangle, Size, VNode } from 'core/vdom'
+import { BorderStyle, BoundingBox, Color, Rectangle, Size, VView } from 'core/view'
 import { CoreRenderOptions } from 'core/renderer'
 import { VComponent } from 'core/component'
 import { Key, range, Strings } from '@raycenity/misc-ts'
@@ -293,12 +293,12 @@ export class TerminalRendererImpl extends RendererImpl<VRender, AssetCacher> {
     return result
   }
 
-  protected override renderImage (bounds: BoundingBox, columnSize: Size, src: string, node: VNode): { render: VRender, size: Size } {
+  protected override renderImage (bounds: BoundingBox, columnSize: Size, src: string, view: VView): { render: VRender, size: Size } {
     const [image, resolveCallback] = this.assets.getImage(src, bounds.width, bounds.height)
     if (image === undefined) {
       throw new Error(`Image should not ever be undefined: ${src}`)
     } else if (image === null) {
-      resolveCallback(() => this.invalidate(node))
+      resolveCallback(() => this.invalidate(view))
       return {
         render: this.renderText(bounds, columnSize, 'clip', Color('gray'), '...'),
         size: { width: '...'.length, height: 1 }

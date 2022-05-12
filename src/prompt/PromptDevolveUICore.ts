@@ -1,4 +1,4 @@
-import { Renderer, VNode } from 'core'
+import { Renderer, VView } from 'core'
 import type { TerminalRenderOptions } from 'renderer/cli'
 import type { BrowserRenderOptions } from 'renderer/web'
 import { VComponent } from 'core/component'
@@ -18,13 +18,13 @@ export abstract class PromptDevolveUICore<Props extends PromptProps<PromptKeys>,
   protected abstract mkRenderer (root: () => VComponent, opts?: RenderOptions): Renderer
 
   /** Renders a HUD with the given content and doesn't clear, useful for logging */
-  protected static _renderSnapshot<Props>(mkRenderer: (root: () => VComponent, opts?: RenderOptions) => Renderer, RootComponent: (props: Props) => VNode, props: Props, opts?: RenderOptions): void {
+  protected static _renderSnapshot<Props>(mkRenderer: (root: () => VComponent, opts?: RenderOptions) => Renderer, RootComponent: (props: Props) => VView, props: Props, opts?: RenderOptions): void {
     const renderer = mkRenderer(() => VComponent('RootComponent', props, RootComponent), opts)
     renderer.forceRerender()
     renderer.dispose()
   }
 
-  constructor (RootComponent: (props: Props) => VNode, props: Omit<Props, keyof PromptProps<any>>, opts?: RenderOptions) {
+  constructor (RootComponent: (props: Props) => VView, props: Omit<Props, keyof PromptProps<any>>, opts?: RenderOptions) {
     // We need to cast becuase this is slightly illegal: prompts should not require properties but we can't enforce that easily
     super(RootComponent, { ...props as Props, prompts: {} }, opts)
   }

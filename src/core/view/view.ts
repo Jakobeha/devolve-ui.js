@@ -1,13 +1,12 @@
-import { BorderAttrs, BoxAttrs, ColorAttrs, PixiAttrs, SourceAttrs, TextAttrs } from 'core/vdom/attrs'
+import { BorderAttrs, BoxAttrs, ColorAttrs, PixiAttrs, SourceAttrs, TextAttrs } from 'core/view/attrs'
 import type { DisplayObject } from 'pixi.js'
 import { VComponent } from 'core/component'
 import { assert } from '@raycenity/misc-ts'
 
-// TODO: Rename VNode to VView
-export type VNodeNode = VNode | VComponent
+export type VNode = VView | VComponent
 
-export module VNodeNode {
-  export function update (node: VNodeNode, updatePath: string): void {
+export module VNode {
+  export function update (node: VNode, updatePath: string): void {
     updatePath += `/${node.key ?? ''}`
     if (node.type === 'component') {
       VComponent.update(node, updatePath)
@@ -19,45 +18,45 @@ export module VNodeNode {
     }
   }
 
-  export function view (node: VNodeNode): VNode {
+  export function view (node: VNode): VView {
     if (node.type === 'component') {
-      assert(node.node !== null, `tried to get view from uninitialized component: ${node.key}. It should've been initialized earlier`)
-      return node.node
+      assert(node.view !== null, `tried to get view from uninitialized component: ${node.key}. It should've been initialized earlier`)
+      return node.view
     } else {
       return node
     }
   }
 }
 
-export type VNode = VBox | VText | VColor | VBorder | VSource | VPixi<any>
+export type VView = VBox | VText | VColor | VBorder | VSource | VPixi<any>
 
-interface VNodeCommon {
+interface VViewCommon {
   readonly type: string
 }
 
-export interface VBox extends BoxAttrs, VNodeCommon {
+export interface VBox extends BoxAttrs, VViewCommon {
   readonly type: 'box'
-  readonly children: readonly VNodeNode[]
+  readonly children: readonly VNode[]
 }
 
-export interface VText extends TextAttrs, VNodeCommon {
+export interface VText extends TextAttrs, VViewCommon {
   readonly type: 'text'
   readonly text: string
 }
 
-export interface VColor extends ColorAttrs, VNodeCommon {
+export interface VColor extends ColorAttrs, VViewCommon {
   readonly type: 'color'
 }
 
-export interface VBorder extends BorderAttrs, VNodeCommon {
+export interface VBorder extends BorderAttrs, VViewCommon {
   readonly type: 'border'
 }
 
-export interface VSource extends SourceAttrs, VNodeCommon {
+export interface VSource extends SourceAttrs, VViewCommon {
   readonly type: 'source'
 }
 
-export interface VPixi<Pixi extends DisplayObject> extends PixiAttrs<Pixi>, VNodeCommon {
+export interface VPixi<Pixi extends DisplayObject> extends PixiAttrs<Pixi>, VViewCommon {
   readonly type: 'pixi'
   // Not doing null | undefined
   pixi: Pixi | 'terminal' | null
@@ -67,7 +66,7 @@ export function VText (text: string, attrs: TextAttrs): VText {
   return { type: 'text', text, ...attrs }
 }
 
-export function VBox (children: VNodeNode[], attrs: BoxAttrs): VBox {
+export function VBox (children: VNode[], attrs: BoxAttrs): VBox {
   return { type: 'box', children, ...attrs }
 }
 

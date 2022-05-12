@@ -97,9 +97,9 @@ When a devolve-ui application is run in the web browser, it uses pixi.js for ren
 
 devolve-ui uses JSX and React-style **components**: you write your UI declaratively and use hooks (useState, useEffect, useLazy, useInput) for local state and side-effects. Your UI is literally a function which takes the global state, and returns a render of your application.
 
-Unlike React, the **nodes** (lowercase components) which devolve-ui uses are not HTML elements, they are:
+Unlike React, the lowercase JSX nodes (**views**) which devolve-ui uses are not HTML elements, they are:
 
-- `hbox`, `vbox`, `zbox`: Layout child components
+- `hbox`, `vbox`, `zbox`: Layout child views
   - `hbox`: Places children horizontally
   - `vbox`: Places children vertically
   - `zbox`: Places children on top of each other (no position offsets)
@@ -258,6 +258,6 @@ Regular (non-state) contexts are called **props contexts** and are essentially i
 
 ### Notable types
 
-- `VNode`: Virtual "DOM" node, e.g. `box`, `text`, `color`
-- `VComponent`: Synchronizes a component function to a persistent `VNode` and preserves state from hooks.
-- `Bounds`: A node's bounds depend on the parent and previous component: therefore `Bounds` are literally a function from parent and previous component properties to a `BoundingBox`. See [src/core/vdom/bounds.ts](https://github.com/Jakobeha/devolve-ui/blob/tree/master/core/vdom/bounds.ts)
+- `VView`: Virtual "DOM" node, e.g. `box`, `text`, `color`. Immutable: a new view is created on change.
+- `VComponent`: Component. Manages state, effects, input, etc. and renders a `VView`
+- `Bounds`: A view's bounds depend on the parent and previous view: therefore `Bounds` are literally a function from parent and previous view properties to a `BoundingBox`. See [src/core/vdom/bounds.ts](https://github.com/Jakobeha/devolve-ui/blob/tree/master/core/vdom/bounds.ts)

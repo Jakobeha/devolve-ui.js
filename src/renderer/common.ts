@@ -1,8 +1,8 @@
-import { BoundingBox, Bounds, Color, ParentBounds, Rectangle, Size, VNode, VNodeNode } from 'core/vdom'
+import { BoundingBox, Bounds, Color, ParentBounds, Rectangle, Size, VView, VNode } from 'core/view'
 import { CoreRenderOptions, DEFAULT_CORE_RENDER_OPTIONS, DEFAULT_COLUMN_SIZE, Renderer } from 'core/renderer'
 import { VComponent, VRoot } from 'core/component'
 import { assert, Key, Strings } from '@raycenity/misc-ts'
-import { BorderStyle } from 'core/vdom/border-style'
+import { BorderStyle } from 'core/view/border-style'
 import type { DisplayObject } from 'pixi.js'
 
 type Timer = NodeJS.Timer
@@ -43,7 +43,7 @@ export interface VRenderBatch<VRender> {
 interface CachedRenderInfo {
   parentBounds: ParentBounds
   siblingBounds: Rectangle | null
-  parent: VNode | null
+  parent: VView | null
 }
 
 export abstract class RendererImpl<VRender, AssetCacher extends CoreAssetCacher> implements Renderer {
@@ -51,7 +51,7 @@ export abstract class RendererImpl<VRender, AssetCacher extends CoreAssetCacher>
   root: VComponent | null = null
   protected readonly assets: AssetCacher
 
-  private readonly cachedRenders: Map<VNode, VRenderBatch<VRender> & CachedRenderInfo> = new Map()
+  private readonly cachedRenders: Map<VView, VRenderBatch<VRender> & CachedRenderInfo> = new Map()
   private needsRerender: boolean = false
   private timer: Timer | null = null
   private isVisible: boolean = false
@@ -64,7 +64,7 @@ export abstract class RendererImpl<VRender, AssetCacher extends CoreAssetCacher>
   protected finishInit (mkRoot: () => VComponent): void {
     const root = VRoot(this, mkRoot)
     assert(this.root === root, 'sanity check failed: root component assigned during build tree doesn\'t match root component from VRoot')
-    assert(this.root.node !== null, 'sanity check failed: root\'s node not created after VRoot')
+    assert(this.root.view !== null, 'sanity check failed: root\'s node not created after VRoot')
   }
 
   start (fps?: number): void {
@@ -100,13 +100,13 @@ export abstract class RendererImpl<VRender, AssetCacher extends CoreAssetCacher>
     this.isVisible = false
   }
 
-  invalidate (node: VNode): void {
-    let nextNode: VNode | null = node
-    while (nextNode !== null) {
-      if (this.cachedRenders.has(nextNode)) {
-        const node = nextNode
-        nextNode = this.cachedRenders.get(nextNode)!.parent
-        this.cachedRenders.delete(node)
+  invalidate (view: VView): void {
+    let nextView: VView | null = view
+    while (nextView !== null) {
+      if (this.cachedRenders.has(nextView)) {
+        const view = nextView
+        nextView = this.cachedRenders.get(nextView)!.parent
+        this.cachedRenders.delete(view)
       } else {
         break
       }
@@ -114,7 +114,7 @@ export abstract class RendererImpl<VRender, AssetCacher extends CoreAssetCacher>
     this.needsRerender = true
   }
 
-  reroot<Props> (props?: Props, mkRoot?: (props: Props) => VNode): void {
+  reroot<Props> (props?: Props, mkRoot?: (props: Props) => VView): void {
     if (props !== undefined) {
       this.root!.props = props
     }
@@ -129,8 +129,8 @@ export abstract class RendererImpl<VRender, AssetCacher extends CoreAssetCacher>
   forceRerender (): void {
     this.needsRerender = false
     this.clear()
-    assert(this.root!.node !== null, 'sanity check failed: root not created by the time forceRender is called')
-    this.writeRender(this.renderNode(this.getRootParentBounds(), null, this.root!.node))
+    assert(this.root!.view !== null, 'sanity check failed: root not created by the time forceRender is called')
+    this.writeRender(this.renderNode(this.getRootParentBounds(), null, this.root!.view))
   }
 
   abstract useInput (handler: (key: Key) => void): () => void
@@ -141,14 +141,14 @@ export abstract class RendererImpl<VRender, AssetCacher extends CoreAssetCacher>
     boundingBox: BoundingBox
     columnSize?: Size
   }
-  protected abstract renderText (bounds: BoundingBox, columnSize: Size, wrapMode: 'word' | 'char' | 'clip' | undefined, color: Color | null, text: string, node: VNode): VRender
-  protected abstract renderSolidColor (rect: Rectangle, columnSize: Size, color: Color, node: VNode): VRender
-  protected abstract renderBorder (rect: Rectangle, columnSize: Size, color: Color | null, borderStyle: BorderStyle, node: VNode): VRender
-  protected abstract renderImage (bounds: BoundingBox, columnSize: Size, src: string, node: VNode): { render: VRender, size: Size }
-  protected abstract renderVectorImage (bounds: BoundingBox, columnSize: Size, src: string, node: VNode): { render: VRender, size: Size }
-  protected abstract renderPixi (bounds: BoundingBox, columnSize: Size, pixi: DisplayObject | 'terminal', getSize: ((pixi: DisplayObject, bounds: BoundingBox, columnSize: Size) => Size) | undefined, node: VNode): { render: VRender, size: Size | null }
+  protected abstract renderText (bounds: BoundingBox, columnSize: Size, wrapMode: 'word' | 'char' | 'clip' | undefined, color: Color | null, text: string, node: VView): VRender
+  protected abstract renderSolidColor (rect: Rectangle, columnSize: Size, color: Color, node: VView): VRender
+  protected abstract renderBorder (rect: Rectangle, columnSize: Size, color: Color | null, borderStyle: BorderStyle, node: VView): VRender
+  protected abstract renderImage (bounds: BoundingBox, columnSize: Size, src: string, node: VView): { render: VRender, size: Size }
+  protected abstract renderVectorImage (bounds: BoundingBox, columnSize: Size, src: string, node: VView): { render: VRender, size: Size }
+  protected abstract renderPixi (bounds: BoundingBox, columnSize: Size, pixi: DisplayObject | 'terminal', getSize: ((pixi: DisplayObject, bounds: BoundingBox, columnSize: Size) => Size) | undefined, node: VView): { render: VRender, size: Size | null }
 
-  protected renderNode (parentBounds: ParentBounds, siblingBounds: Rectangle | null, node: VNode): VRenderBatch<VRender> {
+  protected renderNode (parentBounds: ParentBounds, siblingBounds: Rectangle | null, node: VView): VRenderBatch<VRender> {
     if (this.cachedRenders.has(node)) {
       const cachedRender = this.cachedRenders.get(node)!
       if (
@@ -175,7 +175,7 @@ export abstract class RendererImpl<VRender, AssetCacher extends CoreAssetCacher>
     }
   }
 
-  private renderNodeImpl (parentBounds: ParentBounds, siblingBounds: Rectangle | null, node: VNode): VRenderBatch<VRender> {
+  private renderNodeImpl (parentBounds: ParentBounds, siblingBounds: Rectangle | null, node: VView): VRenderBatch<VRender> {
     if (node.visible === false) {
       return { rect: null }
     }
@@ -194,7 +194,7 @@ export abstract class RendererImpl<VRender, AssetCacher extends CoreAssetCacher>
         const children = []
         let lastChild = null
         for (const child of node.children) {
-          const childRender = this.renderNode(bounds2, lastChild?.rect ?? null, VNodeNode.view(child))
+          const childRender = this.renderNode(bounds2, lastChild?.rect ?? null, VNode.view(child))
           children.push(childRender)
           lastChild = childRender
         }

@@ -1,6 +1,6 @@
-import { CommonAttrs, JSXColorAttrs } from 'core/vdom/attrs'
-import { Bounds, BoundsSpec } from 'core/vdom/bounds'
-import { Color } from 'core/vdom/color'
+import { CommonAttrs, JSXColorAttrs } from 'core/view/attrs'
+import { Bounds, BoundsSpec } from 'core/view/bounds'
+import { Color } from 'core/view/color'
 
 export function jsxToNormalAttrs<T extends CommonAttrs> (jsxAttrs: T & BoundsSpec): Omit<T & BoundsSpec, 'bounds' | keyof BoundsSpec> & { bounds: Bounds } {
   const { layout, x, y, z, anchorX, anchorY, width, height, bounds: explicitBounds, ...attrs } = jsxAttrs

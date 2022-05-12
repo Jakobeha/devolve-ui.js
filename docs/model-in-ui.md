@@ -4,7 +4,7 @@ How do you represent state in UI? It's an age-old question.
 
 In devolve-ui, there are 2 types of state:
 
-- **App state:* Application state AKA model
+- **App state:* Application state AKA model. What you pass to `DevolveUI` and your root component
 - **UI state:** UI-specific state (e.g. is a button pressed? Is there an animation in progress?)
 
 And 4 ways to create and pass state:

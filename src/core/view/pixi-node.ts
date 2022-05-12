@@ -1,5 +1,5 @@
-import { JSXPixiAttrs } from 'core/vdom/attrs'
-import { VPixi } from 'core/vdom/node'
+import { JSXPixiAttrs } from 'core/view/attrs'
+import { VPixi } from 'core/view/view'
 import type { DisplayObject } from 'pixi.js'
 
 /** Manages a pixi {@link DisplayObject} in the virtual DOM. */
@@ -13,13 +13,13 @@ export interface PixiLifecycle<Pixi extends DisplayObject> {
 }
 
 /**
- * A component function which returns nodes containing pixi {@link DisplayObject}.
- * It keeps track of these nodes via `pixis` and `pixi` properties,
+ * A component which returns views containing pixi {@link DisplayObject}.
+ * It keeps track of these views via `pixis` and `pixi` properties,
  * so they can be referenced by other `PixiComponent`s.
  * Call `PixiComponent` to create these.
  */
 export interface PixiComponent<Pixi extends DisplayObject> {
-  /** Use as a component */
+  /** Use as a component (remember: a component is a function returning view) */
   (): VPixi<Pixi>
   /** Returns all `Pixi`s from every component created from `C`, in the order they were created. */
   pixis: Pixi[]
@@ -30,9 +30,9 @@ export interface PixiComponent<Pixi extends DisplayObject> {
   lifecycle: PixiLifecycle<Pixi>
 }
 
-/** Returns a component which generates nodes containing pixi {@link DisplayObject}s.
- * The `lifecycle` parameters determines how these nodes are created and updated.
- * `attrs` contains `getSize` to generate a size for use in laying out other nodes,
+/** Returns a component which generates views containing pixi {@link DisplayObject}s.
+ * The `lifecycle` parameters determines how these views are created and updated.
+ * `attrs` contains `getSize` to generate a size for use in laying out other views,
  * as well as other standard component attributes.
  */
 export function PixiComponent<Pixi extends DisplayObject> (

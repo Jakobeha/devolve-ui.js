@@ -1,4 +1,4 @@
-import { BorderStyle, BoundingBox, Color, Rectangle, Size } from 'core/vdom'
+import { BorderStyle, BoundingBox, Color, Rectangle, Size } from 'core/view'
 import { CoreRenderOptions, DEFAULT_COLUMN_SIZE } from 'core/renderer'
 import { CoreAssetCacher, RendererImpl, VRenderBatch } from 'renderer/common'
 import { Key, Strings } from '@raycenity/misc-ts'

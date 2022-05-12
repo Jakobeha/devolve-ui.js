@@ -1,9 +1,9 @@
-import { VNode } from 'core/vdom/node'
-import { Size } from 'core/vdom'
+import { VView } from 'core/view/view'
+import { Size } from 'core/view'
 
 export interface Renderer {
   forceRerender: () => void
-  reroot: <Props>(props?: Props, root?: (props: Props) => VNode) => void
+  reroot: <Props>(props?: Props, root?: (props: Props) => VView) => void
   show: () => void
   hide: () => void
   dispose: () => void
