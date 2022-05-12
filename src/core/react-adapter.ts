@@ -1,7 +1,8 @@
-import { VView, VNode } from 'core/view/view'
+import { VView} from 'core/view/view'
 import { intrinsics, JSXIntrinsics, VJSX } from 'core/view/jsx'
 import { VComponent } from 'core/component'
 import { IntoArray } from '@raycenity/misc-ts'
+import {VNode} from "core/view";
 
 function createElement (
   element: undefined,

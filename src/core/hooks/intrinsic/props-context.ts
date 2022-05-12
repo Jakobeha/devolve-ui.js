@@ -1,5 +1,5 @@
 import { Context } from 'core/hooks/intrinsic/context'
-import { getVComponent, iterVComponentsStackTopDown, VComponent } from 'core/component'
+import { getVComponent, iterVComponentAncestorsTopDown, VComponent } from 'core/component'
 import { rec } from '@raycenity/misc-ts'
 
 /**
@@ -57,7 +57,7 @@ export function createContext<T> (): PropsContext<T> {
         return component.consumedContexts.get(context)
       }
       // Try to find in hierarchy
-      for (const parent of iterVComponentsStackTopDown()) {
+      for (const parent of iterVComponentAncestorsTopDown()) {
         if (parent.providedContexts.has(context)) {
           const value = parent.providedContexts.get(context)
           component.consumedContexts.set(context, value)

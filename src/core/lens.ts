@@ -64,7 +64,7 @@ function lensPrimitive<T extends Primitive> (value: T, debugPath: string): Lens<
           return debugPath
         case Symbol.toPrimitive:
           // 2) Forgot to call .v
-          throw new Error(`forgot to call .v on primitive lens: ${debugPath}. Instead use ${debugPath}.v`)
+          throw new Error(`forgot to call .v on primitive lens${debugPath === '.' ? '' : `: ${debugPath}. Instead use ${debugPath}.v`}`)
         default:
           // 3) Not an object, can't get properties
           throw new Error(`this lens is a primitive, it has no properties except v (and internals): ${subpath}`)

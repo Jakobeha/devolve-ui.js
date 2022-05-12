@@ -16,7 +16,7 @@ export function useState<T> (initialValue: T): Lens<T> {
       throw new Error(`sanity check failed: state length (${component.state.length}) !== index (${index})`)
     }
     const state = Lens(initialValue)
-    VComponent.trackState(component, state, `set-state-${index}`)
+    VComponent.trackState(component, state, `set:state-${index}`)
     component.state.push(state)
   }
 
@@ -72,7 +72,7 @@ export function _useDynamicState<T> (initialState: T, doUpdate: boolean): [() =>
           const stackTrace = isDebugMode()
             ? (new Error().stack?.replace('\n', '  \n') ?? 'could not get stack, new Error().stack is undefined')
             : 'omitted in production'
-          VComponent.update(component, `set-state-${index}\n${stackTrace}`)
+          VComponent.update(component, `set2:state${index}\n${stackTrace}`)
         }
       }
     }

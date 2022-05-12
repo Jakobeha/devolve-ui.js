@@ -2,7 +2,7 @@ import { PLATFORM } from 'core/platform'
 import { PixiComponent, VView, VNode } from 'core/view'
 import { RendererImpl } from 'renderer/common'
 import { Lens } from 'core/lens'
-import { assert } from '@raycenity/misc-ts'
+import { assert, deepAssign, Strings } from '@raycenity/misc-ts'
 import { Context } from 'core/hooks/intrinsic/context'
 
 type PendingUpdateDetails = string
@@ -52,10 +52,8 @@ export function getVComponent (): VComponent {
   return VCOMPONENT_STACK[VCOMPONENT_STACK.length - 1]
 }
 
-/** **Warning:** While components higher in the stack are guaranteed to be ancestors of components lower,
- * there may be gaps, since indirect children aren't part of the stack.
- */
-export function * iterVComponentsStackTopDown (): Generator<VComponent> {
+/** Iterates the current component and then all its ancestors */
+export function * iterVComponentAncestorsTopDown (): Generator<VComponent> {
   for (let i = VCOMPONENT_STACK.length - 1; i >= 0; i--) {
     yield VCOMPONENT_STACK[i]
   }
@@ -99,7 +97,7 @@ export function VComponent<Props> (key: string, props: Props, construct: (props:
           component.props = props
           component.construct = construct
           component.isFresh = true
-          VComponent.update(component, `child ${key}`)
+          VComponent.update(component, `child:${key}`)
           return component
         }
       }
@@ -158,7 +156,7 @@ export module VComponent {
     return component
   }
 
-  export function update (component: VComponent, details: PendingUpdateDetails | null): void {
+  export function update (component: VComponent, details: PendingUpdateDetails): void {
     if (component.isBeingUpdated) {
       // Delay until after this update, especially if there are multiple triggered updates since we only have to update once more
       component.hasPendingUpdates = true
@@ -167,7 +165,8 @@ export module VComponent {
       }
     } else if (component.node === null) {
       // Do construct
-      withRenderer(component.renderer, () => doUpdate(component, () => {
+      details += '!'
+      withRenderer(component.renderer, () => doUpdate(component, details, () => {
         // Actually do construct and set component.node
         const node = component.construct(component.props)
         component.node = node
@@ -188,7 +187,7 @@ export module VComponent {
         }
 
         // Update children (if box or another component)
-        VNode.update(node, details ?? '')
+        VNode.update(node, details)
       }))
     } else {
       // Reset
@@ -198,7 +197,7 @@ export module VComponent {
 
       // Do construct
       // We also need to use VComponent's renderer because the current renderer might be different
-      withRenderer(component.renderer, () => doUpdate(component, () => {
+      withRenderer(component.renderer, () => doUpdate(component, details, () => {
         const node = component.construct(component.props)
         component.node = node
 
@@ -209,7 +208,7 @@ export module VComponent {
         }
 
         // Update children (if box or another component)
-        VNode.update(node, details ?? '')
+        VNode.update(node, details)
       }))
       component.renderer.invalidate(view(component))
     }
@@ -237,12 +236,12 @@ export module VComponent {
     }
   }
 
-  function doUpdate (component: VComponent, body: () => void): void {
+  function doUpdate (component: VComponent, details: PendingUpdateDetails, body: () => void): void {
     if (component.isDead) {
       throw new Error('sanity check: tried to update dead component')
     }
 
-    withVComponent(component, () => {
+    withVComponent(component, () => BuildTree.log(details, () => {
       component.isBeingUpdated = true
 
       // This will update state, add events, etc.
@@ -251,13 +250,13 @@ export module VComponent {
       clearFreshAndRemoveStaleChildren(component)
       component.isBeingUpdated = false
       runEffects(component)
-    })
+    }))
     if (component.hasPendingUpdates) {
       component.hasPendingUpdates = false
       if (component.recursiveUpdateStackTrace.length > GLOBAL_COMPONENT_OPTS.maxRecursiveUpdatesBeforeLoopDetected) {
         throw new Error(`update loop detected:\n${component.recursiveUpdateStackTrace.join('\n')}`)
       }
-      update(component, null)
+      update(component, `${details}^`)
     } else if (isDebugMode()) {
       component.recursiveUpdateStackTrace = []
     }
@@ -313,7 +312,7 @@ export module VComponent {
       const stackTrace = isDebugMode()
         ? (new Error().stack?.replace('\n', '  \n') ?? 'could not get stack, new Error().stack is undefined')
         : 'omitted in production'
-      update(component, `${hookId}-${debugPath}\n${stackTrace}`)
+      update(component, `${hookId}${debugPath}\n${stackTrace}`)
     }
     component.stateTrackers.set(state, stateTracker)
     Lens.onSet(state, stateTracker)
@@ -345,22 +344,73 @@ export module VComponent {
   export function isBeingCreated (component: VComponent): boolean {
     return component.node === null
   }
+
+  module BuildTree {
+    let LOCAL_DEPTH: number = 0
+    let LOCAL_LOGS: string[] | null = null
+
+    export function log (details: PendingUpdateDetails, action: () => void): void {
+      const {enable, width} = GLOBAL_COMPONENT_OPTS.logBuildTree
+      if (!enable) {
+        action()
+        return
+      }
+
+      details = details.split('\n')[0]
+      let componentPath = ''
+      for (const component of iterVComponentAncestorsTopDown()) {
+        if (componentPath === '') {
+          componentPath = component.key
+        } else {
+          componentPath = `${component.key}/${componentPath}`
+        }
+      }
+
+      const localDepth = LOCAL_DEPTH
+      LOCAL_DEPTH++
+      if (localDepth === 0) {
+        assert(LOCAL_LOGS === null, 'broken invariant: local depth === 0 but there are logs')
+        LOCAL_LOGS = [Strings.padCenterSmart(`. ${details}`, `in ${componentPath}`, width)]
+        action()
+        print(LOCAL_LOGS)
+        LOCAL_LOGS = null
+      } else {
+        assert(LOCAL_LOGS !== null, `broken invariant: local depth !== 0 (${localDepth}) but there are no local logs`)
+        LOCAL_LOGS.push(Strings.padCenterSmart(`${`  `.repeat(LOCAL_DEPTH - 1)}| ${details}`, `in ${componentPath}`, width))
+        action()
+      }
+      LOCAL_DEPTH--
+      assert(LOCAL_DEPTH === localDepth, 'broken invariant: depth of build tree log changed without reverting')
+    }
+
+    function print (logs: string[]) {
+      console.log(`Build tree:\n${logs.join('\n')}`)
+    }
+  }
 }
 
 export interface GlobalComponentOpts {
   maxRecursiveUpdatesBeforeLoopDetected: number
   isDebugMode: boolean
+  logBuildTree: {
+    enable: boolean
+    width: number
+  }
 }
 
 export const DEFAULT_GLOBAL_COMPONENT_OPTS: GlobalComponentOpts = {
   maxRecursiveUpdatesBeforeLoopDetected: 100,
-  isDebugMode: true
+  isDebugMode: true,
+  logBuildTree: {
+    enable: true,
+    width: 100
+  }
 }
 
 const GLOBAL_COMPONENT_OPTS: GlobalComponentOpts = { ...DEFAULT_GLOBAL_COMPONENT_OPTS }
 
 export function setGlobalComponentOpts (opts: Partial<GlobalComponentOpts>): void {
-  Object.assign(GLOBAL_COMPONENT_OPTS, opts)
+  deepAssign(GLOBAL_COMPONENT_OPTS, opts)
 }
 
 export function isDebugMode (): boolean {

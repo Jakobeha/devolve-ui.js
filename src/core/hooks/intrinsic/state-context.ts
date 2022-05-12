@@ -1,5 +1,5 @@
 import { Context } from 'core/hooks/intrinsic/context'
-import { getRenderer, getVComponent, iterVComponentsStackTopDown, VComponent } from 'core/component'
+import { getRenderer, getVComponent, iterVComponentAncestorsTopDown, VComponent } from 'core/component'
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
 import type { PropsContext } from 'core/hooks/intrinsic/props-context'
 import { useState } from 'core/hooks/intrinsic/state-dynamic'
@@ -81,7 +81,7 @@ export function createStateContext<T> (defaultInitialValue?: T): StateContext<T>
         return component.consumedContexts.get(context)
       }
       // Try to find in hierarchy
-      for (const parent of iterVComponentsStackTopDown()) {
+      for (const parent of iterVComponentAncestorsTopDown()) {
         if (parent.providedContexts.has(context)) {
           const state = parent.providedContexts.get(context)
           component.consumedContexts.set(context, state)
