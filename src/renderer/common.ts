@@ -1,4 +1,4 @@
-import { BoundingBox, Bounds, Color, ParentBounds, Rectangle, Size, VView, VNode } from 'core/view'
+import { BoundingBox, Bounds, Color, DelayedSubLayout, ParentBounds, Rectangle, Size, VView, VNode } from 'core/view'
 import { CoreRenderOptions, DEFAULT_CORE_RENDER_OPTIONS, DEFAULT_COLUMN_SIZE, Renderer } from 'core/renderer'
 import { doLogRender, VComponent, VRoot } from 'core/component'
 import { assert, Key, Strings } from '@raycenity/misc-ts'
@@ -146,6 +146,8 @@ export abstract class RendererImpl<VRender, AssetCacher extends CoreAssetCacher>
     boundingBox: BoundingBox
     columnSize?: Size
   }
+  /** Can mutate `render` if it's faster */
+  protected abstract clipRender (clipRect: Rectangle, columnSize: Size, render: VRender): VRender
   protected abstract renderText (bounds: BoundingBox, columnSize: Size, wrapMode: 'word' | 'char' | 'clip' | undefined, color: Color | null, text: string, node: VView): VRender
   protected abstract renderSolidColor (rect: Rectangle, columnSize: Size, color: Color, node: VView): VRender
   protected abstract renderBorder (rect: Rectangle, columnSize: Size, color: Color | null, borderStyle: BorderStyle, node: VView): VRender
@@ -196,7 +198,7 @@ export abstract class RendererImpl<VRender, AssetCacher extends CoreAssetCacher>
       case 'box': {
         const bounds2: ParentBounds = {
           boundingBox: bounds,
-          sublayout: view.sublayout ?? {},
+          sublayout: DelayedSubLayout.resolve(view.sublayout ?? {}, bounds, parentBounds, siblingBounds),
           columnSize: parentBounds.columnSize
         }
 
@@ -226,6 +228,36 @@ export abstract class RendererImpl<VRender, AssetCacher extends CoreAssetCacher>
             }
           }
         }
+
+        // Clip if necessary
+        if (view.clip === true) {
+          // Not sure whether to use mergedRender.rect or Infinity
+          // mergedRender.rect seems more consistent wrt both negative and positive offsets being clipped with auto size,
+          // and you can ignore this behavior simply by nesting the clipping box in another offset box
+          const clipRect = BoundingBox.toRectangle(bounds, {
+            width: bounds.width ?? mergedRender.rect?.width ?? 0,
+            height: bounds.height ?? mergedRender.rect?.height ?? 0
+          })
+          if (view.extend === true) {
+            mergedRender.rect = clipRect
+          } else {
+            mergedRender.rect = Rectangle.intersection(mergedRender.rect, clipRect)
+          }
+          for (const zString in mergedRender) {
+            const zPosition = Number(zString)
+            if (!isNaN(zPosition)) {
+              mergedRender[zPosition] = this.clipRender(clipRect, parentBounds.columnSize, mergedRender[zPosition])
+            }
+          }
+        } else if (view.extend === true) {
+          if (mergedRender.rect !== null && bounds.width !== undefined && mergedRender.rect.width < bounds.width) {
+            mergedRender.rect.width = bounds.width
+          }
+          if (mergedRender.rect !== null && bounds.height !== undefined && mergedRender.rect.height < bounds.height) {
+            mergedRender.rect.height = bounds.height
+          }
+        }
+
         return mergedRender
       }
       case 'text': {

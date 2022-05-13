@@ -131,6 +131,11 @@ export class TerminalRendererImpl extends RendererImpl<VRender, AssetCacher> {
     }
   }
 
+  protected override clipRender (clipRect: Rectangle, columnSize: Size, render: VRender): VRender {
+    VRender.clip(clipRect, render)
+    return render
+  }
+
   protected override renderText (bounds: BoundingBox, columnSize: Size, wrap: 'word' | 'char' | 'clip' | undefined, color: Color | null, text: string | string[]): VRender {
     const width = bounds.width ?? Infinity
     const height = bounds.height ?? Infinity

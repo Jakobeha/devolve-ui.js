@@ -1,7 +1,9 @@
-import { BoundingBox, Bounds, BoundsSpec, Size, SubLayout } from 'core/view/bounds'
+import { BoundingBox, Bounds, BoundsSpec, Size } from 'core/view/bounds'
 import { BorderStyle } from 'core/view/border-style'
 import { Color, ColorSpec, LCHColor, RGBColor } from 'core/view/color'
 import type { DisplayObject } from 'pixi.js'
+import { DelayedSubLayout } from 'core'
+import { CustomDelayedSubLayout } from 'core/view/sub-layout'
 
 export interface CommonAttrs {
   readonly bounds?: Bounds
@@ -10,7 +12,9 @@ export interface CommonAttrs {
 }
 
 export interface BoxAttrs extends CommonAttrs {
-  readonly sublayout?: SubLayout
+  readonly sublayout?: DelayedSubLayout
+  readonly clip?: boolean
+  readonly extend?: boolean
 }
 
 export interface TextAttrs extends CommonAttrs {
@@ -40,8 +44,14 @@ export interface PixiAttrs<Pixi extends DisplayObject> extends CommonAttrs {
   readonly getSize?: (pixi: Pixi, bounds: BoundingBox, columnSize: Size) => Size
 }
 
+export interface JSXSubLayoutAttrs {
+  storeBoundsIn?: string
+  keepBounds?: string | string[]
+  customSublayout?: CustomDelayedSubLayout
+}
+
 export type JSXTextAttrs = JSXColorAttrs<TextAttrs>
-export type JSXBoxAttrs = Omit<BoxAttrs, 'sublayout'> & SubLayout & BoundsSpec
+export type JSXBoxAttrs = Omit<BoxAttrs, 'sublayout'> & Omit<DelayedSubLayout, 'store' | 'keep' | 'custom'> & JSXSubLayoutAttrs & BoundsSpec
 export type JSXColorAttrs<T extends CommonAttrs & { color: Color | null } = ColorAttrs> = Omit<T, 'color'> & Partial<{ color: ColorSpec } & LCHColor & RGBColor> & BoundsSpec
 export type JSXBorderAttrs = JSXColorAttrs<BorderAttrs>
 export type JSXSourceAttrs = SourceAttrs & BoundsSpec

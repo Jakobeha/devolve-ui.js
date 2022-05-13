@@ -1,3 +1,6 @@
+import { assert } from '@raycenity/misc-ts'
+import { ParentSubLayout } from 'core/view/sub-layout'
+
 export type LayoutDirection = 'horizontal' | 'vertical' | 'overlap'
 
 export type Measurement =
@@ -19,12 +22,6 @@ export type LayoutPosition1D =
 export type LayoutPosition =
   LayoutPosition1D |
   { x: LayoutPosition1D, y: LayoutPosition1D }
-
-export interface SubLayout {
-  direction?: LayoutDirection
-  gap?: Measurement
-  custom?: any
-}
 
 export interface BoundingBox {
   x: number
@@ -50,7 +47,7 @@ export interface Rectangle {
 
 export interface ParentBounds {
   boundingBox: BoundingBox
-  sublayout: SubLayout
+  sublayout: ParentSubLayout
   columnSize: Size
 }
 
@@ -86,9 +83,9 @@ function reifyX (parent: ParentBounds, prevSibling: number |'not-applicable' | n
     return 0
   } else if (typeof x === 'number') {
     return x
-  } else if (/^[0-9]+$/.test(x)) {
+  } else if (/^\d+$/.test(x)) {
     return parseInt(x)
-  } else if (/^[0-9]*\.[0-9]+$/.test(x)) {
+  } else if (/^\d*\.\d+$/.test(x)) {
     return parseFloat(x)
   } else if (x.endsWith('%')) {
     if (parent.boundingBox.width === undefined) {
@@ -121,9 +118,9 @@ function reifyY (parent: ParentBounds, prevSibling: number | 'not-applicable' | 
     return 0
   } else if (typeof y === 'number') {
     return y
-  } else if (/^[0-9]+$/.test(y)) {
+  } else if (/^\d+$/.test(y)) {
     return parseInt(y)
-  } else if (/^[0-9]*\.[0-9]+$/.test(y)) {
+  } else if (/^\d*\.\d+$/.test(y)) {
     return parseFloat(y)
   } else if (y.endsWith('%')) {
     if (parent.boundingBox.height === undefined) {
@@ -256,6 +253,29 @@ export module Rectangle {
       }
     }
   }
+
+  export function intersection (a: Rectangle | null, b: Rectangle | null): Rectangle | null {
+    if (a === null) {
+      return null
+    } else if (b === null) {
+      return null
+    } else {
+      const left = Math.max(a.left, b.left)
+      const top = Math.max(a.top, b.top)
+      const right = Math.min(a.left + a.width, b.left + b.width)
+      const bottom = Math.min(a.top + a.height, b.top + b.height)
+      if (right < left || bottom < top) {
+        return null
+      } else {
+        return {
+          left,
+          top,
+          width: right - left,
+          height: bottom - top
+        }
+      }
+    }
+  }
 }
 
 export module BoundingBox {
@@ -264,9 +284,7 @@ export module BoundingBox {
   export function toRectangle (bounds: BoundingBox, size?: Size): Rectangle {
     const width = bounds.width ?? size?.width
     const height = bounds.height ?? size?.height
-    if (width === undefined || height === undefined) {
-      throw new Error('toRectangle invalid arguments: bounds has no size and no size provided')
-    }
+    assert(width !== undefined && height !== undefined, 'toRectangle invalid arguments: bounds has no size and no size provided')
     return {
       left: bounds.x - (bounds.anchorX * width),
       top: bounds.y - (bounds.anchorY * height),
@@ -317,9 +335,7 @@ export module Bounds {
   })
 
   export const CENTER: Bounds = parent => {
-    if (parent.boundingBox.width === undefined || parent.boundingBox.height === undefined) {
-      throw new Error('bad layout: parent has no width or height, so we can\'t center it')
-    }
+    assert(parent.boundingBox.width !== undefined && parent.boundingBox.height !== undefined, 'bad layout: parent has no width or height, so we can\'t center it')
 
     return {
       x: parent.boundingBox.x + (parent.boundingBox.width / 2),
@@ -331,9 +347,7 @@ export module Bounds {
   }
 
   export const CENTER_X_FILL_Y: Bounds = parent => {
-    if (parent.boundingBox.width === undefined) {
-      throw new Error('bad layout: parent has no width, so we can\'t center it')
-    }
+    assert(parent.boundingBox.width !== undefined, 'bad layout: parent has no width, so we can\'t center it')
 
     return {
       x: parent.boundingBox.x + (parent.boundingBox.width / 2),
@@ -346,9 +360,7 @@ export module Bounds {
   }
 
   export const CENTER_Y_FILL_X: Bounds = parent => {
-    if (parent.boundingBox.height === undefined) {
-      throw new Error('bad layout: parent has no height, so we can\'t center it')
-    }
+    assert(parent.boundingBox.height !== undefined, 'bad layout: parent has no height, so we can\'t center it')
 
     return {
       x: parent.boundingBox.x,
@@ -361,9 +373,7 @@ export module Bounds {
   }
 
   export const PREV: Bounds = (parent, prev) => {
-    if (prev === null) {
-      throw new Error('bad layout: parent has no previous sibling')
-    }
+    assert(prev !== null, 'bad layout: parent has no previous sibling')
 
     return {
       x: prev.left,
@@ -373,6 +383,30 @@ export module Bounds {
       anchorY: 0,
       width: prev.width,
       height: prev.height
+    }
+  }
+
+  export function addZ (z: number, bounds: Bounds): Bounds {
+    return (parent, prev) => {
+      const boundingBox = bounds(parent, prev)
+      return {
+        ...boundingBox,
+        z: boundingBox.z + z
+      }
+    }
+  }
+
+  export function withBoundingBox (boundingBox: BoundingBox | string, bounds: Bounds): Bounds {
+    return (parent, prev) => {
+      let boundingBox_: BoundingBox
+      if (typeof boundingBox === 'string') {
+        assert(parent.sublayout.stored !== undefined, `bad layout: parent has no stored bounding boxes, tried to get one named ${boundingBox}`)
+        assert(boundingBox in parent.sublayout.stored, `bad layout: parent has no stored bounding box named ${boundingBox}`)
+        boundingBox_ = parent.sublayout.stored[boundingBox]
+      } else {
+        boundingBox_ = boundingBox
+      }
+      return bounds({ ...parent, boundingBox: boundingBox_ }, prev)
     }
   }
 }

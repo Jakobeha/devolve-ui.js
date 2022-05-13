@@ -88,6 +88,20 @@ export class BrowserRendererImpl extends RendererImpl<VRender, AssetCacher> {
     }
   }
 
+  protected override clipRender (clipRect: Rectangle, columnSize: Size, render: VRender): VRender {
+    const mask = new PIXI.Graphics()
+    mask.beginFill(0)
+    mask.drawRect(
+      clipRect.left * columnSize.width,
+      clipRect.top * columnSize.height,
+      clipRect.width * columnSize.width,
+      clipRect.height * columnSize.height
+    )
+
+    render.mask = mask
+    return render
+  }
+
   protected override renderText (bounds: BoundingBox, columnSize: Size, wrapMode: 'word' | 'char' | 'clip' | undefined, color: Color | null, text: string): VRender {
     if (bounds.width !== undefined) {
       if (wrapMode === 'clip') {

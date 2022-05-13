@@ -5,11 +5,10 @@ import {
   JSXSourceAttrs,
   JSXTextAttrs
 } from 'core/view/attrs'
-import { SubLayout } from 'core/view/bounds'
 import { VBorder, VBox, VColor, VView, VSource, VText } from 'core/view/view'
 import { ExplicitPartial, IntoArray } from '@raycenity/misc-ts'
 import { jsxToNormalAttrs, jsxColorToNormalAttrs } from 'core/view/jsx-helpers'
-import { VNode } from 'core'
+import { DelayedSubLayout, VNode } from 'core'
 
 export type VJSX =
   VNode |
@@ -54,8 +53,9 @@ export const intrinsics: {
   zbox: (props: Omit<JSXBoxAttrs, 'direction'>, ...children: VJSX[]): VView =>
     intrinsics.box({ ...props, direction: 'overlap' }, ...children),
   box: (props: JSXBoxAttrs, ...children: VJSX[]): VView => {
-    const { visible, key, bounds, direction, gap, custom, ...attrs } = jsxToNormalAttrs(props)
-    const sublayout: ExplicitPartial<SubLayout> = { direction, gap, custom }
+    const { visible, key, bounds, direction, gap, storeBoundsIn: store, keepBounds: keep_, customSublayout: custom, ...attrs } = jsxToNormalAttrs(props)
+    const keep = typeof keep_ === 'string' ? [keep_] : keep_
+    const sublayout: ExplicitPartial<DelayedSubLayout> = { direction, gap, store, keep, custom }
 
     const children_ = VJSX.collapse(children)
     if (children_.length > 1 && direction === undefined) {

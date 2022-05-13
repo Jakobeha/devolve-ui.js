@@ -1,4 +1,4 @@
-import { BoundingBox } from 'core'
+import { BoundingBox, Rectangle } from 'core'
 import { CharColor, TRANSPARENT } from 'renderer/cli/CharColor'
 
 /**
@@ -120,6 +120,17 @@ export module VRender {
       }
     }
     return result
+  }
+
+  export function clip (clipRect: Rectangle, vrender: VRender): void {
+    for (let y = 0; y < vrender.length; y++) {
+      const line = vrender[y]
+      for (let x = 0; x < line.length; x++) {
+        if (x < clipRect.left || x >= clipRect.left + clipRect.width || y < clipRect.top || y >= clipRect.top + clipRect.height) {
+          line[x] = TRANSPARENT
+        }
+      }
+    }
   }
 
   function getWidth (vrender: VRender): number {
