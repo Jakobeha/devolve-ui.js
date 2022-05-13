@@ -1,10 +1,11 @@
-import {BorderAttrs, BoxAttrs, ColorAttrs, PixiAttrs, SourceAttrs, TextAttrs} from 'core/view/attrs'
-import type {DisplayObject} from 'pixi.js'
+import { BorderAttrs, BoxAttrs, ColorAttrs, PixiAttrs, SourceAttrs, TextAttrs } from 'core/view/attrs'
+import type { DisplayObject } from 'pixi.js'
 import { VNode } from 'core'
 
 export type VView = VBox | VText | VColor | VBorder | VSource | VPixi<any>
 
 interface VViewCommon {
+  readonly id: number
   readonly type: string
 }
 
@@ -37,25 +38,25 @@ export interface VPixi<Pixi extends DisplayObject> extends PixiAttrs<Pixi>, VVie
 }
 
 export function VText (text: string, attrs: TextAttrs): VText {
-  return { type: 'text', text, ...attrs }
+  return { id: VNode.nextId(), type: 'text', text, ...attrs }
 }
 
 export function VBox (children: VNode[], attrs: BoxAttrs): VBox {
-  return { type: 'box', children, ...attrs }
+  return { id: VNode.nextId(), type: 'box', children, ...attrs }
 }
 
 export function VColor (attrs: ColorAttrs): VColor {
-  return { type: 'color', ...attrs }
+  return { id: VNode.nextId(), type: 'color', ...attrs }
 }
 
 export function VBorder (attrs: BorderAttrs): VBorder {
-  return { type: 'border', ...attrs }
+  return { id: VNode.nextId(), type: 'border', ...attrs }
 }
 
 export function VSource (attrs: SourceAttrs): VSource {
-  return { type: 'source', ...attrs }
+  return { id: VNode.nextId(), type: 'source', ...attrs }
 }
 
 export function VPixi<Pixi extends DisplayObject> (attrs: PixiAttrs<Pixi>): VPixi<Pixi> {
-  return { type: 'pixi', ...attrs, pixi: null }
+  return { id: VNode.nextId(), type: 'pixi', ...attrs, pixi: null }
 }

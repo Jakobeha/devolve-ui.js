@@ -1,5 +1,5 @@
 import { PLATFORM } from 'core/platform'
-import { PixiComponent, VView, VNode } from 'core/view'
+import { PixiComponent, VNode } from 'core/view'
 import { RendererImpl } from 'renderer/common'
 import { Lens } from 'core/lens'
 import { assert, deepAssign, Strings } from '@raycenity/misc-ts'
@@ -198,6 +198,7 @@ export module VComponent {
       // Do construct
       // We also need to use VComponent's renderer because the current renderer might be different
       withRenderer(component.renderer, () => doUpdate(component, details, () => {
+        const oldNode = component.node!
         const node = component.construct(component.props)
         component.node = node
 
@@ -209,8 +210,9 @@ export module VComponent {
 
         // Update children (if box or another component)
         VNode.update(node, details)
+
+        invalidate(component, oldNode)
       }))
-      component.renderer.invalidate(view(component))
     }
   }
 
@@ -218,7 +220,7 @@ export module VComponent {
     assert(!component.isDead, 'sanity check: tried to destroy already dead component')
     assert(component.node !== null, 'sanity check: tried to destroy uninitialized component')
 
-    component.renderer.invalidate(view(component))
+    runPermanentDestructors(component)
 
     const node = component.node
     if (node.type === 'pixi' && node.pixi !== 'terminal') {
@@ -226,10 +228,10 @@ export module VComponent {
       pixiComponent.lifecycle.destroy?.(node.pixi)
       pixiComponent.pixis.splice(pixiComponent.pixis.indexOf(node.pixi), 1)
     }
-    runPermanentDestructors(component)
 
     component.isDead = true
     component.node = null
+    invalidate(component, node)
 
     for (const child of Object.values(component.children)) {
       destroy(child)
@@ -241,6 +243,7 @@ export module VComponent {
       throw new Error('sanity check: tried to update dead component')
     }
 
+    // eslint-disable-next-line @typescript-eslint/no-use-before-define
     withVComponent(component, () => BuildTree.log(details, () => {
       component.isBeingUpdated = true
 
@@ -337,8 +340,8 @@ export module VComponent {
     }
   }
 
-  function view (component: VComponent): VView {
-    return VNode.view(component)
+  function invalidate (component: VComponent, oldNode: VNode): void {
+    component.renderer.invalidate(oldNode)
   }
 
   export function isBeingCreated (component: VComponent): boolean {
@@ -350,7 +353,7 @@ export module VComponent {
     let LOCAL_LOGS: string[] | null = null
 
     export function log (details: PendingUpdateDetails, action: () => void): void {
-      const {enable, width} = GLOBAL_COMPONENT_OPTS.logBuildTree
+      const { enable, width } = GLOBAL_COMPONENT_OPTS.logBuildTree
       if (!enable) {
         action()
         return
@@ -376,14 +379,14 @@ export module VComponent {
         LOCAL_LOGS = null
       } else {
         assert(LOCAL_LOGS !== null, `broken invariant: local depth !== 0 (${localDepth}) but there are no local logs`)
-        LOCAL_LOGS.push(Strings.padCenterSmart(`${`  `.repeat(LOCAL_DEPTH - 1)}| ${details}`, `in ${componentPath}`, width))
+        LOCAL_LOGS.push(Strings.padCenterSmart(`${'  '.repeat(LOCAL_DEPTH - 1)}| ${details}`, `in ${componentPath}`, width))
         action()
       }
       LOCAL_DEPTH--
       assert(LOCAL_DEPTH === localDepth, 'broken invariant: depth of build tree log changed without reverting')
     }
 
-    function print (logs: string[]) {
+    function print (logs: string[]): void {
       console.log(`Build tree:\n${logs.join('\n')}`)
     }
   }
@@ -396,15 +399,17 @@ export interface GlobalComponentOpts {
     enable: boolean
     width: number
   }
+  logRender: boolean
 }
 
 export const DEFAULT_GLOBAL_COMPONENT_OPTS: GlobalComponentOpts = {
   maxRecursiveUpdatesBeforeLoopDetected: 100,
   isDebugMode: true,
   logBuildTree: {
-    enable: true,
-    width: 100
-  }
+    enable: false,
+    width: 128
+  },
+  logRender: false
 }
 
 const GLOBAL_COMPONENT_OPTS: GlobalComponentOpts = { ...DEFAULT_GLOBAL_COMPONENT_OPTS }
@@ -415,4 +420,8 @@ export function setGlobalComponentOpts (opts: Partial<GlobalComponentOpts>): voi
 
 export function isDebugMode (): boolean {
   return GLOBAL_COMPONENT_OPTS.isDebugMode
+}
+
+export function doLogRender (): boolean {
+  return GLOBAL_COMPONENT_OPTS.logRender
 }

@@ -1,6 +1,6 @@
 import { BoundingBox, Bounds, Color, ParentBounds, Rectangle, Size, VView, VNode } from 'core/view'
 import { CoreRenderOptions, DEFAULT_CORE_RENDER_OPTIONS, DEFAULT_COLUMN_SIZE, Renderer } from 'core/renderer'
-import { VComponent, VRoot } from 'core/component'
+import { doLogRender, VComponent, VRoot } from 'core/component'
 import { assert, Key, Strings } from '@raycenity/misc-ts'
 import { BorderStyle } from 'core/view/border-style'
 import type { DisplayObject } from 'pixi.js'
@@ -43,7 +43,7 @@ export interface VRenderBatch<VRender> {
 interface CachedRenderInfo {
   parentBounds: ParentBounds
   siblingBounds: Rectangle | null
-  parent: VView | null
+  parent: number
 }
 
 export abstract class RendererImpl<VRender, AssetCacher extends CoreAssetCacher> implements Renderer {
@@ -51,7 +51,7 @@ export abstract class RendererImpl<VRender, AssetCacher extends CoreAssetCacher>
   root: VComponent | null = null
   protected readonly assets: AssetCacher
 
-  private readonly cachedRenders: Map<VView, VRenderBatch<VRender> & CachedRenderInfo> = new Map()
+  private readonly cachedRenders: Map<number, VRenderBatch<VRender> & CachedRenderInfo> = new Map()
   private needsRerender: boolean = false
   private timer: Timer | null = null
   private isVisible: boolean = false
@@ -100,14 +100,19 @@ export abstract class RendererImpl<VRender, AssetCacher extends CoreAssetCacher>
     this.isVisible = false
   }
 
-  invalidate (view: VView): void {
-    let nextView: VView | null = view
-    while (nextView !== null) {
-      if (this.cachedRenders.has(nextView)) {
-        const view = nextView
-        nextView = this.cachedRenders.get(nextView)!.parent
-        this.cachedRenders.delete(view)
+  invalidate (node: VNode): void {
+    const view = VNode.view(node)
+
+    RendererImpl.logRender('invalidate', view)
+    let nextViewId: number = view.id
+    while (nextViewId !== -1) {
+      if (this.cachedRenders.has(nextViewId)) {
+        const viewId = nextViewId
+        nextViewId = this.cachedRenders.get(viewId)!.parent
+        this.cachedRenders.delete(viewId)
+        RendererImpl.logRender('- found ->', nextViewId)
       } else {
+        RendererImpl.logRender('- not found')
         break
       }
     }
@@ -149,27 +154,26 @@ export abstract class RendererImpl<VRender, AssetCacher extends CoreAssetCacher>
   protected abstract renderPixi (bounds: BoundingBox, columnSize: Size, pixi: DisplayObject | 'terminal', getSize: ((pixi: DisplayObject, bounds: BoundingBox, columnSize: Size) => Size) | undefined, node: VView): { render: VRender, size: Size | null }
 
   protected renderNode (parent: VView | null, parentBounds: ParentBounds, siblingBounds: Rectangle | null, node: VNode): VRenderBatch<VRender> {
-    if (node.type === 'component') {
-      assert(node.node !== null, 'sanity check: renderNode called on node with an uninitialized child')
-      return this.renderNode(parent, parentBounds, siblingBounds, node.node)
-    }
+    const view = VNode.view(node)
 
-    if (this.cachedRenders.has(node)) {
-      const cachedRender = this.cachedRenders.get(node)!
+    RendererImpl.logRender('render', view, 'parent', parent)
+    if (this.cachedRenders.has(view.id)) {
+      RendererImpl.logRender('- cached')
+      const cachedRender = this.cachedRenders.get(view.id)!
       if (
         ParentBounds.equals(cachedRender.parentBounds, parentBounds) &&
         Rectangle.equals(cachedRender.siblingBounds, siblingBounds)
       ) {
         return cachedRender
       } else {
-        this.cachedRenders.delete(node)
+        this.cachedRenders.delete(view.id)
       }
     }
-    const render: VRenderBatch<VRender> & CachedRenderInfo = this.renderNodeImpl(parentBounds, siblingBounds, node) as any
+    const render: VRenderBatch<VRender> & CachedRenderInfo = this.renderViewImpl(parentBounds, siblingBounds, view) as any
     render.parentBounds = parentBounds
     render.siblingBounds = siblingBounds
-    render.parent = parent
-    this.cachedRenders.set(node, render)
+    render.parent = parent?.id ?? -1
+    this.cachedRenders.set(view.id, render)
     return render
   }
 
@@ -181,26 +185,26 @@ export abstract class RendererImpl<VRender, AssetCacher extends CoreAssetCacher>
     }
   }
 
-  private renderNodeImpl (parentBounds: ParentBounds, siblingBounds: Rectangle | null, node: VView): VRenderBatch<VRender> {
-    if (node.visible === false) {
+  private renderViewImpl (parentBounds: ParentBounds, siblingBounds: Rectangle | null, view: VView): VRenderBatch<VRender> {
+    if (view.visible === false) {
       return { rect: null }
     }
 
-    const bounds = (node.bounds ?? Bounds.DEFAULT)(parentBounds, siblingBounds)
+    const bounds = (view.bounds ?? Bounds.DEFAULT)(parentBounds, siblingBounds)
 
-    switch (node.type) {
+    switch (view.type) {
       case 'box': {
         const bounds2: ParentBounds = {
           boundingBox: bounds,
-          sublayout: node.sublayout ?? {},
+          sublayout: view.sublayout ?? {},
           columnSize: parentBounds.columnSize
         }
 
         // Render children
         const children = []
         let lastChild = null
-        for (const child of node.children) {
-          const childRender = this.renderNode(node, bounds2, lastChild?.rect ?? null, VNode.view(child))
+        for (const child of view.children) {
+          const childRender = this.renderNode(view, bounds2, lastChild?.rect ?? null, child)
           children.push(childRender)
           lastChild = childRender
         }
@@ -225,14 +229,14 @@ export abstract class RendererImpl<VRender, AssetCacher extends CoreAssetCacher>
         return mergedRender
       }
       case 'text': {
-        const lines = node.text.split('\n')
+        const lines = view.text.split('\n')
         const rect = BoundingBox.toRectangle(bounds, {
           width: Math.max(0, ...lines.map(Strings.width)),
           height: lines.length
         })
         return {
           rect,
-          [bounds.z]: this.renderText(bounds, parentBounds.columnSize, node.wrapMode, node.color, node.text, node)
+          [bounds.z]: this.renderText(bounds, parentBounds.columnSize, view.wrapMode, view.color, view.text, view)
         }
       }
       case 'color': {
@@ -242,12 +246,12 @@ export abstract class RendererImpl<VRender, AssetCacher extends CoreAssetCacher>
           height: bounds.height ?? parentBounds.boundingBox.height ?? siblingBounds?.height
         }
         if (inferredBounds.width === undefined || inferredBounds.height === undefined) {
-          throw new Error('Cannot infer width or height for color node')
+          throw new Error('Cannot infer width or height for color view')
         }
         const rect = BoundingBox.toRectangle(inferredBounds as BoundingBox & Size)
         return {
           rect,
-          [bounds.z]: this.renderSolidColor(rect, parentBounds.columnSize, node.color, node)
+          [bounds.z]: this.renderSolidColor(rect, parentBounds.columnSize, view.color, view)
         }
       }
       case 'border': {
@@ -257,22 +261,22 @@ export abstract class RendererImpl<VRender, AssetCacher extends CoreAssetCacher>
           height: bounds.height ?? parentBounds.boundingBox.height ?? siblingBounds?.height
         }
         if (inferredBounds.width === undefined || inferredBounds.height === undefined) {
-          throw new Error('Cannot infer width or height for border node')
+          throw new Error('Cannot infer width or height for border view')
         }
         const rect = BoundingBox.toRectangle(inferredBounds as BoundingBox & Size)
         return {
           rect,
-          [bounds.z]: this.renderBorder(rect, parentBounds.columnSize, node.color, node.style, node)
+          [bounds.z]: this.renderBorder(rect, parentBounds.columnSize, view.color, view.style, view)
         }
       }
       case 'source': {
-        const extension = node.src.split('.').pop()
+        const extension = view.src.split('.').pop()
         switch (extension) {
           case 'png':
           case 'jpg':
           case 'jpeg':
           case 'gif': {
-            const { render, size } = this.renderImage(bounds, parentBounds.columnSize, node.src, node)
+            const { render, size } = this.renderImage(bounds, parentBounds.columnSize, view.src, view)
             const rect = BoundingBox.toRectangle(bounds, size)
             return {
               rect,
@@ -280,7 +284,7 @@ export abstract class RendererImpl<VRender, AssetCacher extends CoreAssetCacher>
             }
           }
           case 'svg': {
-            const { render, size } = this.renderVectorImage(bounds, parentBounds.columnSize, node.src, node)
+            const { render, size } = this.renderVectorImage(bounds, parentBounds.columnSize, view.src, view)
             const rect = BoundingBox.toRectangle(bounds, size)
             return {
               rect,
@@ -299,7 +303,7 @@ export abstract class RendererImpl<VRender, AssetCacher extends CoreAssetCacher>
           width: bounds.width ?? parentBounds.boundingBox.width ?? siblingBounds?.width,
           height: bounds.height ?? parentBounds.boundingBox.height ?? siblingBounds?.height
         }
-        const { render, size } = this.renderPixi(inferredBounds, parentBounds.columnSize, node.pixi, node.getSize, node)
+        const { render, size } = this.renderPixi(inferredBounds, parentBounds.columnSize, view.pixi, view.getSize, view)
         const rect = size !== null ? BoundingBox.toRectangle(bounds, size) : null
         return {
           rect,
@@ -316,5 +320,11 @@ export abstract class RendererImpl<VRender, AssetCacher extends CoreAssetCacher>
 
     VComponent.destroy(this.root!)
     this.root = null
+  }
+
+  private static logRender (...args: any[]): void {
+    if (doLogRender()) {
+      console.log(...args)
+    }
   }
 }

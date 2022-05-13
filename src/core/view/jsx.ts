@@ -9,7 +9,7 @@ import { SubLayout } from 'core/view/bounds'
 import { VBorder, VBox, VColor, VView, VSource, VText } from 'core/view/view'
 import { ExplicitPartial, IntoArray } from '@raycenity/misc-ts'
 import { jsxToNormalAttrs, jsxColorToNormalAttrs } from 'core/view/jsx-helpers'
-import {VNode} from "core";
+import { VNode } from 'core'
 
 export type VJSX =
   VNode |
