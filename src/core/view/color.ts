@@ -184,4 +184,22 @@ export module Color {
       hue: color.hue
     }
   }
+
+  export function lighten (color: ColorSpec, percent100: number): Color {
+    color = toLCH(Color(color))
+    return {
+      lightness: Math.max(100, color.lightness + percent100),
+      chroma: color.chroma,
+      hue: color.hue
+    }
+  }
+
+  export function darken (color: ColorSpec, percent100: number): Color {
+    color = toLCH(Color(color))
+    return {
+      lightness: Math.max(0, color.lightness - percent100),
+      chroma: color.chroma,
+      hue: color.hue
+    }
+  }
 }
