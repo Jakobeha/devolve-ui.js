@@ -15,7 +15,7 @@
 
 //! The implementation for #[derive(Data)]
 
-use crate::core::data::derive::attr::{DataAttr, Field, FieldKind, Fields};
+use crate::attr::{DataAttr, Field, FieldKind, Fields};
 
 use quote::{quote, quote_spanned};
 use syn::{spanned::Spanned, Data, DataEnum, DataStruct};

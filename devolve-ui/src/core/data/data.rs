@@ -19,14 +19,15 @@ use std::ptr;
 use std::rc::Rc;
 use std::sync::Arc;
 
-#[cfg(feature = "graphics")]
+#[cfg(feature = "kurbo")]
 use crate::kurbo::{self, ParamCurve};
-#[cfg(feature = "graphics")]
+#[cfg(feature = "piet")]
 use crate::piet;
-#[cfg(feature = "graphics")]
+#[cfg(feature = "shell")]
 use crate::shell::Scale;
 
-pub use crate::core::data::derive::Data;
+use devolve_ui_derive::Data;
+#[cfg(feature = "piet")]
 use piet::ImageBuf;
 
 /// A trait used to represent value types.

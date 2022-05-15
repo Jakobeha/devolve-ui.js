@@ -21,7 +21,6 @@ extern crate proc_macro;
 
 mod attr;
 mod data;
-mod lens;
 
 use proc_macro::TokenStream;
 use syn::parse_macro_input;
@@ -39,7 +38,7 @@ use syn::parse_macro_input;
 /// # Example
 ///
 /// ```rust
-/// use devolve_ui_derive::::Data;
+/// use devolve_ui_derive::Data;
 ///
 /// #[derive(Clone, Data)]
 /// struct State {
@@ -57,44 +56,6 @@ use syn::parse_macro_input;
 pub fn derive_data(input: TokenStream) -> TokenStream {
     let input = parse_macro_input!(input as syn::DeriveInput);
     data::derive_data_impl(input)
-        .unwrap_or_else(|err| err.to_compile_error())
-        .into()
-}
-
-/// Generates lenses to access the fields of a struct.
-///
-/// An associated constant is defined on the struct for each field,
-/// having the same name as the field.
-///
-/// This macro supports a `lens` field attribute with the following arguments:
-///
-/// - `#[lens(ignore)]` skips creating a lens for one field.
-/// - `#[lens(name="foo")]` gives the lens the specified name (instead of the default, which is to
-///    create a lens with the same name as the field).
-///
-/// # Example
-///
-/// ```rust
-/// use devolve_ui_derive::::Lens;
-///
-/// #[derive(Lens)]
-/// struct State {
-///     // The Lens derive will create a `State::text` constant implementing
-///     // `devolve_ui_derive::::Lens<State, String>`
-///     text: String,
-///     // The Lens derive will create a `State::lens_number` constant implementing
-///     // `devolve_ui_derive::::Lens<State, f64>`
-///     #[lens(name = "lens_number")]
-///     number: f64,
-///     // The Lens derive won't create anything for this field.
-///     #[lens(ignore)]
-///     blah: f64,
-/// }
-/// ```
-#[proc_macro_derive(Lens, attributes(lens))]
-pub fn derive_lens(input: TokenStream) -> TokenStream {
-    let input = parse_macro_input!(input as syn::DeriveInput);
-    lens::derive_lens_impl(input)
         .unwrap_or_else(|err| err.to_compile_error())
         .into()
 }
