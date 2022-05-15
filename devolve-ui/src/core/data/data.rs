@@ -26,7 +26,6 @@ use crate::piet;
 #[cfg(feature = "shell")]
 use crate::shell::Scale;
 
-use devolve_ui_derive::Data;
 #[cfg(feature = "piet")]
 use piet::ImageBuf;
 
