@@ -1,0 +1,18 @@
+[package]
+name = "devolve-ui"
+version = "0.1.0"
+authors = ["jakobeha"]
+description = "TUI (and planned future GUI) library using Reactive programming"
+repository = "https://github.com/jakobeha/devolve-ui.rs"
+license = "Apache-2.0"
+keywords = ["ui", "tui", "terminal"]
+categories = ["command-line-interface", "gui"]
+edition = "2021"
+
+[package.metadata.docs.rs]
+cargo-args = ["-Zunstable-options", "-Zrustdoc-scrape-examples=examples"]
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+devolve-ui-derive = { path = "../devolve-ui-derive" }
