@@ -26,20 +26,20 @@ impl VContext {
         Self::borrow_global(|this| !this.components.is_empty())
     }
 
-    pub fn get_component<'a>() -> &'a mut Box<VComponent> {
+    pub fn get_component() -> &'static mut Box<VComponent> {
         Self::borrow_global(|this| this
             .components
             .last_mut()
             .expect("no components in context"))
     }
 
-    pub fn try_get_component<'a>() -> Option<&'a mut Box<VComponent>> {
+    pub fn try_get_component() -> Option<&'static mut Box<VComponent>> {
         Self::borrow_global(|this| this
             .components
             .last_mut())
     }
 
-    pub fn iter_components_top_down<'a>() -> impl Iterator<Item=&'a mut Box<VComponent>> {
+    pub fn iter_components_top_down() -> impl Iterator<Item=&'static mut Box<VComponent>> {
         Self::borrow_global(|this| this
             .components
             .iter_mut()
