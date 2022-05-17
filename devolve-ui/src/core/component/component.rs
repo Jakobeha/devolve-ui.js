@@ -1,9 +1,9 @@
 use crate::core::component::node::VNode;
 use std::any::Any;
 use std::borrow::{BorrowMut, Cow};
-use std::cell::{Cell, RefCell};
 use std::collections::HashMap;
 use std::rc::{Rc, Weak};
+use replace_with::replace_with_or_abort;
 use crate::core::component::context::VContext;
 use crate::renderer::Renderer;
 
@@ -12,65 +12,77 @@ pub trait VComponentConstruct {
 
     fn props(&self) -> &Self::Props;
     fn props_mut(&mut self) -> &mut Self::Props;
-    fn _construct(props: &Self::Props) -> VNode;
-
-    fn construct(&self) -> VNode {
-        Self::_construct(self.props())
-    }
+    fn construct(&self) -> VNode;
 }
 
-struct VComponentConstructImpl<F: Fn(Props) -> VNode, Props> {
+struct VComponentConstructImpl<Props, F: Fn(&Props) -> VNode> {
     props: Props,
     construct: F
 }
 
-pub type VComponentKey = Cow<'_, str>;
+pub type VComponentKey = Cow<'static, str>;
 
 pub struct VComponent {
-    pub key: VComponentKey,
+    /*readonly*/ id: usize,
+    /*readonly*/ key: VComponentKey,
 
-    construct: Box<dyn VComponentConstruct>,
-    pub node: Option<VNode>,
-    state: RefCell<Vec<Box<dyn Any>>>,
+    construct: Box<dyn VComponentConstruct<Props = dyn Any>>,
+    node: Option<VNode>,
+    state: Vec<Box<dyn Any>>,
     // pub providedContexts: HashMap<Context, Box<dyn Any>>,
     // pub consumedContexts: HashMap<Context, Box<dyn Any>>
-    effects: RefCell<Vec<Box<dyn Fn() -> ()>>>,
-    update_destructors: RefCell<Vec<Box<dyn FnOnce() -> ()>>>,
-    next_update_destructors: RefCell<Vec<Box<dyn FnOnce() -> ()>>>,
-    permanent_destructors: RefCell<Vec<Box<dyn FnOnce() -> ()>>>,
+    effects: Vec<Box<dyn Fn() -> ()>>,
+    update_destructors: Vec<Box<dyn FnOnce() -> ()>>,
+    next_update_destructors: Vec<Box<dyn FnOnce() -> ()>>,
+    permanent_destructors: Vec<Box<dyn FnOnce() -> ()>>,
 
-    children: HashMap<VComponentKey, Rc<VComponent>>,
-    renderer: Weak<Renderer>,
+    /*readonly*/ children: HashMap<VComponentKey, Box<VComponent>>,
+    /*readonly*/ renderer: Weak<Renderer>,
 
     is_being_updated: bool,
     is_fresh: bool,
     is_dead: bool,
     has_pending_updates: bool,
-    recursive_update_stack_trace: RefCell<Vec<Cow<'_, str>>>,
-    next_state_index: Cell<usize>
+    recursive_update_stack_trace: Vec<Cow<'static, str>>,
+    next_state_index: usize
 }
 
 impl VComponent {
-    pub fn root(renderer: Weak<Renderer>, construct: impl FnOnce() -> VComponent) -> VComponent {
+    pub fn root(renderer: Rc<Renderer>, construct: impl FnOnce() -> Self) {
         VContext::with_empty_component_stack(|| {
-            let mut node = VContext::with_renderer(renderer, construct);
-            node.update("init:");
-            node
+            renderer.root_component = VContext::with_renderer(renderer.downgrade(), construct);
+            renderer.root_component.update(Cow::Borrowed("init:"))
         })
     }
 
-    pub fn new<Props, F: Fn(Props) -> VNode>(key: &VComponentKey, props: Props, construct: F) -> Rc<VComponent> {
+    pub fn new<Props, F: Fn(Props) -> VNode>(key: &VComponentKey, props: Props, construct: F) -> Box<Self> {
         if let Some(parent) = VContext::try_get_component() {
-            if (!parent.is_being_updated) {
-                // TODO: try to reuse this component
+            // parent is being created = if there are any existing children, they're not being reused, they're a conflict
+            if parent.node.is_some() {
+                let found_child = parent.children.remove(key);
+                if let Some((_, found_child)) = found_child {
+                    if found_child.is_fresh {
+                        // If the component was already reused this update, it's a conflict. We add back and fall through to VComponent.create which will panic
+                        parent.children[key] = found_child;
+                    } else {
+                        // Reuse child
+                        found_child.construct = construct;
+                        found_child.is_fresh = true;
+                        let details = Cow::Owned(format!("child:{}", key));
+                        found_child.update(details);
+                        // When we return this it will be added back to parent.children
+                        return found_child;
+                    }
+                }
             }
         }
 
         Self::create(key, props, construct)
     }
 
-    fn create<Props, F: Fn(Props) -> VNode>(key: &VComponentKey, props: Props, construct: F) -> Rc<VComponent> {
-        let component = Rc::new(VComponent {
+    fn create<Props, F: Fn(Props) -> VNode>(key: &VComponentKey, props: Props, construct: F)  -> Box<Self>{
+        Box::new(VComponent {
+            id: VNode::next_id(),
             key: key.clone(),
 
             construct: Box::new(VComponentConstructImpl {
@@ -78,13 +90,13 @@ impl VComponent {
                 construct
             }),
             node: None,
-            state: RefCell::new(Vec::new()),
+            state: Vec::new(),
             // providedContexts: HashMap::new(),
             // consumedContexts: HashMap::new(),
-            effects: RefCell::new(Vec::new()),
-            update_destructors: RefCell::new(Vec::new()),
-            next_update_destructors: RefCell::new(Vec::new()),
-            permanent_destructors: RefCell::new(Vec::new()),
+            effects: Vec::new(),
+            update_destructors: Vec::new(),
+            next_update_destructors: Vec::new(),
+            permanent_destructors: Vec::new(),
 
             children: HashMap::new(),
             renderer: Rc::downgrade(&VContext::get_renderer()),
@@ -93,21 +105,12 @@ impl VComponent {
             is_fresh: true,
             is_dead: false,
             has_pending_updates: false,
-            recursive_update_stack_trace: RefCell::new(Vec::new()),
-            next_state_index: Cell::new(0)
-        });
-
-        if let Some(parent) = VContext::try_get_component() {
-            let mut children = parent.children.borrow_mut();
-            assert!(children.insert(key.clone(), component.clone()).is_none());
-        } else {
-            VContext::get_renderer().set_root_component(component.clone());
-        }
-
-        component
+            recursive_update_stack_trace: Vec::new(),
+            next_state_index: 0
+        })
     }
 
-    fn update(self: &mut Rc<Self>, details: Cow<'_, str>) {
+    pub(super) fn update(mut self: &mut Box<Self>, details: Cow<'_, str>) {
         if self.is_being_updated {
             // Delay until after this update, especially if there are multiple triggered updates since we only have to update once more
             self.has_pending_updates = true;
@@ -116,17 +119,17 @@ impl VComponent {
             }
         } else if self.node.is_none() {
             // Do construct
-            let details = format!("{}!", details);
-            let child_details = format!("{}/", details);
-            self.do_update(Cow::Owned(details), || {
+            let details = Cow::Owned(format!("{}!", details));
+            let child_details = Cow::Owned(format!("{}/", details));
+            self.do_update(details, |mut this| {
                 // Actually do construct and set component.node
-                let node = self.construct.construct();
+                let mut node = this.construct.construct();
 
                 // from devolve-ui.js: "Create pixi if pixi component and on web"
 
                 // Update children (if box or another component)
                 node.update(child_details);
-                self.node = Some(node)
+                this.node = Some(node)
             })
         } else {
             // Reset
@@ -135,22 +138,22 @@ impl VComponent {
             // self.provided_contexts.clear();
 
             // Do construct
-            let child_details = format!("{}/", details);
-            self.do_update(details, || {
-                let node = self.construct.construct();
+            let child_details = Cow::Owned(format!("{}/", details));
+            self.do_update(details, |mut this| {
+                let mut node = this.construct.construct();
 
                 // from devolve-ui.js: "Update pixi if pixi component and on web"
 
                 // Update children (if box or another component)
                 node.update(child_details);
 
-                self.invalidate();
-                self.node = Some(node);
+                this.invalidate();
+                this.node = Some(node);
             })
         }
     }
 
-    fn destroy(self: Rc<Self>) {
+    fn destroy(mut self: Box<Self>) {
         assert!(self.node.is_some(), "tried to destroy uninitialized component");
 
         self.run_permanent_destructors();
@@ -164,23 +167,28 @@ impl VComponent {
         }
     }
 
-    fn do_update(self: &mut Rc<Self>, details: Cow<'_, str>, body: impl FnOnce() -> ()) {
-        VContext::with_renderer(self.renderer.clone(), VContext::with_component(Rc::downgrade(self), || {
-            self.is_being_updated = true;
+    fn do_update(mut self: &mut Box<Self>, details: Cow<'_, str>, body: impl FnOnce(Self) -> ()) {
+        replace_with_or_abort(self, |self_| {
+            VContext::with_renderer(self_.renderer.clone(), VContext::with_component(self_, || {
+                let mut self_ = VContext::get_component();
+                self_.is_being_updated = true;
 
-            body();
+                body();
 
-            self.clear_fresh_and_remove_stale_children();
-            self.is_being_updated = false;
-            self.run_effects();
-        }));
+                self_.clear_fresh_and_remove_stale_children();
+                self_.is_being_updated = false;
+                self_.run_effects();
+
+                self_
+            }))
+        });
 
         if self.has_pending_updates {
             self.has_pending_updates = false;
-            let recursive_update_stack_trace = self.recursive_update_stack_trace.borrow();
+            let recursive_update_stack_trace = self.recursive_update_stack_trace;
             assert!(recursive_update_stack_trace.len() < VNode::max_recursive_updates_before_loop_detected(), "update loop detected:\n{}", recursive_update_stack_trace.join("\n"));
-            let details = format!("{}^", details);
-            self.update(Cow::Owned(details));
+            let details = Cow::Owned(format!("{}^", details));
+            self.update(details);
         } else {
             self.recursive_update_stack_trace.borrow_mut().clear();
         }
@@ -195,5 +203,34 @@ impl VComponent {
                 self.children.remove(&*child_key)
             }
         }
+    }
+
+    pub fn id(&self) -> usize {
+        self.id
+    }
+
+    pub fn key(&self) -> VComponentKey {
+        self.key.clone()
+    }
+
+    pub fn node(&self) -> Option<&VNode> {
+        self.node.as_ref()
+    }
+}
+
+impl <Props, F: Fn(&Props) -> VNode> VComponentConstruct for VComponentConstructImpl<Props, F> {
+    type Props = Props;
+
+    fn props(&self) -> &Self::Props {
+        &self.props
+    }
+
+    fn props_mut(&mut self) -> &mut Self::Props {
+        &mut self.props
+    }
+
+    fn construct(&self) -> VNode {
+        let construct = &self.construct;
+        construct(&self.props)
     }
 }

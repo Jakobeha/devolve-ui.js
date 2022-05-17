@@ -1,13 +1,11 @@
-use std::borrow::BorrowMut;
 use std::cell::{RefCell, RefMut};
 use std::rc::{Rc, Weak};
-use std::sync::Mutex;
 use crate::core::component::component::VComponent;
 use crate::renderer::Renderer;
 
 pub struct VContext {
     renderers: Vec<Weak<Renderer>>,
-    components: Vec<Weak<VComponent>>,
+    components: Vec<Box<VComponent>>,
 }
 
 impl VContext {
@@ -21,39 +19,34 @@ impl VContext {
             .last_mut()
             .expect("no renderers in context")
             .upgrade()
-            .expect("renderer shouldn't have been freed"))
+            .expect("renderer in context was freed"))
     }
 
     pub fn has_component() -> bool {
         Self::borrow_global(|this| !this.components.is_empty())
     }
 
-    pub fn get_component() -> Rc<VComponent> {
+    pub fn get_component<'a>() -> &'a mut Box<VComponent> {
         Self::borrow_global(|this| this
             .components
             .last_mut()
-            .expect("no components in context")
-            .upgrade()
-            .expect("component shouldn't have been freed"))
+            .expect("no components in context"))
     }
 
-    pub fn try_get_component() -> Option<Rc<VComponent>> {
+    pub fn try_get_component<'a>() -> Option<&'a mut Box<VComponent>> {
         Self::borrow_global(|this| this
             .components
-            .last_mut()
-            .map(|weak| weak.upgrade().expect("component shouldn't have been freed")))
+            .last_mut())
     }
 
-    pub fn iter_components_top_down() -> impl Iterator<Item=Rc<VComponent>> {
+    pub fn iter_components_top_down<'a>() -> impl Iterator<Item=&'a mut Box<VComponent>> {
         Self::borrow_global(|this| this
             .components
-            .clone()
-            .into_iter()
-            .rev()
-            .map(|weak| weak.upgrade().expect("component shouldn't have been freed")))
+            .iter_mut()
+            .rev())
     }
 
-    pub fn with_renderer(renderer: Weak<Renderer>, f: impl FnOnce() -> R) -> R {
+    pub fn with_renderer<R>(renderer: Weak<Renderer>, f: impl FnOnce() -> R) -> R {
         // We need to not borrow during f or we'll get a RefCell runtime error
         Self::borrow_global(|this| this.renderers.push(renderer));
         let result = f();
@@ -61,20 +54,23 @@ impl VContext {
         result
     }
 
-    pub fn with_component(component: Weak<VComponent>, f: impl FnOnce() -> R) -> R {
+    pub fn with_component<R>(component: Box<VComponent>, f: impl FnOnce() -> R) -> (R, Box<VComponent>) {
         // We need to not borrow during f or we'll get a RefCell runtime error
         Self::borrow_global(|this| this.components.push(component));
         let result = f();
-        Self::borrow_global(|this| this.components.pop());
-        result
+        let component = Self::borrow_global(|this| this.components.pop().expect("component stack misaligned"));
+        (result, component)
     }
 
-    pub fn with_empty_component_stack(f: impl FnOnce() -> R) -> R {
+    pub fn with_empty_component_stack<R>(f: impl FnOnce() -> R) -> R {
         // We need to not borrow during f or we'll get a RefCell runtime error
-        let mut old_components = Self::borrow_global(|this| this.components.clone());
-        Self::borrow_global(|this| this.components.clear());
+        let mut old_components = Self::borrow_global(|this| {
+            let mut old_components = Vec::new();
+            old_components.append(&mut this.components);
+            old_components
+        });
         let result = f();
-        assert!(Self::borrow_global(|this| this.components.is_empty()), "component stack mismatch");
+        assert!(Self::borrow_global(|this| this.components.is_empty()), "component stack misaligned");
         Self::borrow_global(|this| this.components.append(&mut old_components));
         result
     }
