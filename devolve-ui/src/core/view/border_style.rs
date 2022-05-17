@@ -8,3 +8,12 @@ pub enum BorderStyle {
     Ascii,
     AsciiDashed
 }
+
+pub enum DividerStyle {
+    Single,
+    Double,
+    Dashed,
+    Thick,
+    Ascii,
+    AsciiDashed
+}

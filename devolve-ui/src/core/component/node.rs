@@ -1,10 +1,10 @@
 use std::borrow::Cow;
 use crate::core::component::component::VComponent;
-use crate::core::view::view::{VView, VViewType};
+use crate::core::view::view::VView;
 
 pub enum VNode {
     Component(Box<VComponent>),
-    View(VView)
+    View(Box<VView>)
 }
 
 static mut NEXT_ID: usize = 0;
@@ -33,11 +33,9 @@ impl VNode {
                 component.update(details);
             },
             VNode::View(view) => {
-                if let VViewType::VBox { children } = &mut view.t {
-                    for (index, child) in children.iter_mut().enumerate() {
-                        let sub_details = Cow::Owned(format!("{}[{}]", details, index));
-                        child.update(sub_details);
-                    }
+                for (index, child) in view.children_mut().iter_mut().enumerate() {
+                    let sub_details = Cow::Owned(format!("{}[{}]", details, index));
+                    child.update(sub_details);
                 }
             }
         }
