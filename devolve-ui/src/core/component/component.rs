@@ -273,8 +273,9 @@ impl VComponent {
     }
 
     fn invalidate(self: &Box<Self>) {
-        // TODO
-        // self.renderer.invalidate(self);
+        if let Some(renderer) = self.renderer.upgrade() {
+            renderer.invalidate(self);
+        }
     }
 
     pub fn id(&self) -> usize {
