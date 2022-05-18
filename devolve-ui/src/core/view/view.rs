@@ -1,13 +1,15 @@
+use std::borrow::Cow;
 use std::fmt;
 use std::fmt::{Display, Formatter};
-use crate::core::component::node::VNode;
+use crate::core::component::node::{NodeId, VNode};
+use crate::core::view::layout::bounds::Bounds;
 // use crate::core::view::border_style::{BorderStyle, DividerStyle};
 
 pub struct VView {
-    id: usize,
-    // bounds: Bounds,
-    // visible: bool,
-    // key: Option<Cow<'_, str>>,
+    id: NodeId,
+    bounds: Bounds,
+    is_visible: bool,
+    key: Option<Cow<'static, str>>,
     pub d: dyn VViewData
 }
 
@@ -54,7 +56,7 @@ pub trait VViewData {
 }*/
 
 impl VView {
-    pub fn id(&self) -> usize {
+    pub fn id(&self) -> NodeId {
         self.id
     }
 

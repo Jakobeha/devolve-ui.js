@@ -9,6 +9,11 @@ keywords = ["ui", "tui", "terminal"]
 categories = ["command-line-interface", "gui"]
 edition = "2021"
 
+[features]
+# Include nothing by default
+default = []
+time = []
+
 [package.metadata.docs.rs]
 cargo-args = ["-Zunstable-options", "-Zrustdoc-scrape-examples=examples"]
 
@@ -18,3 +23,4 @@ cargo-args = ["-Zunstable-options", "-Zrustdoc-scrape-examples=examples"]
 devolve-ui-derive = { path = "../devolve-ui-derive" }
 palette = "0.6"
 replace_with = "0.1.7"
+tokio = { version = "1.18.2", features = ["rt", "time"], optional = true }

@@ -1,6 +1,17 @@
 use std::borrow::Cow;
+use std::fmt;
+use std::fmt::{Display, Formatter};
 use crate::core::component::component::VComponent;
 use crate::core::view::view::VView;
+
+#[derive(Debug, Clone, Copy, Eq, PartialEq, Ord, PartialOrd, Hash)]
+pub struct NodeId(usize);
+
+impl Display for NodeId {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.0)
+    }
+}
 
 pub enum VNode {
     Component(Box<VComponent>),
@@ -10,17 +21,17 @@ pub enum VNode {
 static mut NEXT_ID: usize = 0;
 
 impl VNode {
-    pub fn next_id() -> usize {
+    pub const NULL_ID: NodeId = NodeId(0);
+
+    pub fn next_id() -> NodeId {
         // TODO: Make thread safe?
-        let id: usize;
         unsafe {
             NEXT_ID += 1;
-            id = NEXT_ID;
+            NodeId(NEXT_ID)
         }
-        id
     }
 
-    pub fn id(&self) -> usize {
+    pub fn id(&self) -> NodeId {
         match self {
             VNode::Component(component) => component.id(),
             VNode::View(view) => view.id()
@@ -41,7 +52,7 @@ impl VNode {
         }
     }
 
-    pub fn view(&self) -> &VView {
+    pub fn view(&self) -> &Box<VView> {
         match self {
             VNode::Component(component) => component
                 .node()

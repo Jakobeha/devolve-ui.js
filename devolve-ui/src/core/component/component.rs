@@ -1,12 +1,13 @@
 use crate::core::component::context::VContext;
 use crate::core::component::mode::VMode;
-use crate::core::component::node::VNode;
+use crate::core::component::node::{NodeId, VNode};
 use crate::renderer::Renderer;
 use std::any::Any;
 use std::borrow::Cow;
 use std::collections::HashMap;
 use std::rc::{Rc, Weak};
 use replace_with::replace_with_or_abort;
+use crate::core::view::view::VView;
 
 pub trait VComponentConstruct {
     fn construct(&self) -> VNode;
@@ -20,7 +21,7 @@ struct VComponentConstructImpl<Props: 'static, F: Fn(&Props) -> VNode + 'static>
 pub type VComponentKey = Cow<'static, str>;
 
 pub struct VComponent {
-    /*readonly*/ id: usize,
+    /*readonly*/ id: NodeId,
     /*readonly*/ key: VComponentKey,
 
     construct: Box<dyn VComponentConstruct>,
@@ -45,13 +46,6 @@ pub struct VComponent {
 }
 
 impl VComponent {
-    pub fn root(renderer: Rc<Renderer>, construct: impl FnOnce() -> Box<Self>) {
-        VContext::with_clear_component_stack(|| {
-            let root_component = VContext::with_push_renderer(Rc::downgrade(&renderer), construct);
-            renderer.set_root_component(Some(root_component));
-        })
-    }
-
     pub fn new<Props: 'static, F: Fn(&Props) -> VNode + 'static>(key: &VComponentKey, props: Props, construct: F) -> Box<Self> {
         enum Action<Props_, F_> {
             Reuse(Box<VComponent>),
@@ -274,11 +268,11 @@ impl VComponent {
 
     fn invalidate(self: &Box<Self>) {
         if let Some(renderer) = self.renderer.upgrade() {
-            renderer.invalidate(self);
+            renderer.invalidate(self.view());
         }
     }
 
-    pub fn id(&self) -> usize {
+    pub fn id(&self) -> NodeId {
         self.id
     }
 
@@ -288,6 +282,10 @@ impl VComponent {
 
     pub fn node(&self) -> Option<&VNode> {
         self.node.as_ref()
+    }
+
+    pub fn view(&self) -> &Box<VView> {
+        self.node.expect("tried to get view of uninitialized component").view()
     }
 }
 
