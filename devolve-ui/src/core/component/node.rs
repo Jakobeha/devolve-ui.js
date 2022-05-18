@@ -27,7 +27,7 @@ impl VNode {
         }
     }
 
-    pub fn update(&mut self, details: Cow<'_, str>) {
+    pub fn update(&mut self, details: Cow<'static, str>) {
         match self {
             VNode::Component(component) => {
                 component.update(details);
