@@ -1,41 +1,43 @@
 use crate::core::component::context::VContext;
 use crate::core::component::mode::VMode;
 use crate::core::component::node::{NodeId, VNode};
-use crate::renderer::Renderer;
 use std::any::Any;
 use std::borrow::Cow;
 use std::collections::HashMap;
 use std::rc::{Rc, Weak};
 use replace_with::replace_with_or_abort;
-use crate::core::view::view::VView;
+use crate::core::view::view::{VView, VViewData};
+use crate::renderer::renderer::Renderer;
 
 pub trait VComponentConstruct {
-    fn construct(&self) -> VNode;
+    type ViewData: VViewData;
+
+    fn construct(&self) -> VNode<ViewData>;
 }
 
-struct VComponentConstructImpl<Props: 'static, F: Fn(&Props) -> VNode + 'static> {
+struct VComponentConstructImpl<ViewData: VViewData, Props: 'static, F: Fn(&Props) -> VNode<ViewData> + 'static> {
     props: Props,
     construct: F
 }
 
 pub type VComponentKey = Cow<'static, str>;
 
-pub struct VComponent {
+pub struct VComponent<ViewData: VViewData> {
     /*readonly*/ id: NodeId,
     /*readonly*/ key: VComponentKey,
 
-    construct: Box<dyn VComponentConstruct>,
-    node: Option<VNode>,
+    construct: Box<dyn VComponentConstruct<ViewData = ViewData>>,
+    node: Option<VNode<ViewData>>,
     state: Vec<Box<dyn Any>>,
     // pub providedContexts: HashMap<Context, Box<dyn Any>>,
     // pub consumedContexts: HashMap<Context, Box<dyn Any>>
-    effects: Vec<Box<dyn Fn(&mut Box<VComponent>) -> ()>>,
-    update_destructors: Vec<Box<dyn FnOnce(&mut Box<VComponent>) -> ()>>,
-    next_update_destructors: Vec<Box<dyn FnOnce(&mut Box<VComponent>) -> ()>>,
-    permanent_destructors: Vec<Box<dyn FnOnce(&mut Box<VComponent>) -> ()>>,
+    effects: Vec<Box<dyn Fn(&mut Box<VComponent<ViewData>>) -> ()>>,
+    update_destructors: Vec<Box<dyn FnOnce(&mut Box<VComponent<ViewData>>) -> ()>>,
+    next_update_destructors: Vec<Box<dyn FnOnce(&mut Box<VComponent<ViewData>>) -> ()>>,
+    permanent_destructors: Vec<Box<dyn FnOnce(&mut Box<VComponent<ViewData>>) -> ()>>,
 
-    /*readonly*/ children: HashMap<VComponentKey, Box<VComponent>>,
-    /*readonly*/ renderer: Weak<Renderer>,
+    /*readonly*/ children: HashMap<VComponentKey, Box<VComponent<ViewData>>>,
+    /*readonly*/ renderer: Weak<Renderer<dyn Any>>,
 
     is_being_updated: bool,
     is_fresh: bool,
@@ -45,10 +47,10 @@ pub struct VComponent {
     next_state_index: usize
 }
 
-impl VComponent {
-    pub fn new<Props: 'static, F: Fn(&Props) -> VNode + 'static>(key: &VComponentKey, props: Props, construct: F) -> Box<Self> {
+impl <ViewData: VViewData> VComponent<ViewData> {
+    pub fn new<Props: 'static, F: Fn(&Props) -> VNode<ViewData> + 'static>(key: &VComponentKey, props: Props, construct: F) -> Box<Self> {
         enum Action<Props_, F_> {
-            Reuse(Box<VComponent>),
+            Reuse(Box<VComponent<ViewData>>),
             Create(Props_, F_)
         }
 
@@ -85,7 +87,7 @@ impl VComponent {
         }
     }
 
-    fn create<Props: 'static, F: Fn(&Props) -> VNode + 'static>(key: &VComponentKey, props: Props, construct: F)  -> Box<Self>{
+    fn create<Props: 'static, F: Fn(&Props) -> VNode<ViewData> + 'static>(key: &VComponentKey, props: Props, construct: F)  -> Box<Self>{
         Box::new(VComponent {
             id: VNode::next_id(),
             key: key.clone(),
@@ -280,17 +282,19 @@ impl VComponent {
         self.key.clone()
     }
 
-    pub fn node(&self) -> Option<&VNode> {
+    pub fn node(&self) -> Option<&VNode<ViewData>> {
         self.node.as_ref()
     }
 
-    pub fn view(&self) -> &Box<VView> {
+    pub fn view(&self) -> &Box<VView<ViewData>> {
         self.node.expect("tried to get view of uninitialized component").view()
     }
 }
 
-impl <Props: 'static, F: Fn(&Props) -> VNode + 'static> VComponentConstruct for VComponentConstructImpl<Props, F> {
-    fn construct(&self) -> VNode {
+impl <ViewData: VViewData, Props: 'static, F: Fn(&Props) -> VNode<ViewData> + 'static> VComponentConstruct for VComponentConstructImpl<ViewData, Props, F> {
+    type ViewData = ViewData;
+
+    fn construct(&self) -> VNode<ViewData> {
         let construct = &self.construct;
         construct(&self.props)
     }

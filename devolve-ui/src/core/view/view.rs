@@ -5,12 +5,12 @@ use crate::core::component::node::{NodeId, VNode};
 use crate::core::view::layout::bounds::Bounds;
 // use crate::core::view::border_style::{BorderStyle, DividerStyle};
 
-pub struct VView {
+pub struct VView<ViewData: VViewData> {
     id: NodeId,
     bounds: Bounds,
     is_visible: bool,
     key: Option<Cow<'static, str>>,
-    pub d: dyn VViewData
+    pub d: ViewData
 }
 
 #[derive(Debug, Clone, Copy, P)]
@@ -55,7 +55,7 @@ pub trait VViewData {
     Custom(dyn VViewCustom)
 }*/
 
-impl VView {
+impl <ViewData: VViewData> VView<ViewData> {
     pub fn id(&self) -> NodeId {
         self.id
     }

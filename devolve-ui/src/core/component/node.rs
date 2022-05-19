@@ -2,7 +2,7 @@ use std::borrow::Cow;
 use std::fmt;
 use std::fmt::{Display, Formatter};
 use crate::core::component::component::VComponent;
-use crate::core::view::view::VView;
+use crate::core::view::view::{VView, VViewData};
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq, Ord, PartialOrd, Hash)]
 pub struct NodeId(usize);
@@ -13,14 +13,14 @@ impl Display for NodeId {
     }
 }
 
-pub enum VNode {
-    Component(Box<VComponent>),
-    View(Box<VView>)
+pub enum VNode<ViewData: VViewData> {
+    Component(Box<VComponent<ViewData>>),
+    View(Box<VView<ViewData>>)
 }
 
 static mut NEXT_ID: usize = 0;
 
-impl VNode {
+impl <ViewData: VViewData> VNode<ViewData> {
     pub const NULL_ID: NodeId = NodeId(0);
 
     pub fn next_id() -> NodeId {
@@ -52,7 +52,7 @@ impl VNode {
         }
     }
 
-    pub fn view(&self) -> &Box<VView> {
+    pub fn view(&self) -> &Box<VView<ViewData>> {
         match self {
             VNode::Component(component) => component
                 .node()
