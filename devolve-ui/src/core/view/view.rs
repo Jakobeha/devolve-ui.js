@@ -23,9 +23,12 @@ impl Display for VViewType {
 }
 
 pub trait VViewData {
+    type Children: Iterator<Item=&VNode<Self>>;
+    type ChildrenMut: Iterator<Item=&mut VNode<Self>>;
+
     fn typ(&self) -> VViewType;
-    fn children(&self) -> &Vec<VNode>;
-    fn children_mut(&mut self) -> &mut Vec<VNode>;
+    fn children(&self) -> Children;
+    fn children_mut(&mut self) -> ChildrenMut;
 }
 
 /*pub enum VViewType {
@@ -60,11 +63,11 @@ impl <ViewData: VViewData> VView<ViewData> {
         self.id
     }
 
-    pub fn children(&self) -> &Vec<VNode> {
+    pub fn children(&self) -> ViewData::Children {
         self.t.children()
     }
 
-    pub fn children_mut(&mut self) -> &mut Vec<VNode> {
+    pub fn children_mut(&mut self) -> ViewData::ChildrenMut {
         self.t.children_mut()
     }
 }

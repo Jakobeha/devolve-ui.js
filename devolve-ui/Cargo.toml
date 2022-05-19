@@ -12,7 +12,8 @@ edition = "2021"
 [features]
 # Include nothing by default
 default = []
-time = []
+time = ["tokio"]
+tui = ["libc", "crossterm"]
 
 [package.metadata.docs.rs]
 cargo-args = ["-Zunstable-options", "-Zrustdoc-scrape-examples=examples"]
@@ -24,3 +25,5 @@ devolve-ui-derive = { path = "../devolve-ui-derive" }
 palette = "0.6"
 replace_with = "0.1.7"
 tokio = { version = "1.18.2", features = ["rt", "time"], optional = true }
+libc = { version = "0.2.126", optional = true }
+crossterm = { version = "0.23.2", optional = true }

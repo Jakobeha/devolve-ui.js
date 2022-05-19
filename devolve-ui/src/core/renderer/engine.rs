@@ -1,14 +1,14 @@
 use crate::core::view::layout::geom::{BoundingBox, Rectangle, Size};
 use crate::core::view::layout::parent_bounds::ParentBounds;
 use crate::core::view::view::{VView, VViewData};
-use crate::renderer::renderer::VRender;
+use crate::core::renderer::renderer::VRender;
 
 pub trait RenderEngine {
     type ViewData: VViewData;
     type RenderLayer;
 
     fn get_root_dimensions(&self) -> ParentBounds;
-    fn on_resize(&mut self, callback: Box<dyn FnMut(ParentBounds) -> ()>);
+    fn on_resize(&mut self, callback: Box<dyn Fn() -> ()>);
 
     fn start_rendering(&mut self);
     fn stop_rendering(&mut self);

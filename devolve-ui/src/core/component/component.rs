@@ -7,7 +7,7 @@ use std::collections::HashMap;
 use std::rc::{Rc, Weak};
 use replace_with::replace_with_or_abort;
 use crate::core::view::view::{VView, VViewData};
-use crate::renderer::renderer::Renderer;
+use crate::core::renderer::renderer::Renderer;
 
 pub trait VComponentConstruct {
     type ViewData: VViewData;

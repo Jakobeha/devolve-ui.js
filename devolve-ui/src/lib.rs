@@ -2,7 +2,8 @@
 #![feature(type_alias_impl_trait)]
 
 pub mod core;
-pub mod renderer;
+pub mod engines;
+pub mod view_data;
 
 #[cfg(test)]
 mod tests {

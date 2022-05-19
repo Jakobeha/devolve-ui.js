@@ -14,7 +14,7 @@ use crate::core::component::node::{NodeId, VNode};
 use crate::core::view::layout::geom::Rectangle;
 use crate::core::view::layout::parent_bounds::ParentBounds;
 use crate::core::view::view::VView;
-use crate::renderer::engine::RenderEngine;
+use crate::core::renderer::engine::RenderEngine;
 
 pub struct VRender<Layer> {
     layers: HashMap<f32, Layer>,
@@ -50,7 +50,7 @@ impl <Engine: RenderEngine> Renderer<Engine> {
     /// # Examples
     /// Start a renderer which re-renders automatically
     /// ```
-    /// use devolve_ui::renderer::renderer::Renderer;
+    /// use devolve_ui::core::renderer::renderer::Renderer;
     /// use devolve_ui::rsx;
     /// use std::time::Duration;
     ///
@@ -63,7 +63,7 @@ impl <Engine: RenderEngine> Renderer<Engine> {
     ///
     /// Start a renderer which re-renders manually (renders once, then can be re-rendered via `renderer.rerender()`)
     /// ```
-    /// use devolve_ui::renderer::renderer::Renderer;
+    /// use devolve_ui::core::renderer::renderer::Renderer;
     /// use devolve_ui::rsx;
     /// use std::time::Duration;
     ///
@@ -83,14 +83,14 @@ impl <Engine: RenderEngine> Renderer<Engine> {
             needs_rerender: Cell::new(false),
             root_component: RefCell::new(None)
         });
-        renderer.engine.borrow().on_resize(Box::new(|new_size| {
+        renderer.engine.borrow().on_resize(Box::new(|| {
             renderer.needs_rerender.set(true);
         }));
         renderer
     }
 
     pub fn root(self: Rc<Self>, construct: impl FnOnce() -> Box<VComponent<ViewData>>) {
-        VContext::with_clear_component_stack(|| {
+        VContext::with_local_context(|| {
             let root_component = VContext::with_push_renderer(Rc::downgrade(&self), construct);
             self.set_root_component(Some(root_component));
         });
@@ -211,5 +211,13 @@ impl <Engine: RenderEngine> Renderer<Engine> {
         }
 
         self.needs_rerender.set(true);
+    }
+}
+
+impl <Engine: RenderEngine> Drop for Renderer<Engine> {
+    fn drop(&mut self) {
+        if self.is_visible.get() {
+            self.engine.borrow_mut().stop_rendering();
+        }
     }
 }
