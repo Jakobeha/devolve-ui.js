@@ -14,12 +14,8 @@ use crate::core::component::node::{NodeId, VNode};
 use crate::core::view::layout::geom::Rectangle;
 use crate::core::view::layout::parent_bounds::ParentBounds;
 use crate::core::view::view::VView;
+use crate::core::renderer::render::VRender;
 use crate::core::renderer::engine::RenderEngine;
-
-pub struct VRender<Layer> {
-    layers: HashMap<f32, Layer>,
-    rect: Option<Rectangle>
-}
 
 struct CachedRender<Layer> {
     render: VRender<Layer>,

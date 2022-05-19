@@ -15,6 +15,7 @@ use crate::core::view::layout::geom::{BoundingBox, Rectangle, Size};
 use crate::core::view::layout::parent_bounds::{DimsStore, ParentBounds};
 use crate::core::view::view::VView;
 use crate::view_data::tui::TuiViewData;
+use crate::engines::tui::layer::RenderLayer;
 
 #[cfg(target_family = "unix")]
 lazy_static! {
@@ -96,7 +97,7 @@ impl <Input: Read, Output: Write> TuiEngine<Input, Output> {
 
 impl <Input: Read, Output: Write> RenderEngine for TuiEngine<Input, Output> {
     type ViewData = TuiViewData<Self::ViewData>;
-    type RenderLayer = Vec<Vec<char>>;
+    type RenderLayer = RenderLayer;
 
     fn get_root_dimensions(&self) -> ParentBounds {
         let size = if let Some(size) = &self.config.override_size {
@@ -153,7 +154,7 @@ impl <Input: Read, Output: Write> RenderEngine for TuiEngine<Input, Output> {
     }
 
     fn write_render(&mut self, batch: VRender<RenderLayer>) {
-        todo!()
+        RenderLayer::collapse(batch).write(&mut self.config.output);
     }
 
     fn clear(&mut self) {
@@ -164,8 +165,9 @@ impl <Input: Read, Output: Write> RenderEngine for TuiEngine<Input, Output> {
         })
     }
 
-    fn clip(&self, layer: &mut RenderLayer, clip_rect: &Rectangle, column_size: &Size) {
-        todo!()
+    // Since we're on a terminal we don't need column_size
+    fn clip(&self, layer: &mut RenderLayer, clip_rect: &Rectangle, _column_size: &Size) {
+        layer.clip(clip_rect);
     }
 
     fn make_render(&self, bounds: &BoundingBox, column_size: &Size, view: &VView<Self::ViewData>) -> RenderLayer {
