@@ -101,7 +101,7 @@ impl Rectangle {
         self.bottom + self.top
     }
 
-    pub fn union(lhs: &Option<Rectangle>, rhs: &Option<Rectangle>) -> Option<Rectangle> {
+    pub fn union(lhs: Option<&Rectangle>, rhs: Option<&Rectangle>) -> Option<Rectangle> {
         match (lhs, rhs) {
             (None, None) => None,
             (None, Some(rhs)) => Some(rhs.clone()),
@@ -115,7 +115,7 @@ impl Rectangle {
         }
     }
 
-    pub fn intersection(lhs: &Option<Rectangle>, rhs: &Option<Rectangle>) -> Option<Rectangle> {
+    pub fn intersection(lhs: Option<&Rectangle>, rhs: Option<&Rectangle>) -> Option<Rectangle> {
         match (lhs, rhs) {
             (None, None) => None,
             (None, Some(rhs)) => Some(rhs.clone()),

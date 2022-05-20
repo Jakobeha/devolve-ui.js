@@ -165,19 +165,37 @@ impl <Input: Read, Output: Write> RenderEngine for TuiEngine<Input, Output> {
         })
     }
 
-    // Since we're on a terminal we don't need column_size
-    fn clip(&self, layer: &mut RenderLayer, clip_rect: &Rectangle, _column_size: &Size) {
-        layer.clip(clip_rect);
-    }
-
-    fn make_render(&self, bounds: &BoundingBox, column_size: &Size, view: &VView<Self::ViewData>) -> RenderLayer {
+    fn make_render(&self, bounds: &BoundingBox, column_size: &Size, view: &Box<VView<Self::ViewData>>, mut render: VRender<RenderLayer>) -> VRender<RenderLayer> {
         match &view.d {
-            TuiViewData::Box { children, sublayout, clip, extend } => todo!(),
+            TuiViewData::Box {
+                children: _children,
+                sub_layout: _sub_layout,
+                clip,
+                extend
+            } => {
+                if clip || extend {
+                    let rect = match bounds.as_rectangle() {
+                        Ok(rect) => Some(&rect),
+                        Err(layout_error) => {
+                            error!("layout error getting rect to clip view {}: {}", view.id, layout_error);
+                            None
+                        }
+                    };
+                    if clip && extend {
+                        render.clip_and_extend(rect);
+                    } else if clip {
+                        render.clip(rect);
+                    } else if extend {
+                        render.extend(rect);
+                    }
+                }
+            }
             TuiViewData::Text { text } => todo!(),
             TuiViewData::Color { color } => todo!(),
             TuiViewData::Border { color, style } => todo!(),
             TuiViewData::Divider { color, style } => todo!(),
             TuiViewData::Source { source } => todo!()
         }
+        render
     }
 }

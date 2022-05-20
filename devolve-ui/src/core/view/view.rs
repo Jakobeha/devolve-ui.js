@@ -3,13 +3,13 @@ use std::fmt;
 use std::fmt::{Display, Formatter};
 use crate::core::component::node::{NodeId, VNode};
 use crate::core::view::layout::bounds::Bounds;
-// use crate::core::view::border_style::{BorderStyle, DividerStyle};
+use crate::core::view::layout::parent_bounds::SubLayout;
 
 pub struct VView<ViewData: VViewData> {
-    id: NodeId,
-    bounds: Bounds,
-    is_visible: bool,
-    key: Option<Cow<'static, str>>,
+    pub id: NodeId,
+    pub bounds: Bounds,
+    pub is_visible: bool,
+    pub key: Option<Cow<'static, str>>,
     pub d: ViewData
 }
 
@@ -27,8 +27,8 @@ pub trait VViewData {
     type ChildrenMut: Iterator<Item=&mut VNode<Self>>;
 
     fn typ(&self) -> VViewType;
-    fn children(&self) -> Children;
-    fn children_mut(&mut self) -> ChildrenMut;
+    fn children(&self) -> Option<(Children, SubLayout)>;
+    fn children_mut(&mut self) -> Option<(ChildrenMut, SubLayout)>;
 }
 
 /*pub enum VViewType {
@@ -57,17 +57,3 @@ pub trait VViewData {
     },
     Custom(dyn VViewCustom)
 }*/
-
-impl <ViewData: VViewData> VView<ViewData> {
-    pub fn id(&self) -> NodeId {
-        self.id
-    }
-
-    pub fn children(&self) -> ViewData::Children {
-        self.t.children()
-    }
-
-    pub fn children_mut(&mut self) -> ViewData::ChildrenMut {
-        self.t.children_mut()
-    }
-}

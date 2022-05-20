@@ -1,5 +1,5 @@
 use std::borrow::Cow;
-use std::cell::{Cell, RefCell};
+use std::cell::{Cell, RefCell, RefMut};
 use std::collections::HashMap;
 use std::rc::Rc;
 #[cfg(feature = "time")]
@@ -20,7 +20,7 @@ use crate::core::renderer::engine::RenderEngine;
 struct CachedRender<Layer> {
     render: VRender<Layer>,
     parent_bounds: ParentBounds,
-    sibling_rect: Option<Rectangle>,
+    prev_sibling: Option<Rectangle>,
     parent: NodeId
 }
 
@@ -36,6 +36,11 @@ pub struct Renderer<Engine: RenderEngine> {
     cached_renders: RefCell<HashMap<NodeId, CachedRender<Engine::RenderLayer>>>,
     needs_rerender: Cell<bool>,
     root_component: RefCell<Option<Box<VComponent<ViewData>>>>
+}
+
+struct RenderBorrows<'a, Engine: RenderEngine> {
+    pub cached_renders: RefMut<'a, HashMap<NodeId, CachedRender<Engine::RenderLayer>>>,
+    pub engine: RefMut<'a, Engine>
 }
 
 impl <Engine: RenderEngine> Renderer<Engine> {
@@ -169,7 +174,7 @@ impl <Engine: RenderEngine> Renderer<Engine> {
 
     fn render(self: Rc<Self>, is_first: bool) {
         assert!(self.is_visible.get(), "can't render while invisible");
-        assert!(self.root_component.borrow().is_some(), "can't render without root component");
+        let root_component = self.root_component.borrow().expect("can't render without root component");
 
         self.needs_rerender.set(false);
 
@@ -177,7 +182,15 @@ impl <Engine: RenderEngine> Renderer<Engine> {
         if is_first {
             engine.start_rendering();
         }
-        // TODO
+
+        let root_dimensions = engine.get_root_dimensions();
+        let mut render_borrows = RenderBorrows {
+            cached_renders: self.cached_renders.borrow_mut(),
+            engine
+        };
+
+        let final_render = self.render_view(root_component.view(), &root_dimensions, None, &mut render_borrows);
+        engine.write_render(final_render);
     }
 
     fn clear(self: Rc<Self>, is_last: bool) {
@@ -192,10 +205,50 @@ impl <Engine: RenderEngine> Renderer<Engine> {
         }
     }
 
+    fn render_view(self: &Rc<Self>, view: &Box<VView<Engine::ViewData>>, parent_bounds: &ParentBounds, prev_sibling: Option<&Rectangle>, r: &mut RenderBorrows<'_, Engine>) -> VRender<Engine::RenderLayer> {
+        // Try cached
+        if let Some(cached_render) = r.cached_renders.get(&view.id) {
+            if cached_render.parent_bounds == parent_bounds && cached_render.prev_sibling == prev_sibling {
+                return cached_render.render.clone();
+            } else {
+                r.cached_renders.remove(&view.id).unwrap();
+            }
+        }
+
+        // Do render
+        // Get bounds
+        let bounds_result = view.bounds.resolve(parent_bounds, prev_sibling);
+        if let Err(err) = bounds_result {
+            error!("Error resolving bounds for view {}: {}", view.id, err);
+            return VRender::new();
+        }
+        let (bounding_box, child_store) = bounds_result.unwrap();
+
+        // Render children
+        let mut rendered_children: VRender<Engine::RenderLayer> = VRender::new();
+        if let Some((children, sub_layout)) = view.children() {
+            let parent_bounds = ParentBounds {
+                bounding_box,
+                sub_layout,
+                column_size,
+                store: child_store
+            };
+            let mut prev_sibling = None;
+            for child in children {
+                let child_render = self.render_view(child, &parent_bounds, prev_sibling, r);
+                prev_sibling = child_render.rect();
+                rendered_children.merge(child_render);
+            }
+        }
+
+        // Render this view
+        r.engine.make_render(&bounds, &parent_bounds.column_size, view, rendered_children)
+    }
+
     pub(crate) fn invalidate(self: Rc<Self>, view: &Box<VView<ViewData>>) {
         // Removes this view and all parents from cached_renders
         let mut cached_renders = self.cached_renders.borrow_mut();
-        let mut next_view_id = view.id();
+        let mut next_view_id = view.id;
         while next_view_id != VNode::NULL_ID {
             // This code 1) removes next_view_id from cached_renders,
             // 2) sets next_view_id to the parent (from cached_renders[next_view_id]),

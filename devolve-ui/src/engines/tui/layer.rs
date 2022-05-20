@@ -5,8 +5,9 @@ use crossterm::{Command, cursor};
 use crossterm::style;
 use crate::core::view::color::{Color, PackedColor};
 use crate::core::view::layout::geom::{BoundingBox, Rectangle};
-use crate::core::renderer::renderer::VRender;
+use crate::core::renderer::render::{VRender, VRenderLayer};
 
+#[derive(Debug, Clone)]
 pub enum RenderCellContent {
     TransparentChar,
     Char(char),
@@ -16,12 +17,14 @@ pub enum RenderCellContent {
     ZeroChars
 }
 
+#[derive(Debug, Clone)]
 pub struct RenderCell {
     pub content: RenderCellContent,
     pub fg: PackedColor,
     pub bg: PackedColor
 }
 
+#[derive(Debug, Clone)]
 pub struct RenderLayer(Vec<Vec<RenderCell>>);
 
 impl RenderCell {
@@ -79,18 +82,6 @@ impl RenderLayer {
         }
         for _ in 0..y_offset {
             self.0.insert(0, Vec::new());
-        }
-    }
-
-    pub fn clip(&mut self, clip_rect: &Rectangle) {
-        for (y, line) in self.0.iter_mut().enumerate() {
-            let y = y as f32;
-            for (x, cell) in line.iter_mut().enumerate() {
-                let x = x as f32;
-                if x < clip_rect.left || x >= clip_rect.right || y < clip_rect.top || y >= clip_rect.bottom {
-                    *cell = RenderCell::empty();
-                }
-            }
         }
     }
 
@@ -184,5 +175,25 @@ impl RenderLayer {
         output.flush()?;
 
         OK(())
+    }
+}
+
+impl VRenderLayer for RenderLayer {
+    fn clip(&mut self, clip_rect: &Rectangle) {
+        for (y, line) in self.0.iter_mut().enumerate() {
+            let y = y as f32;
+            for (x, cell) in line.iter_mut().enumerate() {
+                let x = x as f32;
+                if x < clip_rect.left || x >= clip_rect.right || y < clip_rect.top || y >= clip_rect.bottom {
+                    *cell = RenderCell::empty();
+                }
+            }
+        }
+    }
+}
+
+impl Default for RenderLayer {
+    fn default() -> Self {
+        RenderLayer(Vec::new())
     }
 }

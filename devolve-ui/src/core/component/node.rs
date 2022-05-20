@@ -34,7 +34,7 @@ impl <ViewData: VViewData> VNode<ViewData> {
     pub fn id(&self) -> NodeId {
         match self {
             VNode::Component(component) => component.id(),
-            VNode::View(view) => view.id()
+            VNode::View(view) => view.id
         }
     }
 
