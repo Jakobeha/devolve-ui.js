@@ -1,2 +1,2 @@
 pub mod tui;
-pub mod border_style;
+pub mod attrs;

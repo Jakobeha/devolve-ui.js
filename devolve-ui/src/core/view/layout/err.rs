@@ -12,7 +12,7 @@ pub struct LayoutError<'a> {
 pub type LayoutResult<'a, T> = Result<T, LayoutError<'a>>;
 
 impl LayoutError {
-    pub fn new<'a, Str: Into<Cow<'a, str>>>(message: Str) -> LayoutError<'a> {
+    pub fn new<'a>(message: impl Into<Cow<'a, str>>) -> LayoutError<'a> {
         LayoutError {
             message: message.into(),
             path: String::new(),
@@ -46,4 +46,11 @@ impl LayoutError {
             path: format!("{}#{}[{}].{}", parent_type.to_string(), parent_id, index, self.path),
         }
     }
+
+     pub fn add_description(&self, description: &str) -> LayoutError {
+         LayoutError {
+             message: Cow::Owned(format!("{}: {}", description, self.message)),
+             path: self.path.clone()
+         }
+     }
 }

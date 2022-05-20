@@ -66,7 +66,7 @@ impl BoundingBox {
         }
     }
 
-    pub fn with_default_size(&self, default_size: Size) -> Self {
+    pub fn with_default_size(&self, default_size: &Size) -> Self {
         BoundingBox {
             x: self.x,
             y: self.y,
@@ -89,6 +89,10 @@ impl BoundingBox {
         } else {
             Err(LayoutError::new("can't convert bounds into rectangle because there is no size"))
         }
+    }
+
+    pub fn as_rectangle_with_default_size(&self, default_size: &Size) -> Rectangle {
+        self.with_default_size(default_size).as_rectangle().expect("as_rectangle_with_default_size: didn't expect a layout error was possible here")
     }
 }
 

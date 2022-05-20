@@ -34,7 +34,7 @@ pub trait VViewData {
 /*pub enum VViewType {
     Box {
         children: Vec<VNode>,
-        // sublayout: SubLayout,
+        // sub_layout: SubLayout,
         // clip: bool,
         // extend: bool
     },

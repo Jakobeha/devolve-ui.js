@@ -17,3 +17,10 @@ pub enum DividerStyle {
     Ascii,
     AsciiDashed
 }
+
+pub enum TextWrapMode {
+    Word,
+    Char,
+    Clip,
+    Undefined
+}

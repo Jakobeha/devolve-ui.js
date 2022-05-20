@@ -1,6 +1,6 @@
 use std::slice::{Iter, IterMut};
 use crate::core::component::node::VNode;
-use crate::view_data::border_style::{BorderStyle, DividerStyle};
+use crate::view_data::attrs::{BorderStyle, DividerStyle, TextWrapMode};
 use crate::core::view::color::Color;
 use crate::core::view::layout::parent_bounds::SubLayout;
 use crate::core::view::view::{VViewData, VViewType};
@@ -14,6 +14,8 @@ pub enum TuiViewData<Self_: VViewData> {
     },
     Text {
         text: String,
+        color: Color,
+        wrap_mode: WrapMode
     },
     Color {
         color: Color

@@ -9,13 +9,17 @@ use std::io;
 use std::io::{Stdin, Stdout, Read, Write, stdin, stdout};
 #[cfg(target_family = "unix")]
 use std::os::unix::io::{AsRawFd, RawFd};
+use std::str::Lines;
 use crate::core::renderer::engine::RenderEngine;
 use crate::core::renderer::renderer::VRender;
+use crate::core::view::color::Color;
+use crate::core::view::layout::err::LayoutError;
 use crate::core::view::layout::geom::{BoundingBox, Rectangle, Size};
 use crate::core::view::layout::parent_bounds::{DimsStore, ParentBounds};
 use crate::core::view::view::VView;
 use crate::view_data::tui::TuiViewData;
 use crate::engines::tui::layer::RenderLayer;
+use crate::view_data::attrs::{BorderStyle, DividerStyle, TextWrapMode};
 
 #[cfg(target_family = "unix")]
 lazy_static! {
@@ -93,6 +97,26 @@ impl <Input: Read, Output: Write> TuiEngine<Input, Output> {
             config
         }
     }
+
+    fn render_text(&self, bounds: &BoundingBox, color: &Color, wrap_mode: &TextWrapMode, lines: Lines<'_>) -> RenderLayer {
+        todo!()
+    }
+
+    fn render_color(&self, bounds: &BoundingBox, color: &Color) -> RenderLayer {
+        todo!()
+    }
+
+    fn render_border(&self, bounds: &BoundingBox, color: &Color, style: &BorderStyle) -> RenderLayer {
+        todo!()
+    }
+
+    fn render_divider(&self, bounds: &BoundingBox, color: &Color, style: &DividerStyle) -> RenderLayer {
+        todo!()
+    }
+
+    fn render_source(&self, bounds: &BoundingBox, source: &str) -> (RenderLayer, Size) {
+        todo!()
+    }
 }
 
 impl <Input: Read, Output: Write> RenderEngine for TuiEngine<Input, Output> {
@@ -165,7 +189,7 @@ impl <Input: Read, Output: Write> RenderEngine for TuiEngine<Input, Output> {
         })
     }
 
-    fn make_render(&self, bounds: &BoundingBox, column_size: &Size, view: &Box<VView<Self::ViewData>>, mut render: VRender<RenderLayer>) -> VRender<RenderLayer> {
+    fn make_render(&self, bounds: &BoundingBox, column_size: &Size, view: &Box<VView<Self::ViewData>>, mut render: VRender<RenderLayer>) -> Result<VRender<RenderLayer>, LayoutError> {
         match &view.d {
             TuiViewData::Box {
                 children: _children,
@@ -190,12 +214,37 @@ impl <Input: Read, Output: Write> RenderEngine for TuiEngine<Input, Output> {
                     }
                 }
             }
-            TuiViewData::Text { text } => todo!(),
-            TuiViewData::Color { color } => todo!(),
-            TuiViewData::Border { color, style } => todo!(),
-            TuiViewData::Divider { color, style } => todo!(),
-            TuiViewData::Source { source } => todo!()
+            TuiViewData::Text { text, color, wrap_mode } => {
+                let lines = text.lines();
+                let bounds = bounds.with_default_size(&Size {
+                    width: lines.clone().map(|line| line.len()).max().unwrap_or(0) as f32,
+                    height: lines.clone().len() as f32
+                });
+                let rect = bounds.as_rectangle().expect("didn't expect a layout error would be possible here after with_default_size");
+                let layer = self.render_text(&bounds, color, wrap_mode, lines);
+                render.insert(bounds.z, Some(&rect), layer);
+            }
+            TuiViewData::Color { color } => {
+                let rect = bounds.as_rectangle().map_err(|err| err.add_description("Fill-color requires explicit size"))?;
+                let layer = self.render_color(bounds, color);
+                render.insert(bounds.z, Some(&rect), layer);
+            },
+            TuiViewData::Border { color, style } => {
+                let rect = bounds.as_rectangle().map_err(|err| err.add_description("Border requires explicit size"))?;
+                let layer = self.render_border(bounds, color, style);
+                render.insert(bounds.z, Some(&rect), layer);
+            },
+            TuiViewData::Divider { color, style } => {
+                let rect = bounds.as_rectangle().map_err(|err| err.add_description("Divider requires explicit size"))?;
+                let layer = self.render_divider(bounds, color, style);
+                render.insert(bounds.z, Some(&rect), layer);
+            },
+            TuiViewData::Source { source } => {
+                let (layer, size) = self.render_image(bounds, column_size, source)?;
+                let rect = bounds.as_rectangle_with_default_size(&size);
+                render.insert(bounds.z, Some(&rect), layer);
+            }
         }
-        render
+        Ok(render)
     }
 }
