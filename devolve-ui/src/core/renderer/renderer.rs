@@ -9,7 +9,7 @@ use tokio::time::{interval, Interval};
 #[cfg(feature = "time")]
 use tokio::task::{spawn, JoinHandle};
 use crate::core::component::component::{VComponent, VComponentRoot};
-use crate::core::component::context::VContext;
+use crate::core::component::context::VParent;
 use crate::core::component::node::{NodeId, VNode};
 use crate::core::view::layout::geom::Rectangle;
 use crate::core::view::layout::parent_bounds::ParentBounds;
@@ -92,11 +92,11 @@ impl <Engine: RenderEngine> Renderer<Engine> where Engine::RenderLayer: VRenderL
         renderer
     }
 
-    pub fn root(self: &Rc<Self>, construct: impl FnOnce() -> Box<VComponent<Engine::ViewData>>) {
-        VContext::with_local_context(|| {
-            let root_component = VContext::with_push_renderer(self, construct);
-            self.set_root_component(Some(root_component));
-        });
+    pub fn root(self: &Rc<Self>, construct: impl FnOnce(VParent<'_, Engine::ViewData>) -> Box<VComponent<Engine::ViewData>>) {
+        let self_upcast = self.upcast();
+        let root_component = construct(VParent::Root(&self_upcast));
+        self.set_root_component(Some(root_component));
+
         if self.is_visible.get() {
             self.rerender();
         }
@@ -259,6 +259,10 @@ impl <Engine: RenderEngine> Renderer<Engine> where Engine::RenderLayer: VRenderL
             eprintln!("Error rendering view {}: {}", view.id, error);
             VRender::new()
         })
+    }
+
+    fn upcast(self: Rc<Self>) -> Rc<dyn VComponentRoot<ViewData = Engine::ViewData>> {
+        self
     }
 }
 

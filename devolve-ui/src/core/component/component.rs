@@ -1,12 +1,11 @@
-use crate::core::component::context::VContext;
+use crate::core::component::context::VParent;
 use crate::core::component::mode::VMode;
 use crate::core::component::node::{NodeId, VNode};
 use std::any::Any;
 use std::borrow::Cow;
-use std::cell::RefMut;
 use std::collections::HashMap;
+use std::marker::PhantomData;
 use std::rc::{Rc, Weak};
-use replace_with::replace_with_or_abort;
 use crate::core::view::view::{VView, VViewData};
 
 pub(crate) trait VComponentRoot {
@@ -18,12 +17,13 @@ pub(crate) trait VComponentRoot {
 pub trait VComponentConstruct {
     type ViewData: VViewData;
 
-    fn construct(&self) -> VNode<Self::ViewData>;
+    fn construct(&self, component: &mut Box<VComponent<Self::ViewData>>) -> VNode<Self::ViewData>;
 }
 
-struct VComponentConstructImpl<ViewData: VViewData, Props: 'static, F: Fn(&Props) -> VNode<ViewData> + 'static> {
+struct VComponentConstructImpl<ViewData: VViewData, Props: 'static, F: Fn(&mut Box<VComponent<ViewData>>, &Props) -> VNode<ViewData> + 'static> {
     props: Props,
-    construct: F
+    construct: F,
+    view_data_type: PhantomData<ViewData>
 }
 
 pub type VComponentKey = Cow<'static, str>;
@@ -54,14 +54,14 @@ pub struct VComponent<ViewData: VViewData> {
 }
 
 impl <ViewData: VViewData + 'static> VComponent<ViewData> {
-    pub fn new<Props: 'static, F: Fn(&Props) -> VNode<ViewData> + 'static>(key: &VComponentKey, props: Props, construct: F) -> Box<Self> {
+    pub fn new<Props: 'static, F: Fn(&mut Box<VComponent<ViewData>>, &Props) -> VNode<ViewData> + 'static>(parent: VParent<'_, ViewData>, key: &VComponentKey, props: Props, construct: F) -> Box<Self> {
         enum Action<ViewData_: VViewData, Props_, F_> {
             Reuse(Box<VComponent<ViewData_>>),
             Create(Props_, F_)
         }
 
-        let action = VContext::with_try_top_component(|parent| {
-            if let Some(mut parent) = parent {
+        let action = (|| {
+            if let VParent::Component(mut parent) = parent {
                 // parent is being created = if there are any existing children, they're not being reused, they're a conflict
                 if parent.node.is_some() {
                     let found_child = parent.children.remove(key);
@@ -73,7 +73,8 @@ impl <ViewData: VViewData + 'static> VComponent<ViewData> {
                             // Reuse child
                             found_child.construct = Box::new(VComponentConstructImpl {
                                 props,
-                                construct
+                                construct,
+                                view_data_type: PhantomData,
                             });
                             found_child.is_fresh = true;
                             let details = Cow::Owned(format!("child:{}", key));
@@ -86,21 +87,22 @@ impl <ViewData: VViewData + 'static> VComponent<ViewData> {
             }
             // Fallthrough case
             return Action::Create(props, construct)
-        });
+        })();
         match action {
             Action::Reuse(found_child) => found_child,
-            Action::Create(props, construct) => Self::create(key, props, construct)
+            Action::Create(props, construct) => Self::create(parent, key, props, construct)
         }
     }
 
-    fn create<Props: 'static, F: Fn(&Props) -> VNode<ViewData> + 'static>(key: &VComponentKey, props: Props, construct: F)  -> Box<Self>{
+    fn create<Props: 'static, F: Fn(&mut Box<VComponent<ViewData>>, &Props) -> VNode<ViewData> + 'static>(parent: VParent<'_, ViewData>, key: &VComponentKey, props: Props, construct: F)  -> Box<Self>{
         Box::new(VComponent {
             id: VNode::<ViewData>::next_id(),
             key: key.clone(),
 
             construct: Box::new(VComponentConstructImpl {
                 props,
-                construct
+                construct,
+                view_data_type: PhantomData
             }),
             node: None,
             state: Vec::new(),
@@ -112,7 +114,10 @@ impl <ViewData: VViewData + 'static> VComponent<ViewData> {
             permanent_destructors: Vec::new(),
 
             children: HashMap::new(),
-            renderer: Rc::downgrade(&VContext::get_renderer()),
+            renderer: match parent {
+                VParent::Root(renderer) => Rc::downgrade(renderer),
+                VParent::Component(component) => component.renderer.clone()
+            },
 
             is_being_updated: false,
             is_fresh: true,
@@ -136,28 +141,17 @@ impl <ViewData: VViewData> VComponent<ViewData> {
             // Do construct
             let details = Cow::Owned(format!("{}!", details));
             let child_details = Cow::Owned(format!("{}/", details));
-            self.do_update(details, || {
+            self.do_update(details, |self_| {
                 // Actually do construct and set node
-                // This needs to be unsafe because code in self_.construct.construct()
-                // needs implicit access to self through the context,
-                // so we can't trigger borrow_mut because it will conflict.
-                // This is safe because once we call self_.construct.construct we effectively
-                // no longer need access to self_, even though there's no clear way to get
-                // this through the type system.
-                let mut node = unsafe {
-                    VContext::with_top_component_unsafe(|self_: &mut Box<VComponent<ViewData>>| {
-                        self_.construct.construct()
-                    })
-                };
+                let mut node = self_.construct.construct(self_);
+
                 // from devolve-ui.js: "Create pixi if pixi component and on web"
                 // should have a hook in view trait we can call through node.view().hook(...)
 
                 // Update children (if box or another component)
                 node.update(child_details);
 
-                VContext::with_top_component(|mut self_: RefMut<Box<VComponent<ViewData>>>| {
-                    self_.node = Some(node)
-                })
+                self_.node = Some(node)
             })
         } else {
             // Reset
@@ -167,18 +161,8 @@ impl <ViewData: VViewData> VComponent<ViewData> {
 
             // Do construct
             let child_details = Cow::Owned(format!("{}/", details));
-            self.do_update(details, || {
-                // This needs to be unsafe because code in self_.construct.construct()
-                // needs implicit access to self through the context,
-                // so we can't trigger borrow_mut because it will conflict.
-                // This is safe because once we call self_.construct.construct we effectively
-                // no longer need access to self_, even though there's no clear way to get
-                // this through the type system.
-                let mut node = unsafe {
-                    VContext::with_top_component_unsafe(|self_: &mut Box<VComponent<ViewData>>| {
-                        self_.construct.construct()
-                    })
-                };
+            self.do_update(details, |self_| {
+                let mut node = self_.construct.construct(self_);
 
                 // from devolve-ui.js: "Update pixi if pixi component and on web"
                 // should have a hook in view trait we can call through node.view().hook(...)
@@ -186,10 +170,8 @@ impl <ViewData: VViewData> VComponent<ViewData> {
                 // Update children (if box or another component)
                 node.update(child_details);
 
-                VContext::with_top_component(|mut self_: RefMut<Box<VComponent<ViewData>>>| {
-                    self_.invalidate();
-                    self_.node = Some(node)
-                })
+                self_.invalidate();
+                self_.node = Some(node)
             })
         }
     }
@@ -209,26 +191,14 @@ impl <ViewData: VViewData> VComponent<ViewData> {
         }
     }
 
-    fn do_update(mut self: &mut Box<Self>, details: Cow<'_, str>, body: impl FnOnce() -> ()) {
-        replace_with_or_abort(self, |self_| {
-            let renderer = self_.renderer.upgrade().expect("do_update: component's renderer was deallocated before componnet");
-            VContext::with_push_renderer(&renderer, || {
-                let ((), self_) = VContext::with_push_component(self_, || {
-                    VContext::with_top_component(|mut self_: RefMut<Box<VComponent<ViewData>>>| {
-                        self_.is_being_updated = true;
-                    });
+    fn do_update(mut self: &mut Box<Self>, details: Cow<'_, str>, body: impl FnOnce(&mut Box<Self>) -> ()) {
+        self.is_being_updated = true;
 
-                    body();
+        body(self);
 
-                    VContext::with_top_component(|mut self_: RefMut<Box<VComponent<ViewData>>>| {
-                        self_.clear_fresh_and_remove_stale_children();
-                        self_.is_being_updated = false;
-                        self_.run_effects()
-                    })
-                });
-                self_
-            })
-        });
+        self.clear_fresh_and_remove_stale_children();
+        self.is_being_updated = false;
+        self.run_effects();
 
         if self.has_pending_updates {
             self.has_pending_updates = false;
@@ -300,11 +270,11 @@ impl <ViewData: VViewData> VComponent<ViewData> {
     }
 }
 
-impl <ViewData: VViewData, Props: 'static, F: Fn(&Props) -> VNode<ViewData> + 'static> VComponentConstruct for VComponentConstructImpl<ViewData, Props, F> {
+impl <ViewData: VViewData, Props: 'static, F: Fn(&mut Box<VComponent<ViewData>>, &Props) -> VNode<ViewData> + 'static> VComponentConstruct for VComponentConstructImpl<ViewData, Props, F> {
     type ViewData = ViewData;
 
-    fn construct(&self) -> VNode<ViewData> {
+    fn construct(&self, component: &mut Box<VComponent<Self::ViewData>>) -> VNode<Self::ViewData> {
         let construct = &self.construct;
-        construct(&self.props)
+        construct(component, &self.props)
     }
 }
