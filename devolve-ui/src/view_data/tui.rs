@@ -5,9 +5,9 @@ use crate::core::view::color::Color;
 use crate::core::view::layout::parent_bounds::SubLayout;
 use crate::core::view::view::{VViewData, VViewType};
 
-pub enum TuiViewData<'a, Self_: VViewData<'a>> {
+pub enum TuiViewData {
     Box {
-        children: Vec<VNode<Self_>>,
+        children: Vec<VNode<TuiViewData>>,
         sub_layout: SubLayout,
         clip: bool,
         extend: bool
@@ -33,9 +33,9 @@ pub enum TuiViewData<'a, Self_: VViewData<'a>> {
     }
 }
 
-impl <'a, Self_: VViewData<'a>> VViewData<'a> for TuiViewData<Self_> {
-    type Children = Iter<'a, VNode<Self_>>;
-    type ChildrenMut = IterMut<'a, VNode<Self_>>;
+impl VViewData for TuiViewData {
+    type Children<'a> = Iter<'a, VNode<Self>>;
+    type ChildrenMut<'a> = IterMut<'a, VNode<Self>>;
 
 
     fn typ(&self) -> VViewType {
@@ -49,14 +49,14 @@ impl <'a, Self_: VViewData<'a>> VViewData<'a> for TuiViewData<Self_> {
         }
     }
 
-    fn children(&self) -> Option<(Self::Children, SubLayout)> {
+    fn children(&self) -> Option<(Self::Children<'_>, SubLayout)> {
         match self {
             TuiViewData::Box { children, sub_layout, .. } => Some((children.iter(), sub_layout.clone())),
             _ => None
         }
     }
 
-    fn children_mut(&mut self) -> Option<(Self::ChildrenMut, SubLayout)> {
+    fn children_mut(&mut self) -> Option<(Self::ChildrenMut<'_>, SubLayout)> {
         match self {
             TuiViewData::Box { children, sub_layout, .. } => Some((children.iter_mut(), sub_layout.clone())),
             _ => None

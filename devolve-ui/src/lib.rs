@@ -1,5 +1,7 @@
-// #![feature(arbitrary_self_types)]
+#![feature(arbitrary_self_types)]
 // #![feature(type_alias_impl_trait)]
+#![feature(generic_associated_types)]
+#![feature(is_some_with)]
 
 pub mod core;
 pub mod engines;

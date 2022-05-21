@@ -10,13 +10,13 @@ pub enum LayoutDirection {
     Overlap
 }
 
-#[derive(Clone, Eq, PartialEq)]
+#[derive(Clone, PartialEq)]
 pub struct SubLayout {
     pub direction: LayoutDirection,
-    pub gap: Option<Measurement>
+    pub gap: Measurement
 }
 
-#[derive(Clone, Eq, PartialEq)]
+#[derive(Clone, PartialEq)]
 pub struct DimMap<T> {
     pub x: T,
     pub y: T,
@@ -37,7 +37,7 @@ impl <T: Default> DimMap<T> {
 
 pub type DimsStore = DimMap<HashMap<&'static str, f32>>;
 
-#[derive(Clone, Eq, PartialEq)]
+#[derive(Clone, PartialEq)]
 pub struct ParentBounds {
     pub bounding_box: BoundingBox,
     pub sub_layout: SubLayout,
@@ -59,7 +59,7 @@ impl ParentBounds {
             },
             sub_layout: SubLayout {
                 direction: LayoutDirection::Vertical,
-                gap: None
+                gap: Measurement::Zero
             },
             column_size: Cow::Owned(column_size),
             store

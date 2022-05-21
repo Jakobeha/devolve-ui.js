@@ -1,16 +1,13 @@
-use std::any::Any;
 use std::cell::{RefCell, Ref, RefMut};
 use std::ops::Deref;
 use std::rc::{Rc, Weak};
-use crate::core::component::component::VComponent;
-use crate::core::renderer::engine::RenderEngine;
-use crate::core::renderer::renderer::Renderer;
-use crate::core::renderer::render::VRender;
+use crate::core::component::component::{VComponent, VComponentRoot};
 use crate::core::view::view::VViewData;
+use crate::core::misc::castable_pointer::CastablePointer;
 
 pub struct VContext {
-    renderer: Weak<dyn Any>,
-    components: Vec<RefCell<Box<dyn Any>>>,
+    renderer: Option<CastablePointer<Weak<()>>>,
+    components: Vec<CastablePointer<RefCell<Box<()>>>>,
 }
 
 impl VContext {
@@ -34,14 +31,13 @@ impl VContext {
         Self::with_global(|context| user_f(f(Ref::deref(&context)).as_ptr().as_mut().unwrap()))
     }
 
-    pub fn get_renderer<Engine : RenderEngine>() -> Rc<Renderer<Engine>> {
+    pub fn get_renderer<ViewData: VViewData>() -> Rc<dyn VComponentRoot<ViewData = ViewData>> {
         Self::with_global(|this| this
-            .renderers
-            .last()
+            .renderer
             .expect("no renderers in context")
             .upgrade()
             .expect("renderer in context was freed")
-            .downcast::<Renderer<Engine>>()
+            .downcast::<dyn VComponentRoot<ViewData = ViewData>>()
             .expect("renderer in context was not of expected parameterized type"))
     }
 
@@ -49,31 +45,27 @@ impl VContext {
         Self::with_global(|this| !this.components.is_empty())
     }
 
-    pub fn with_top_component<'a, R, ViewData: VViewData<'a>>(f: impl FnOnce(RefMut<Box<VComponent<'a, ViewData>>>) -> R) -> R {
+    pub fn with_top_component<R, ViewData: VViewData>(f: impl FnOnce(RefMut<Box<VComponent<ViewData>>>) -> R) -> R {
         Self::with_global_subref_mut(|this| this
             .components
             .last()
             .expect("no components in context")
-            .downcast::<VComponent<ViewData>>()
-            .expect("component in context was not of expected parameterized type"), f)
+            .downcast::<RefCell<Box<VComponent<ViewData>>>>(), f)
     }
 
-    pub unsafe fn with_top_component_unsafe<R, ViewData: VViewData<'_>>(f: impl FnOnce(&mut Box<VComponent<ViewData>>) -> R) -> R {
+    pub unsafe fn with_top_component_unsafe<R, ViewData: VViewData>(f: impl FnOnce(&mut Box<VComponent<ViewData>>) -> R) -> R {
         Self::with_global_subref_unsafe(|this| this
             .components
             .last()
             .expect("no components in context")
-            .downcast::<VComponent<ViewData>>()
-            .expect("component in context was not of expected parameterized type"), f)
+            .downcast::<RefCell<Box<VComponent<ViewData>>>>(), f)
     }
 
-    pub fn with_try_top_component<R, ViewData: VViewData<'_>>(f: impl FnOnce(Option<RefMut<Box<VComponent<ViewData>>>>) -> R) -> R {
+    pub fn with_try_top_component<R, ViewData: VViewData>(f: impl FnOnce(Option<RefMut<Box<VComponent<ViewData>>>>) -> R) -> R {
         Self::with_global_opt_subref_mut(|this| this
             .components
             .last()
-            .map(|component| component
-                .downcast::<VComponent<ViewData>>()
-                .expect("component in context was not of expected parameterized type")), f)
+            .map(|component| component.downcast::<RefCell<VComponent<ViewData>>>()), f)
     }
 
     /* pub fn with_iter_components_top_down<R>(f: impl FnOnce(RefMut<impl Iterator<Item=&mut Box<VComponent<Engine::ViewData>>>>>) -> R) -> R {
@@ -83,19 +75,22 @@ impl VContext {
             .rev(), f)
     } */
 
-    pub fn with_push_renderer<R, Engine: RenderEngine>(renderer: Weak<Renderer<Engine>>, f: impl FnOnce() -> R) -> R {
+    pub fn with_push_renderer<R, ViewData: VViewData>(renderer: &Rc<dyn VComponentRoot<ViewData = ViewData>>, f: impl FnOnce() -> R) -> R {
         // We need to not borrow during f or we'll get a RefCell runtime error
-        Self::with_global_mut(|mut this| this.renderers.push(renderer));
+        let old_renderer = Self::with_global_mut(|mut this| this.renderer.replace(Rc::downgrade(renderer).into()));
         let result = f();
-        Self::with_global_mut(|mut this| this.renderers.pop().expect("renderer stack misaligned: empty context when trying to pop renderer"));
+        assert!(Self::with_global(|this| this.renderer.is_some()), "renderer stack misaligned: empty context when trying to pop renderer");
+        Self::with_global_mut(|mut this| RefMut::map(this, |this| *this.renderer = old_renderer));
         result
     }
 
-    pub fn with_push_component<R, ViewData: VViewData<'_>>(component: Box<VComponent<ViewData>>, f: impl FnOnce() -> R) -> (R, Box<VComponent<ViewData>>) {
+    pub fn with_push_component<R, ViewData: VViewData>(component: Box<VComponent<ViewData>>, f: impl FnOnce() -> R) -> (R, Box<VComponent<ViewData>>) {
         // We need to not borrow during f or we'll get a RefCell runtime error
-        Self::with_global_mut(|mut this| this.components.push(RefCell::new(component)));
+        Self::with_global_mut(|mut this| this.components.push(CastablePointer::<RefCell<Box<VComponent<ViewData>>>>::from(RefCell::new(component)).into_downcast()));
         let result = f();
-        let component = Self::with_global_mut(|mut this| this.components.pop().expect("component stack misaligned: empty context when trying to pop component")).into_inner();
+        let component = Self::with_global_mut(|mut this| this.components.pop().expect("component stack misaligned: empty context when trying to pop component"))
+            .downcast::<RefCell<Box<VComponent<ViewData>>>>()
+            .take();
         (result, component)
     }
 
@@ -109,5 +104,8 @@ impl VContext {
 }
 
 thread_local! {
-    static CONTEXT: RefCell<VContext> = RefCell::new();
+    static CONTEXT: RefCell<VContext> = RefCell::new(VContext {
+        renderer: None,
+        components: Vec::new(),
+    });
 }

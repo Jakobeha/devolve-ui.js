@@ -1,6 +1,6 @@
 use crate::core::view::layout::err::{LayoutError, LayoutResult};
 
-#[derive(Clone, Eq, PartialEq)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct BoundingBox {
     pub x: f32,
     pub y: f32,
@@ -11,13 +11,13 @@ pub struct BoundingBox {
     pub anchor_y: f32,
 }
 
-#[derive(Clone, Eq, PartialEq)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct Size {
     pub width: f32,
     pub height: f32,
 }
 
-#[derive(Clone, Eq, PartialEq)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct Rectangle {
     pub left: f32,
     pub top: f32,
@@ -71,8 +71,8 @@ impl BoundingBox {
             x: self.x,
             y: self.y,
             z: self.z,
-            width: self.width.or_else(default_size.width),
-            height: self.height.or_else(default_size.height),
+            width: self.width.or(Some(default_size.width)),
+            height: self.height.or(Some(default_size.height)),
             anchor_x: self.anchor_x,
             anchor_y: self.anchor_y
         }

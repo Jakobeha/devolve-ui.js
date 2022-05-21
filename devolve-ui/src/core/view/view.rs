@@ -5,7 +5,7 @@ use crate::core::component::node::{NodeId, VNode};
 use crate::core::view::layout::bounds::Bounds;
 use crate::core::view::layout::parent_bounds::SubLayout;
 
-pub struct VView<'a, ViewData: VViewData<'a>> {
+pub struct VView<ViewData: VViewData> {
     pub id: NodeId,
     pub bounds: Bounds,
     pub is_visible: bool,
@@ -28,13 +28,13 @@ impl Display for VViewType {
     }
 }
 
-pub trait VViewData<'a> {
-    type Children: Iterator<Item=&'a VNode<Self>>;
-    type ChildrenMut: Iterator<Item=&'a mut VNode<Self>>;
+pub trait VViewData: Sized {
+    type Children<'a>: Iterator<Item=&'a VNode<Self>> where Self: 'a;
+    type ChildrenMut<'a>: Iterator<Item=&'a mut VNode<Self>> where Self: 'a;
 
     fn typ(&self) -> VViewType;
-    fn children(&self) -> Option<(Self::Children, SubLayout)>;
-    fn children_mut(&mut self) -> Option<(Self::ChildrenMut, SubLayout)>;
+    fn children(&self) -> Option<(Self::Children<'_>, SubLayout)>;
+    fn children_mut(&mut self) -> Option<(Self::ChildrenMut<'_>, SubLayout)>;
 }
 
 /*pub enum VViewType {

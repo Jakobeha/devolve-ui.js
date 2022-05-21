@@ -13,14 +13,14 @@ impl Display for NodeId {
     }
 }
 
-pub enum VNode<'a, ViewData: VViewData<'a>> {
-    Component(Box<VComponent<'a, ViewData>>),
-    View(Box<VView<'a, ViewData>>)
+pub enum VNode<ViewData: VViewData> {
+    Component(Box<VComponent<ViewData>>),
+    View(Box<VView<ViewData>>)
 }
 
 static mut NEXT_ID: usize = 0;
 
-impl <'a, ViewData: VViewData<'a>> VNode<'a, ViewData> {
+impl <ViewData: VViewData> VNode<ViewData> {
     pub const NULL_ID: NodeId = NodeId(0);
 
     pub fn next_id() -> NodeId {
@@ -44,9 +44,11 @@ impl <'a, ViewData: VViewData<'a>> VNode<'a, ViewData> {
                 component.update(details);
             },
             VNode::View(view) => {
-                for (index, child) in view.children_mut().enumerate() {
-                    let sub_details = Cow::Owned(format!("{}[{}]", details, index));
-                    child.update(sub_details);
+                if let Some((children, _)) = view.d.children_mut() {
+                    for (index, child) in children.enumerate() {
+                        let sub_details = Cow::Owned(format!("{}[{}]", details, index));
+                        child.update(sub_details);
+                    }
                 }
             }
         }

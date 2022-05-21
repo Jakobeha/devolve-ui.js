@@ -3,31 +3,37 @@ use crate::core::component::mode::VMode;
 use crate::core::component::node::{NodeId, VNode};
 use std::any::Any;
 use std::borrow::Cow;
+use std::cell::RefMut;
 use std::collections::HashMap;
 use std::rc::{Rc, Weak};
 use replace_with::replace_with_or_abort;
 use crate::core::view::view::{VView, VViewData};
-use crate::core::renderer::renderer::Renderer;
 
-pub trait VComponentConstruct<'a> {
-    type ViewData: VViewData<'a>;
+pub(crate) trait VComponentRoot {
+    type ViewData: VViewData;
+
+    fn invalidate(self: Rc<Self>, view: &Box<VView<Self::ViewData>>);
+}
+
+pub trait VComponentConstruct {
+    type ViewData: VViewData;
 
     fn construct(&self) -> VNode<Self::ViewData>;
 }
 
-struct VComponentConstructImpl<'a, ViewData: VViewData<'a>, Props: 'static, F: Fn(&Props) -> VNode<ViewData> + 'static> {
+struct VComponentConstructImpl<ViewData: VViewData, Props: 'static, F: Fn(&Props) -> VNode<ViewData> + 'static> {
     props: Props,
     construct: F
 }
 
 pub type VComponentKey = Cow<'static, str>;
 
-pub struct VComponent<'a, ViewData: VViewData<'a>> {
+pub struct VComponent<ViewData: VViewData> {
     /*readonly*/ id: NodeId,
     /*readonly*/ key: VComponentKey,
 
-    construct: Box<dyn VComponentConstruct<'a, ViewData = ViewData>>,
-    node: Option<VNode<'a, ViewData>>,
+    construct: Box<dyn VComponentConstruct<ViewData = ViewData>>,
+    node: Option<VNode<ViewData>>,
     state: Vec<Box<dyn Any>>,
     // pub providedContexts: HashMap<Context, Box<dyn Any>>,
     // pub consumedContexts: HashMap<Context, Box<dyn Any>>
@@ -36,8 +42,8 @@ pub struct VComponent<'a, ViewData: VViewData<'a>> {
     next_update_destructors: Vec<Box<dyn FnOnce(&mut Box<VComponent<ViewData>>) -> ()>>,
     permanent_destructors: Vec<Box<dyn FnOnce(&mut Box<VComponent<ViewData>>) -> ()>>,
 
-    /*readonly*/ children: HashMap<VComponentKey, Box<VComponent<'a, ViewData>>>,
-    /*readonly*/ renderer: Weak<Renderer<dyn Any>>,
+    /*readonly*/ children: HashMap<VComponentKey, Box<VComponent<ViewData>>>,
+    /*readonly*/ renderer: Weak<dyn VComponentRoot<ViewData = ViewData>>,
 
     is_being_updated: bool,
     is_fresh: bool,
@@ -47,10 +53,10 @@ pub struct VComponent<'a, ViewData: VViewData<'a>> {
     next_state_index: usize
 }
 
-impl <'a, ViewData: VViewData<'a>> VComponent<ViewData> {
+impl <ViewData: VViewData + 'static> VComponent<ViewData> {
     pub fn new<Props: 'static, F: Fn(&Props) -> VNode<ViewData> + 'static>(key: &VComponentKey, props: Props, construct: F) -> Box<Self> {
-        enum Action<ViewData_, Props_, F_> {
-            Reuse(Box<VComponent<'a, ViewData_>>),
+        enum Action<ViewData_: VViewData, Props_, F_> {
+            Reuse(Box<VComponent<ViewData_>>),
             Create(Props_, F_)
         }
 
@@ -89,7 +95,7 @@ impl <'a, ViewData: VViewData<'a>> VComponent<ViewData> {
 
     fn create<Props: 'static, F: Fn(&Props) -> VNode<ViewData> + 'static>(key: &VComponentKey, props: Props, construct: F)  -> Box<Self>{
         Box::new(VComponent {
-            id: VNode::next_id(),
+            id: VNode::<ViewData>::next_id(),
             key: key.clone(),
 
             construct: Box::new(VComponentConstructImpl {
@@ -116,7 +122,9 @@ impl <'a, ViewData: VViewData<'a>> VComponent<ViewData> {
             next_state_index: 0
         })
     }
+}
 
+impl <ViewData: VViewData> VComponent<ViewData> {
     pub(crate) fn update(mut self: &mut Box<Self>, details: Cow<'static, str>) {
         if self.is_being_updated {
             // Delay until after this update, especially if there are multiple triggered updates since we only have to update once more
@@ -137,7 +145,7 @@ impl <'a, ViewData: VViewData<'a>> VComponent<ViewData> {
                 // no longer need access to self_, even though there's no clear way to get
                 // this through the type system.
                 let mut node = unsafe {
-                    VContext::with_top_component_unsafe(|self_| {
+                    VContext::with_top_component_unsafe(|self_: &mut Box<VComponent<ViewData>>| {
                         self_.construct.construct()
                     })
                 };
@@ -147,7 +155,7 @@ impl <'a, ViewData: VViewData<'a>> VComponent<ViewData> {
                 // Update children (if box or another component)
                 node.update(child_details);
 
-                VContext::with_top_component(|mut self_| {
+                VContext::with_top_component(|mut self_: RefMut<Box<VComponent<ViewData>>>| {
                     self_.node = Some(node)
                 })
             })
@@ -167,7 +175,7 @@ impl <'a, ViewData: VViewData<'a>> VComponent<ViewData> {
                 // no longer need access to self_, even though there's no clear way to get
                 // this through the type system.
                 let mut node = unsafe {
-                    VContext::with_top_component_unsafe(|self_| {
+                    VContext::with_top_component_unsafe(|self_: &mut Box<VComponent<ViewData>>| {
                         self_.construct.construct()
                     })
                 };
@@ -178,7 +186,7 @@ impl <'a, ViewData: VViewData<'a>> VComponent<ViewData> {
                 // Update children (if box or another component)
                 node.update(child_details);
 
-                VContext::with_top_component(|mut self_| {
+                VContext::with_top_component(|mut self_: RefMut<Box<VComponent<ViewData>>>| {
                     self_.invalidate();
                     self_.node = Some(node)
                 })
@@ -203,15 +211,16 @@ impl <'a, ViewData: VViewData<'a>> VComponent<ViewData> {
 
     fn do_update(mut self: &mut Box<Self>, details: Cow<'_, str>, body: impl FnOnce() -> ()) {
         replace_with_or_abort(self, |self_| {
-            VContext::with_push_renderer(self_.renderer.clone(), || {
+            let renderer = self_.renderer.upgrade().expect("do_update: component's renderer was deallocated before componnet");
+            VContext::with_push_renderer(&renderer, || {
                 let ((), self_) = VContext::with_push_component(self_, || {
-                    VContext::with_top_component(|mut self_| {
+                    VContext::with_top_component(|mut self_: RefMut<Box<VComponent<ViewData>>>| {
                         self_.is_being_updated = true;
                     });
 
                     body();
 
-                    VContext::with_top_component(|mut self_| {
+                    VContext::with_top_component(|mut self_: RefMut<Box<VComponent<ViewData>>>| {
                         self_.clear_fresh_and_remove_stale_children();
                         self_.is_being_updated = false;
                         self_.run_effects()
@@ -291,7 +300,7 @@ impl <'a, ViewData: VViewData<'a>> VComponent<ViewData> {
     }
 }
 
-impl <'a, ViewData: VViewData<'a>, Props: 'static, F: Fn(&Props) -> VNode<ViewData> + 'static> VComponentConstruct for VComponentConstructImpl<ViewData, Props, F> {
+impl <ViewData: VViewData, Props: 'static, F: Fn(&Props) -> VNode<ViewData> + 'static> VComponentConstruct for VComponentConstructImpl<ViewData, Props, F> {
     type ViewData = ViewData;
 
     fn construct(&self) -> VNode<ViewData> {

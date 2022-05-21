@@ -3,7 +3,7 @@ use crate::core::view::layout::err::{LayoutError, LayoutResult};
 use crate::core::view::layout::geom::{BoundingBox, Rectangle};
 use crate::core::view::layout::parent_bounds::{DimsStore, LayoutDirection, ParentBounds};
 
-#[derive(Clone, Eq, PartialEq)]
+#[derive(Clone, PartialEq)]
 pub struct Bounds {
     layout: LayoutPosition,
     x: Measurement,
@@ -31,7 +31,7 @@ pub struct LayoutPosition {
     y: LayoutPosition1D,
 }
 
-#[derive(Clone, Eq, PartialEq)]
+#[derive(Clone, PartialEq)]
 pub enum Measurement {
     Zero,
     /// To the right of previous node if x, below if y, same as prev's if width or height
@@ -69,16 +69,16 @@ impl From<Option<f32>> for PrevSiblingDim {
 }
 
 impl Bounds {
-    pub fn resolve(&self, parent_bounds: &ParentBounds, prev_sibling: Option<&Rectangle>) -> LayoutResult<'_, (BoundingBox, DimsStore)> {
+    pub fn resolve<'a>(&self, parent_bounds: &'a ParentBounds, prev_sibling: Option<&Rectangle>) -> LayoutResult<'a, (BoundingBox, DimsStore)> {
         let mut store = parent_bounds.store.clone();
         let bounding_box = BoundingBox {
             x: Self::apply_layout_x(parent_bounds, prev_sibling, self.layout.x, Self::reify_x(parent_bounds, &PrevSiblingDim::NotApplicable, Some(&mut store.x), &self.x).map_err(|err| err.add_store("x"))?).map_err(|err| err.add_store("x@layout"))?,
             y: Self::apply_layout_y(parent_bounds, prev_sibling, self.layout.y, Self::reify_y(parent_bounds, &PrevSiblingDim::NotApplicable, Some(&mut store.y), &self.y).map_err(|err| err.add_store("y"))?).map_err(|err| err.add_store("y@layout"))?,
-            z: self.z + parent_bounds.bounding_box.z,
+            z: self.z as f32 + parent_bounds.bounding_box.z,
             anchor_x: self.anchor_x,
             anchor_y: self.anchor_y,
-            width: self.width.map(|width| Self::reify_x(parent_bounds, prev_sibling.map(|r| r.width).into(), Some(&mut store.width), &width).map_err(|err| err.add_dimension("width"))).transpose()?,
-            height: self.height.map(|height| Self::reify_y(parent_bounds, prev_sibling.map(|r| r.height).inti(), Some(&mut store.height), &height).map_err(|err| err.add_dimension("height"))).transpose()?
+            width: self.width.map(|width| Self::reify_x(parent_bounds, &prev_sibling.map(|r| r.width()).into(), Some(&mut store.width), &width).map_err(|err| err.add_dimension("width"))).transpose()?,
+            height: self.height.map(|height| Self::reify_y(parent_bounds, &prev_sibling.map(|r| r.height()).into(), Some(&mut store.height), &height).map_err(|err| err.add_dimension("height"))).transpose()?
         };
         Ok((bounding_box, store))
     }
@@ -89,16 +89,16 @@ impl Bounds {
             Measurement::Prev => match prev_sibling {
                 PrevSiblingDim::NotApplicable => Err(LayoutError::new("can't use prev for x: not applicable"))?,
                 PrevSiblingDim::FirstChild => 0f32,
-                PrevSiblingDim::Some(prev_sibling_dim) => prev_sibling_dim
+                PrevSiblingDim::Some(prev_sibling_dim) => *prev_sibling_dim
             },
-            Measurement::Units(x) => x,
+            Measurement::Units(x) => *x,
             Measurement::Pixels(x) => x / parent_bounds.column_size.width,
             Measurement::Fraction(x) => match parent_bounds.bounding_box.width {
                 None => Err(LayoutError::new("can't use fraction for x: parent width not known"))?,
                 Some(width) => x * width,
             },
-            Measurement::Add(lhs, rhs) => Self::reify_x(parent_bounds, prev_sibling, store.as_deref_mut(), lhs)? + Self::reify_x(parent_bounds, prev_sibling, store, rhs),
-            Measurement::Sub(lhs, rhs) => Self::reify_x(parent_bounds, prev_sibling, store.as_deref_mut(), lhs)? - Self::reify_x(parent_bounds, prev_sibling, store, rhs),
+            Measurement::Add(lhs, rhs) => Self::reify_x(parent_bounds, prev_sibling, store.as_deref_mut(), lhs)? + Self::reify_x(parent_bounds, prev_sibling, store, rhs)?,
+            Measurement::Sub(lhs, rhs) => Self::reify_x(parent_bounds, prev_sibling, store.as_deref_mut(), lhs)? - Self::reify_x(parent_bounds, prev_sibling, store, rhs)?,
             Measurement::Mul(lhs, scale) => Self::reify_x(parent_bounds, prev_sibling, store, lhs)? * scale,
             Measurement::Div(lhs, scale) => Self::reify_x(parent_bounds, prev_sibling, store, lhs)? / scale,
             Measurement::Store(name, x) => match store {
@@ -110,10 +110,10 @@ impl Bounds {
                 }
             }
             Measurement::Load(name) => match store {
-                None => Err(LayoutError::new("can't use load for x: dim-store not applicable")),
+                None => Err(LayoutError::new("can't use load for x: dim-store not applicable"))?,
                 Some(dim_store) => match dim_store.get(name) {
                     None => Err(LayoutError::new(format!("can't use load for x: no such dim {}", name)))?,
-                    Some(result) => result
+                    Some(result) => *result
                 }
             }
         })
@@ -125,16 +125,16 @@ impl Bounds {
             Measurement::Prev => match prev_sibling {
                 PrevSiblingDim::NotApplicable => Err(LayoutError::new("can't use prev for y: not applicable"))?,
                 PrevSiblingDim::FirstChild => 0f32,
-                PrevSiblingDim::Some(prev_sibling_dim) => prev_sibling_dim
+                PrevSiblingDim::Some(prev_sibling_dim) => *prev_sibling_dim
             },
-            Measurement::Units(y) => y,
+            Measurement::Units(y) => *y,
             Measurement::Pixels(y) => y / parent_bounds.column_size.height,
             Measurement::Fraction(y) => match parent_bounds.bounding_box.height {
                 None => Err(LayoutError::new("can't use fraction for y: parent height not known"))?,
                 Some(height) => y * height
             },
-            Measurement::Add(lhs, rhs) => Self::reify_y(parent_bounds, prev_sibling, store.as_deref_mut(), lhs)? + Self::reify_y(parent_bounds, prev_sibling, store, rhs),
-            Measurement::Sub(lhs, rhs) => Self::reify_y(parent_bounds, prev_sibling, store.as_deref_mut(), lhs)? - Self::reify_y(parent_bounds, prev_sibling, store, rhs),
+            Measurement::Add(lhs, rhs) => Self::reify_y(parent_bounds, prev_sibling, store.as_deref_mut(), lhs)? + Self::reify_y(parent_bounds, prev_sibling, store, rhs)?,
+            Measurement::Sub(lhs, rhs) => Self::reify_y(parent_bounds, prev_sibling, store.as_deref_mut(), lhs)? - Self::reify_y(parent_bounds, prev_sibling, store, rhs)?,
             Measurement::Mul(lhs, scale) => Self::reify_y(parent_bounds, prev_sibling, store, lhs)? * scale,
             Measurement::Div(lhs, scale) => Self::reify_y(parent_bounds, prev_sibling, store, lhs)? / scale,
             Measurement::Store(name, y) => match store {
@@ -149,13 +149,13 @@ impl Bounds {
                 None => Err(LayoutError::new("can't use load for y: dim-store not applicable"))?,
                 Some(store) => match store.get(name) {
                     None => Err(LayoutError::new(format!("can't use load for y: no such dim {}", name)))?,
-                    Some(result) => result
+                    Some(result) => *result
                 }
             }
         })
     }
 
-    fn apply_layout_x(parent_bounds: &ParentBounds, prev_sibling: Option<&Rectangle>, layout: LayoutPosition1D, reified: f32) -> LayoutResult<'static, f32> {
+    fn apply_layout_x<'a>(parent_bounds: &'a ParentBounds, prev_sibling: Option<&Rectangle>, layout: LayoutPosition1D, reified: f32) -> LayoutResult<'a, f32> {
         Ok(match layout {
             LayoutPosition1D::GlobalAbsolute => reified,
             LayoutPosition1D::LocalAbsolute => reified + parent_bounds.bounding_box.x,
@@ -164,7 +164,7 @@ impl Bounds {
                     None => reified  + parent_bounds.bounding_box.left().map_err(|err| err.add_dimension("parent.left"))?,
                     Some(prev_sibling) => {
                         // Yes, we do want to reify the parent's sub-layout with it's own bounds
-                        let gap = Self::reify_x(parent_bounds, &PrevSiblingDim::NotApplicable, None, parent_bounds.sublayout.gap).map_err(|err| err.add_dimension("parent.gap"))?;
+                        let gap = Self::reify_x(parent_bounds, &PrevSiblingDim::NotApplicable, None, &parent_bounds.sub_layout.gap).map_err(|err| err.add_dimension("parent.gap"))?;
                         reified + prev_sibling.right + gap
                     }
                 },
@@ -174,7 +174,7 @@ impl Bounds {
         })
     }
 
-    fn apply_layout_y(parent_bounds: &ParentBounds, prev_sibling: Option<&Rectangle>, layout: LayoutPosition1D, reified: f32) -> LayoutResult<'static, f32> {
+    fn apply_layout_y<'a>(parent_bounds: &'a ParentBounds, prev_sibling: Option<&Rectangle>, layout: LayoutPosition1D, reified: f32) -> LayoutResult<'a, f32> {
         Ok(match layout {
             LayoutPosition1D::GlobalAbsolute => reified,
             LayoutPosition1D::LocalAbsolute => reified + parent_bounds.bounding_box.y,
@@ -184,7 +184,7 @@ impl Bounds {
                     None => reified + parent_bounds.bounding_box.top().map_err(|err| err.add_dimension("parent.top"))?,
                     Some(prev_sibling) => {
                         // Yes, we do want to reify the parent's sub-layout with it's own bounds
-                        let gap = Self::reify_y(parent_bounds, &PrevSiblingDim::NotApplicable, None, parent_bounds.sublayout.gap).map_err(|err| err.add_dimension("parent.gap"))?;
+                        let gap = Self::reify_y(parent_bounds, &PrevSiblingDim::NotApplicable, None, &parent_bounds.sub_layout.gap).map_err(|err| err.add_dimension("parent.gap"))?;
                         reified + prev_sibling.bottom + gap
                     }
                 },
