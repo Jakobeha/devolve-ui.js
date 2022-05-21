@@ -9,25 +9,25 @@ use replace_with::replace_with_or_abort;
 use crate::core::view::view::{VView, VViewData};
 use crate::core::renderer::renderer::Renderer;
 
-pub trait VComponentConstruct {
-    type ViewData: VViewData;
+pub trait VComponentConstruct<'a> {
+    type ViewData: VViewData<'a>;
 
-    fn construct(&self) -> VNode<ViewData>;
+    fn construct(&self) -> VNode<Self::ViewData>;
 }
 
-struct VComponentConstructImpl<ViewData: VViewData, Props: 'static, F: Fn(&Props) -> VNode<ViewData> + 'static> {
+struct VComponentConstructImpl<'a, ViewData: VViewData<'a>, Props: 'static, F: Fn(&Props) -> VNode<ViewData> + 'static> {
     props: Props,
     construct: F
 }
 
 pub type VComponentKey = Cow<'static, str>;
 
-pub struct VComponent<ViewData: VViewData> {
+pub struct VComponent<'a, ViewData: VViewData<'a>> {
     /*readonly*/ id: NodeId,
     /*readonly*/ key: VComponentKey,
 
-    construct: Box<dyn VComponentConstruct<ViewData = ViewData>>,
-    node: Option<VNode<ViewData>>,
+    construct: Box<dyn VComponentConstruct<'a, ViewData = ViewData>>,
+    node: Option<VNode<'a, ViewData>>,
     state: Vec<Box<dyn Any>>,
     // pub providedContexts: HashMap<Context, Box<dyn Any>>,
     // pub consumedContexts: HashMap<Context, Box<dyn Any>>
@@ -36,7 +36,7 @@ pub struct VComponent<ViewData: VViewData> {
     next_update_destructors: Vec<Box<dyn FnOnce(&mut Box<VComponent<ViewData>>) -> ()>>,
     permanent_destructors: Vec<Box<dyn FnOnce(&mut Box<VComponent<ViewData>>) -> ()>>,
 
-    /*readonly*/ children: HashMap<VComponentKey, Box<VComponent<ViewData>>>,
+    /*readonly*/ children: HashMap<VComponentKey, Box<VComponent<'a, ViewData>>>,
     /*readonly*/ renderer: Weak<Renderer<dyn Any>>,
 
     is_being_updated: bool,
@@ -47,10 +47,10 @@ pub struct VComponent<ViewData: VViewData> {
     next_state_index: usize
 }
 
-impl <ViewData: VViewData> VComponent<ViewData> {
+impl <'a, ViewData: VViewData<'a>> VComponent<ViewData> {
     pub fn new<Props: 'static, F: Fn(&Props) -> VNode<ViewData> + 'static>(key: &VComponentKey, props: Props, construct: F) -> Box<Self> {
-        enum Action<Props_, F_> {
-            Reuse(Box<VComponent<ViewData>>),
+        enum Action<ViewData_, Props_, F_> {
+            Reuse(Box<VComponent<'a, ViewData_>>),
             Create(Props_, F_)
         }
 
@@ -291,7 +291,7 @@ impl <ViewData: VViewData> VComponent<ViewData> {
     }
 }
 
-impl <ViewData: VViewData, Props: 'static, F: Fn(&Props) -> VNode<ViewData> + 'static> VComponentConstruct for VComponentConstructImpl<ViewData, Props, F> {
+impl <'a, ViewData: VViewData<'a>, Props: 'static, F: Fn(&Props) -> VNode<ViewData> + 'static> VComponentConstruct for VComponentConstructImpl<ViewData, Props, F> {
     type ViewData = ViewData;
 
     fn construct(&self) -> VNode<ViewData> {

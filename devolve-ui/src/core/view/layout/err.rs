@@ -1,5 +1,6 @@
 use std::borrow::Cow;
-use std::collections::HashMap;
+use std::fmt;
+use std::fmt::{Display, Formatter};
 use crate::core::component::component::VComponentKey;
 use crate::core::view::view::VViewType;
 
@@ -11,8 +12,8 @@ pub struct LayoutError<'a> {
 
 pub type LayoutResult<'a, T> = Result<T, LayoutError<'a>>;
 
-impl LayoutError {
-    pub fn new<'a>(message: impl Into<Cow<'a, str>>) -> LayoutError<'a> {
+impl <'a> LayoutError<'a> {
+    pub fn new(message: impl Into<Cow<'a, str>>) -> LayoutError<'a> {
         LayoutError {
             message: message.into(),
             path: String::new(),
@@ -53,4 +54,10 @@ impl LayoutError {
              path: self.path.clone()
          }
      }
+}
+
+impl <'a> Display for LayoutError<'a> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        write!(f, "{}\nin {}", self.message, self.path)
+    }
 }

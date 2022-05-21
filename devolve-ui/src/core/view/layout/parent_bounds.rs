@@ -1,3 +1,4 @@
+use std::borrow::Cow;
 use std::collections::HashMap;
 use crate::core::view::layout::bounds::Measurement;
 use crate::core::view::layout::geom::{BoundingBox, Size};
@@ -40,7 +41,7 @@ pub type DimsStore = DimMap<HashMap<&'static str, f32>>;
 pub struct ParentBounds {
     pub bounding_box: BoundingBox,
     pub sub_layout: SubLayout,
-    pub column_size: Size,
+    pub column_size: Cow<'static, Size>,
     pub store: DimsStore
 }
 
@@ -60,7 +61,7 @@ impl ParentBounds {
                 direction: LayoutDirection::Vertical,
                 gap: None
             },
-            column_size,
+            column_size: Cow::Owned(column_size),
             store
         }
     }

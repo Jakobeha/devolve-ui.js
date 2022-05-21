@@ -13,14 +13,14 @@ impl Display for NodeId {
     }
 }
 
-pub enum VNode<ViewData: VViewData> {
-    Component(Box<VComponent<ViewData>>),
-    View(Box<VView<ViewData>>)
+pub enum VNode<'a, ViewData: VViewData<'a>> {
+    Component(Box<VComponent<'a, ViewData>>),
+    View(Box<VView<'a, ViewData>>)
 }
 
 static mut NEXT_ID: usize = 0;
 
-impl <ViewData: VViewData> VNode<ViewData> {
+impl <'a, ViewData: VViewData<'a>> VNode<'a, ViewData> {
     pub const NULL_ID: NodeId = NodeId(0);
 
     pub fn next_id() -> NodeId {

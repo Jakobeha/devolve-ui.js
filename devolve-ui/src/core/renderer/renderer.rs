@@ -11,7 +11,7 @@ use tokio::task::{spawn, JoinHandle};
 use crate::core::component::component::VComponent;
 use crate::core::component::context::VContext;
 use crate::core::component::node::{NodeId, VNode};
-use crate::core::view::layout::geom::{Rectangle, Size};
+use crate::core::view::layout::geom::Rectangle;
 use crate::core::view::layout::parent_bounds::ParentBounds;
 use crate::core::view::view::VView;
 use crate::core::renderer::render::VRender;
@@ -24,6 +24,7 @@ struct CachedRender<Layer> {
     parent: NodeId
 }
 
+#[cfg(feature = "time")]
 type RunningTask = JoinHandle<()>;
 
 pub struct Renderer<Engine: RenderEngine> {
@@ -35,7 +36,7 @@ pub struct Renderer<Engine: RenderEngine> {
     running_task: RefCell<Option<RunningTask>>,
     cached_renders: RefCell<HashMap<NodeId, CachedRender<Engine::RenderLayer>>>,
     needs_rerender: Cell<bool>,
-    root_component: RefCell<Option<Box<VComponent<ViewData>>>>
+    root_component: RefCell<Option<Box<VComponent<Engine::ViewData>>>>
 }
 
 struct RenderBorrows<'a, Engine: RenderEngine> {
@@ -44,6 +45,7 @@ struct RenderBorrows<'a, Engine: RenderEngine> {
 }
 
 impl <Engine: RenderEngine> Renderer<Engine> {
+    #[cfg(feature = "time")]
     pub const DEFAULT_INTERVAL_BETWEEN_FRAMES: Duration = Duration::from_millis(25);
 
     /// Creates a new renderer.
@@ -90,7 +92,7 @@ impl <Engine: RenderEngine> Renderer<Engine> {
         renderer
     }
 
-    pub fn root(self: Rc<Self>, construct: impl FnOnce() -> Box<VComponent<ViewData>>) {
+    pub fn root(self: Rc<Self>, construct: impl FnOnce() -> Box<VComponent<Engine::ViewData>>) {
         VContext::with_local_context(|| {
             let root_component = VContext::with_push_renderer(Rc::downgrade(&self), construct);
             self.set_root_component(Some(root_component));
@@ -101,7 +103,7 @@ impl <Engine: RenderEngine> Renderer<Engine> {
     }
 
 
-    fn set_root_component(self: Rc<Self>, root_component: Option<Box<VComponent<ViewData>>>) {
+    fn set_root_component(self: Rc<Self>, root_component: Option<Box<VComponent<Engine::ViewData>>>) {
         let mut self_root_component = self.root_component.borrow_mut();
         *self_root_component = root_component;
         if let Some(self_root_component) = self_root_component.as_mut() {
@@ -219,7 +221,7 @@ impl <Engine: RenderEngine> Renderer<Engine> {
         // Get bounds
         let bounds_result = view.bounds.resolve(parent_bounds, prev_sibling);
         if let Err(error) = bounds_result {
-            error!("Error resolving bounds for view {}: {}", view.id, error);
+            eprintln!("Error resolving bounds for view {}: {}", view.id, error);
             return VRender::new();
         }
         let (bounding_box, child_store) = bounds_result.unwrap();
@@ -230,7 +232,7 @@ impl <Engine: RenderEngine> Renderer<Engine> {
             let parent_bounds = ParentBounds {
                 bounding_box,
                 sub_layout,
-                column_size,
+                column_size: parent_bounds.column_size.clone(),
                 store: child_store
             };
             let mut prev_sibling = None;
@@ -247,21 +249,20 @@ impl <Engine: RenderEngine> Renderer<Engine> {
             height: rendered_children.height()
         }); */
         if bounding_box.width <= 0 || bounding_box.height <= 0 {
-            error!("Warning: view has zero or negative dimensions: {} has width={}, height={}", view.id, bounding_box.width, bounding_box.height);
+            eprintln!("Warning: view has zero or negative dimensions: {} has width={}, height={}", view.id, bounding_box.width, bounding_box.height);
         }
 
 
         // Render this view
         let render_result = r.engine.make_render(&bounding_box, &parent_bounds.column_size, view, rendered_children);
         if let Err(error) = render_result {
-            error!("Error rendering view {}: {}", view.id, error);
+            eprintln!("Error rendering view {}: {}", view.id, error);
             return VRender::new();
         }
         render_result.unwrap()
-
     }
 
-    pub(crate) fn invalidate(self: Rc<Self>, view: &Box<VView<ViewData>>) {
+    pub(crate) fn invalidate(self: Rc<Self>, view: &Box<VView<Engine::ViewData>>) {
         // Removes this view and all parents from cached_renders
         let mut cached_renders = self.cached_renders.borrow_mut();
         let mut next_view_id = view.id;

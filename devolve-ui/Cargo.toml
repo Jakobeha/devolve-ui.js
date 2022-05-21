@@ -27,3 +27,7 @@ replace_with = "0.1.7"
 tokio = { version = "1.18.2", features = ["rt", "time"], optional = true }
 libc = { version = "0.2.126", optional = true }
 crossterm = { version = "0.23.2", optional = true }
+
+[dev-dependencies]
+test-log = "0.2.10"
+env_logger = "0.9.0"

@@ -5,7 +5,7 @@ use crate::core::view::color::Color;
 use crate::core::view::layout::parent_bounds::SubLayout;
 use crate::core::view::view::{VViewData, VViewType};
 
-pub enum TuiViewData<Self_: VViewData> {
+pub enum TuiViewData<'a, Self_: VViewData<'a>> {
     Box {
         children: Vec<VNode<Self_>>,
         sub_layout: SubLayout,
@@ -15,7 +15,7 @@ pub enum TuiViewData<Self_: VViewData> {
     Text {
         text: String,
         color: Color,
-        wrap_mode: WrapMode
+        wrap_mode: TextWrapMode
     },
     Color {
         color: Color
@@ -33,19 +33,19 @@ pub enum TuiViewData<Self_: VViewData> {
     }
 }
 
-impl <Self_: VViewData> VViewData for TuiViewData<Self_> {
-    type Children = Iter<'_, VNode<Self_>>;
-    type ChildrenMut = IterMut<'_, VNode<Self_>>;
+impl <'a, Self_: VViewData<'a>> VViewData<'a> for TuiViewData<Self_> {
+    type Children = Iter<'a, VNode<Self_>>;
+    type ChildrenMut = IterMut<'a, VNode<Self_>>;
 
 
     fn typ(&self) -> VViewType {
         match self {
-            TuiViewData::Box { .. } => VViewType("Tui::Box"),
-            TuiViewData::Text { .. } => VViewType("Tui::Text"),
-            TuiViewData::Color { .. } => VViewType("Tui::Color"),
-            TuiViewData::Border { .. } => VViewType("Tui::Border"),
-            TuiViewData::Divider { .. } => VViewType("Tui::Divider"),
-            TuiViewData::Source { .. } => VViewType("Tui::Source"),
+            TuiViewData::Box { .. } => VViewType::from("Tui::Box"),
+            TuiViewData::Text { .. } => VViewType::from("Tui::Text"),
+            TuiViewData::Color { .. } => VViewType::from("Tui::Color"),
+            TuiViewData::Border { .. } => VViewType::from("Tui::Border"),
+            TuiViewData::Divider { .. } => VViewType::from("Tui::Divider"),
+            TuiViewData::Source { .. } => VViewType::from("Tui::Source"),
         }
     }
 

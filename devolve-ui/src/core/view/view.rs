@@ -5,7 +5,7 @@ use crate::core::component::node::{NodeId, VNode};
 use crate::core::view::layout::bounds::Bounds;
 use crate::core::view::layout::parent_bounds::SubLayout;
 
-pub struct VView<ViewData: VViewData> {
+pub struct VView<'a, ViewData: VViewData<'a>> {
     pub id: NodeId,
     pub bounds: Bounds,
     pub is_visible: bool,
@@ -13,8 +13,14 @@ pub struct VView<ViewData: VViewData> {
     pub d: ViewData
 }
 
-#[derive(Debug, Clone, Copy, P)]
+#[derive(Debug, Clone, Copy, Ord, PartialOrd, Eq, PartialEq, Hash)]
 pub struct VViewType(&'static str);
+
+impl VViewType {
+    pub fn from(str: &'static str) -> VViewType {
+        VViewType(str)
+    }
+}
 
 impl Display for VViewType {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
@@ -22,13 +28,13 @@ impl Display for VViewType {
     }
 }
 
-pub trait VViewData {
-    type Children: Iterator<Item=&VNode<Self>>;
-    type ChildrenMut: Iterator<Item=&mut VNode<Self>>;
+pub trait VViewData<'a> {
+    type Children: Iterator<Item=&'a VNode<Self>>;
+    type ChildrenMut: Iterator<Item=&'a mut VNode<Self>>;
 
     fn typ(&self) -> VViewType;
-    fn children(&self) -> Option<(Children, SubLayout)>;
-    fn children_mut(&mut self) -> Option<(ChildrenMut, SubLayout)>;
+    fn children(&self) -> Option<(Self::Children, SubLayout)>;
+    fn children_mut(&mut self) -> Option<(Self::ChildrenMut, SubLayout)>;
 }
 
 /*pub enum VViewType {
