@@ -54,7 +54,7 @@ impl <T: Pointer> CastablePointer<T> {
     }
 }
 
-impl <T> CastablePointer<Weak<T>> {
+impl <T: 'static> CastablePointer<Weak<T>> {
     pub fn upgrade(&self) -> Option<CastablePointer<Rc<T>>> {
         self.data.upgrade().map(|data| CastablePointer::from(data))
     }

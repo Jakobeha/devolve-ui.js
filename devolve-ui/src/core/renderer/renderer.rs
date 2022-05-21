@@ -237,7 +237,7 @@ impl <Engine: RenderEngine> Renderer<Engine> where Engine::RenderLayer: VRenderL
             };
             let mut prev_sibling = None;
             for child in children {
-                let child_render = self.render_view(child, &parent_bounds, prev_sibling, r);
+                let child_render = self.render_view(child.view(), &parent_bounds, prev_sibling, r);
                 prev_sibling = child_render.rect();
                 rendered_children.merge(child_render);
             }
