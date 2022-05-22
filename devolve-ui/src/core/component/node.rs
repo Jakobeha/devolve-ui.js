@@ -56,10 +56,7 @@ impl <ViewData: VViewData> VNode<ViewData> {
 
     pub fn view(&self) -> &Box<VView<ViewData>> {
         match self {
-            VNode::Component(component) => component
-                .node()
-                .expect("tried to get view from uninitialized component")
-                .view(),
+            VNode::Component(component) => component.view(),
             VNode::View(view) => view
         }
     }

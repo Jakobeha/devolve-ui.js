@@ -3,12 +3,13 @@ use crate::core::component::mode::VMode;
 use crate::core::component::node::{NodeId, VNode};
 use std::any::Any;
 use std::borrow::Cow;
+use std::cell::RefCell;
 use std::collections::HashMap;
 use std::marker::PhantomData;
 use std::rc::{Rc, Weak};
 use crate::core::view::view::{VView, VViewData};
 
-pub(crate) trait VComponentRoot {
+pub(in core) trait VComponentRoot {
     type ViewData: VViewData;
 
     fn invalidate(self: Rc<Self>, view: &Box<VView<Self::ViewData>>);
@@ -34,13 +35,13 @@ pub struct VComponent<ViewData: VViewData> {
 
     construct: Box<dyn VComponentConstruct<ViewData = ViewData>>,
     node: Option<VNode<ViewData>>,
-    state: Vec<Box<dyn Any>>,
-    // pub providedContexts: HashMap<Context, Box<dyn Any>>,
-    // pub consumedContexts: HashMap<Context, Box<dyn Any>>
-    effects: Vec<Box<dyn Fn(&mut Box<VComponent<ViewData>>) -> ()>>,
-    update_destructors: Vec<Box<dyn FnOnce(&mut Box<VComponent<ViewData>>) -> ()>>,
-    next_update_destructors: Vec<Box<dyn FnOnce(&mut Box<VComponent<ViewData>>) -> ()>>,
-    permanent_destructors: Vec<Box<dyn FnOnce(&mut Box<VComponent<ViewData>>) -> ()>>,
+    pub(in crate::core) state: Vec<Box<dyn Any>>,
+    // pub(in crate::core::hooks) providedContexts: HashMap<Context, Box<dyn Any>>,
+    // pub(in crate::core::hooks) consumedContexts: HashMap<Context, Box<dyn Any>>
+    pub(in crate::core) effects: Vec<Box<dyn Fn(&mut Box<VComponent<ViewData>>) -> ()>>,
+    pub(in crate::core) update_destructors: Vec<Box<dyn FnOnce(&mut Box<VComponent<ViewData>>) -> ()>>,
+    pub(in crate::core) next_update_destructors: Vec<Box<dyn FnOnce(&mut Box<VComponent<ViewData>>) -> ()>>,
+    pub(in crate::core) permanent_destructors: Vec<Box<dyn FnOnce(&mut Box<VComponent<ViewData>>) -> ()>>,
 
     /*readonly*/ children: HashMap<VComponentKey, Box<VComponent<ViewData>>>,
     /*readonly*/ renderer: Weak<dyn VComponentRoot<ViewData = ViewData>>,
@@ -49,7 +50,7 @@ pub struct VComponent<ViewData: VViewData> {
     is_fresh: bool,
     has_pending_updates: bool,
     recursive_update_stack_trace: Vec<Cow<'static, str>>,
-    next_state_index: usize
+    pub(in crate::core) next_state_index: usize
 }
 
 impl <ViewData: VViewData + 'static> VComponent<ViewData> {
@@ -131,7 +132,7 @@ impl <ViewData: VViewData + 'static> VComponent<ViewData> {
 }
 
 impl <ViewData: VViewData> VComponent<ViewData> {
-    pub(crate) fn update(mut self: &mut Box<Self>, details: Cow<'static, str>) {
+    pub(in core) fn update(mut self: &mut Box<Self>, details: Cow<'static, str>) {
         if self.is_being_updated {
             // Delay until after this update, especially if there are multiple triggered updates since we only have to update once more
             self.has_pending_updates = true;
@@ -266,8 +267,8 @@ impl <ViewData: VViewData> VComponent<ViewData> {
         self.key.clone()
     }
 
-    pub fn node(&self) -> Option<&VNode<ViewData>> {
-        self.node.as_ref()
+    pub fn is_being_created(&self) -> bool {
+        self.node.is_none()
     }
 
     pub fn view(&self) -> &Box<VView<ViewData>> {
