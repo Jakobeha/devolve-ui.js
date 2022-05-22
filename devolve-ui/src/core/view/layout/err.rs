@@ -5,15 +5,15 @@ use crate::core::component::component::VComponentKey;
 use crate::core::view::view::VViewType;
 
 #[derive(Debug, Clone)]
-pub struct LayoutError<'a> {
-    message: Cow<'a, str>,
+pub struct LayoutError {
+    message: Cow<'static, str>,
     path: String,
 }
 
-pub type LayoutResult<'a, T> = Result<T, LayoutError<'a>>;
+pub type LayoutResult<T> = Result<T, LayoutError>;
 
-impl <'a> LayoutError<'a> {
-    pub fn new(message: impl Into<Cow<'a, str>>) -> LayoutError<'a> {
+impl LayoutError {
+    pub fn new(message: impl Into<Cow<'static, str>>) -> LayoutError {
         LayoutError {
             message: message.into(),
             path: String::new(),
@@ -56,7 +56,7 @@ impl <'a> LayoutError<'a> {
      }
 }
 
-impl <'a> Display for LayoutError<'a> {
+impl Display for LayoutError {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         write!(f, "{}\nin {}", self.message, self.path)
     }

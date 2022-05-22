@@ -86,14 +86,15 @@ impl <Engine: RenderEngine> Renderer<Engine> where Engine::RenderLayer: VRenderL
             needs_rerender: Cell::new(false),
             root_component: RefCell::new(None)
         });
-        renderer.engine.borrow().on_resize(Box::new(|| {
-            renderer.needs_rerender.set(true);
+        let renderer2 = renderer.clone();
+        renderer.engine.borrow_mut().on_resize(Box::new(move || {
+            renderer2.needs_rerender.set(true);
         }));
         renderer
     }
 
     pub fn root(self: &Rc<Self>, construct: impl FnOnce(VParent<'_, Engine::ViewData>) -> Box<VComponent<Engine::ViewData>>) {
-        let self_upcast = self.upcast();
+        let self_upcast = self.clone().upcast();
         let root_component = construct(VParent::Root(&self_upcast));
         self.set_root_component(Some(root_component));
 
@@ -176,7 +177,8 @@ impl <Engine: RenderEngine> Renderer<Engine> where Engine::RenderLayer: VRenderL
 
     fn render(self: &Rc<Self>, is_first: bool) {
         assert!(self.is_visible.get(), "can't render while invisible");
-        let root_component = self.root_component.borrow().expect("can't render without root component");
+        let borrowed_root_component = self.root_component.borrow();
+        let root_component = borrowed_root_component.as_ref().expect("can't render without root component");
 
         self.needs_rerender.set(false);
 
@@ -192,6 +194,7 @@ impl <Engine: RenderEngine> Renderer<Engine> where Engine::RenderLayer: VRenderL
         };
 
         let final_render = self.render_view(root_component.view(), &root_dimensions, None, &mut render_borrows);
+        let mut engine = render_borrows.engine;
         engine.write_render(final_render);
     }
 
@@ -224,7 +227,7 @@ impl <Engine: RenderEngine> Renderer<Engine> where Engine::RenderLayer: VRenderL
             eprintln!("Error resolving bounds for view {}: {}", view.id, error);
             return VRender::new();
         }
-        let (bounding_box, child_store) = bounds_result.unwrap();
+        let (mut bounding_box, child_store) = bounds_result.unwrap();
 
         // Render children
         let mut rendered_children: VRender<Engine::RenderLayer> = VRender::new();
@@ -237,10 +240,12 @@ impl <Engine: RenderEngine> Renderer<Engine> where Engine::RenderLayer: VRenderL
             };
             let mut prev_sibling = None;
             for child in children {
-                let child_render = self.render_view(child.view(), &parent_bounds, prev_sibling, r);
-                prev_sibling = child_render.rect();
+                let child_render = self.render_view(child.view(), &parent_bounds, prev_sibling.as_ref(), r);
+                prev_sibling = child_render.rect().cloned();
                 rendered_children.merge(child_render);
             }
+            // Move back so borrow checker is happy
+            bounding_box = parent_bounds.bounding_box;
         }
 
         // Resolve size

@@ -69,7 +69,7 @@ impl From<Option<f32>> for PrevSiblingDim {
 }
 
 impl Bounds {
-    pub fn resolve<'a>(&self, parent_bounds: &'a ParentBounds, prev_sibling: Option<&Rectangle>) -> LayoutResult<'a, (BoundingBox, DimsStore)> {
+    pub fn resolve(&self, parent_bounds: &ParentBounds, prev_sibling: Option<&Rectangle>) -> LayoutResult<(BoundingBox, DimsStore)> {
         let mut store = parent_bounds.store.clone();
         let bounding_box = BoundingBox {
             x: Self::apply_layout_x(parent_bounds, prev_sibling, self.layout.x, Self::reify_x(parent_bounds, &PrevSiblingDim::NotApplicable, Some(&mut store.x), &self.x).map_err(|err| err.add_store("x"))?).map_err(|err| err.add_store("x@layout"))?,
@@ -77,13 +77,13 @@ impl Bounds {
             z: self.z as f32 + parent_bounds.bounding_box.z,
             anchor_x: self.anchor_x,
             anchor_y: self.anchor_y,
-            width: self.width.map(|width| Self::reify_x(parent_bounds, &prev_sibling.map(|r| r.width()).into(), Some(&mut store.width), &width).map_err(|err| err.add_dimension("width"))).transpose()?,
-            height: self.height.map(|height| Self::reify_y(parent_bounds, &prev_sibling.map(|r| r.height()).into(), Some(&mut store.height), &height).map_err(|err| err.add_dimension("height"))).transpose()?
+            width: self.width.as_ref().map(|width| Self::reify_x(parent_bounds, &prev_sibling.map(|r| r.width()).into(), Some(&mut store.width), &width).map_err(|err| err.add_dimension("width"))).transpose()?,
+            height: self.height.as_ref().map(|height| Self::reify_y(parent_bounds, &prev_sibling.map(|r| r.height()).into(), Some(&mut store.height), &height).map_err(|err| err.add_dimension("height"))).transpose()?
         };
         Ok((bounding_box, store))
     }
 
-    fn reify_x(parent_bounds: &ParentBounds, prev_sibling: &PrevSiblingDim, mut store: Option<&mut HashMap<&'static str, f32>>, x: &Measurement) -> LayoutResult<'static, f32> {
+    fn reify_x(parent_bounds: &ParentBounds, prev_sibling: &PrevSiblingDim, mut store: Option<&mut HashMap<&'static str, f32>>, x: &Measurement) -> LayoutResult<f32> {
         Ok(match x {
             Measurement::Zero => 0f32,
             Measurement::Prev => match prev_sibling {
@@ -119,7 +119,7 @@ impl Bounds {
         })
     }
 
-    fn reify_y(parent_bounds: &ParentBounds, prev_sibling: &PrevSiblingDim, mut store: Option<&mut HashMap<&'static str, f32>>, y: &Measurement) -> LayoutResult<'static, f32> {
+    fn reify_y(parent_bounds: &ParentBounds, prev_sibling: &PrevSiblingDim, mut store: Option<&mut HashMap<&'static str, f32>>, y: &Measurement) -> LayoutResult<f32> {
         Ok(match y {
             Measurement::Zero => 0f32,
             Measurement::Prev => match prev_sibling {
@@ -155,13 +155,13 @@ impl Bounds {
         })
     }
 
-    fn apply_layout_x<'a>(parent_bounds: &'a ParentBounds, prev_sibling: Option<&Rectangle>, layout: LayoutPosition1D, reified: f32) -> LayoutResult<'a, f32> {
+    fn apply_layout_x(parent_bounds: &ParentBounds, prev_sibling: Option<&Rectangle>, layout: LayoutPosition1D, reified: f32) -> LayoutResult<f32> {
         Ok(match layout {
             LayoutPosition1D::GlobalAbsolute => reified,
             LayoutPosition1D::LocalAbsolute => reified + parent_bounds.bounding_box.x,
             LayoutPosition1D::Relative => match parent_bounds.sub_layout.direction {
                 LayoutDirection::Horizontal => match prev_sibling {
-                    None => reified  + parent_bounds.bounding_box.left().map_err(|err| err.add_dimension("parent.left"))?,
+                    None => reified + parent_bounds.bounding_box.left().map_err(|err| err.add_dimension("parent.left"))?,
                     Some(prev_sibling) => {
                         // Yes, we do want to reify the parent's sub-layout with it's own bounds
                         let gap = Self::reify_x(parent_bounds, &PrevSiblingDim::NotApplicable, None, &parent_bounds.sub_layout.gap).map_err(|err| err.add_dimension("parent.gap"))?;
@@ -174,7 +174,7 @@ impl Bounds {
         })
     }
 
-    fn apply_layout_y<'a>(parent_bounds: &'a ParentBounds, prev_sibling: Option<&Rectangle>, layout: LayoutPosition1D, reified: f32) -> LayoutResult<'a, f32> {
+    fn apply_layout_y(parent_bounds: &ParentBounds, prev_sibling: Option<&Rectangle>, layout: LayoutPosition1D, reified: f32) -> LayoutResult<f32> {
         Ok(match layout {
             LayoutPosition1D::GlobalAbsolute => reified,
             LayoutPosition1D::LocalAbsolute => reified + parent_bounds.bounding_box.y,

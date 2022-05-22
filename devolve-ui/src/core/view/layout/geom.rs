@@ -26,7 +26,7 @@ pub struct Rectangle {
 }
 
 impl BoundingBox {
-    pub fn left(&self) -> LayoutResult<'_, f32> {
+    pub fn left(&self) -> LayoutResult<f32> {
         if self.anchor_x == 0f32 {
             Ok(self.x)
         } else if let Some(width) = self.width {
@@ -36,7 +36,7 @@ impl BoundingBox {
         }
     }
 
-    pub fn top(&self) -> LayoutResult<'_, f32> {
+    pub fn top(&self) -> LayoutResult<f32> {
         if self.anchor_y == 0f32 {
             Ok(self.y)
         } else if let Some(height) = self.height {
@@ -46,7 +46,7 @@ impl BoundingBox {
         }
     }
 
-    pub fn right(&self) -> LayoutResult<'_, f32> {
+    pub fn right(&self) -> LayoutResult<f32> {
         if self.anchor_x == 1f32 {
             Ok(self.x)
         } else if let Some(width) = self.width {
@@ -56,7 +56,7 @@ impl BoundingBox {
         }
     }
 
-    pub fn bottom(&self) -> LayoutResult<'_, f32> {
+    pub fn bottom(&self) -> LayoutResult<f32> {
         if self.anchor_y == 1f32 {
             Ok(self.y)
         } else if let Some(height) = self.height {
@@ -78,7 +78,7 @@ impl BoundingBox {
         }
     }
 
-    pub fn as_rectangle(&self) -> LayoutResult<'_, Rectangle> {
+    pub fn as_rectangle(&self) -> LayoutResult<Rectangle> {
         if self.width.is_some() && self.height.is_some() {
             Ok(Rectangle {
                 left: self.left().unwrap(),

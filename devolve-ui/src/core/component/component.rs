@@ -47,7 +47,6 @@ pub struct VComponent<ViewData: VViewData> {
 
     is_being_updated: bool,
     is_fresh: bool,
-    is_dead: bool,
     has_pending_updates: bool,
     recursive_update_stack_trace: Vec<Cow<'static, str>>,
     next_state_index: usize
@@ -55,13 +54,13 @@ pub struct VComponent<ViewData: VViewData> {
 
 impl <ViewData: VViewData + 'static> VComponent<ViewData> {
     pub fn new<Props: 'static, F: Fn(&mut Box<VComponent<ViewData>>, &Props) -> VNode<ViewData> + 'static>(parent: VParent<'_, ViewData>, key: &VComponentKey, props: Props, construct: F) -> Box<Self> {
-        enum Action<ViewData_: VViewData, Props_, F_> {
+        enum Action<'a, ViewData_: VViewData, Props_, F_> {
             Reuse(Box<VComponent<ViewData_>>),
-            Create(Props_, F_)
+            Create(VParent<'a, ViewData_>, Props_, F_)
         }
 
         let action = (|| {
-            if let VParent::Component(mut parent) = parent {
+            if let VParent::Component(parent) = parent {
                 // parent is being created = if there are any existing children, they're not being reused, they're a conflict
                 if parent.node.is_some() {
                     let found_child = parent.children.remove(key);
@@ -84,13 +83,16 @@ impl <ViewData: VViewData + 'static> VComponent<ViewData> {
                         }
                     }
                 }
+                // Fallthrough case (undo move)
+                let parent = VParent::Component(parent);
+                return Action::Create(parent, props, construct)
             }
             // Fallthrough case
-            return Action::Create(props, construct)
+            return Action::Create(parent, props, construct)
         })();
         match action {
             Action::Reuse(found_child) => found_child,
-            Action::Create(props, construct) => Self::create(parent, key, props, construct)
+            Action::Create(parent, props, construct) => Self::create(parent, key, props, construct)
         }
     }
 
@@ -121,7 +123,6 @@ impl <ViewData: VViewData + 'static> VComponent<ViewData> {
 
             is_being_updated: false,
             is_fresh: true,
-            is_dead: false,
             has_pending_updates: false,
             recursive_update_stack_trace: Vec::new(),
             next_state_index: 0
@@ -143,7 +144,9 @@ impl <ViewData: VViewData> VComponent<ViewData> {
             let child_details = Cow::Owned(format!("{}/", details));
             self.do_update(details, |self_| {
                 // Actually do construct and set node
-                let mut node = self_.construct.construct(self_);
+                // This is safe because we only borrow the field 'construct', and the function 'construct.construct' does not borrow the field 'construct'
+                let construct = unsafe { (&self_.construct as *const Box<dyn VComponentConstruct<ViewData = ViewData>>).as_ref().unwrap() };
+                let mut node = construct.construct(self_);
 
                 // from devolve-ui.js: "Create pixi if pixi component and on web"
                 // should have a hook in view trait we can call through node.view().hook(...)
@@ -162,7 +165,9 @@ impl <ViewData: VViewData> VComponent<ViewData> {
             // Do construct
             let child_details = Cow::Owned(format!("{}/", details));
             self.do_update(details, |self_| {
-                let mut node = self_.construct.construct(self_);
+                // This is safe because we only borrow the field 'construct', and the function 'construct.construct' does not borrow the field 'construct'
+                let construct = unsafe { (&self_.construct as *const Box<dyn VComponentConstruct<ViewData = ViewData>>).as_ref().unwrap() };
+                let mut node = construct.construct(self_);
 
                 // from devolve-ui.js: "Update pixi if pixi component and on web"
                 // should have a hook in view trait we can call through node.view().hook(...)
@@ -266,7 +271,7 @@ impl <ViewData: VViewData> VComponent<ViewData> {
     }
 
     pub fn view(&self) -> &Box<VView<ViewData>> {
-        self.node.expect("tried to get view of uninitialized component").view()
+        self.node.as_ref().expect("tried to get view of uninitialized component").view()
     }
 }
 
