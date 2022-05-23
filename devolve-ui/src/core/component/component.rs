@@ -1,15 +1,14 @@
-use crate::core::component::context::VParent;
+use crate::core::component::parent::{_VParent, VParent};
 use crate::core::component::mode::VMode;
 use crate::core::component::node::{NodeId, VNode};
 use std::any::Any;
 use std::borrow::Cow;
-use std::cell::RefCell;
 use std::collections::HashMap;
 use std::marker::PhantomData;
 use std::rc::{Rc, Weak};
 use crate::core::view::view::{VView, VViewData};
 
-pub(in core) trait VComponentRoot {
+pub(in crate::core) trait VComponentRoot {
     type ViewData: VViewData;
 
     fn invalidate(self: Rc<Self>, view: &Box<VView<Self::ViewData>>);
@@ -61,7 +60,7 @@ impl <ViewData: VViewData + 'static> VComponent<ViewData> {
         }
 
         let action = (|| {
-            if let VParent::Component(parent) = parent {
+            if let VParent(_VParent::Component(parent)) = parent {
                 // parent is being created = if there are any existing children, they're not being reused, they're a conflict
                 if parent.node.is_some() {
                     let found_child = parent.children.remove(key);
@@ -85,7 +84,7 @@ impl <ViewData: VViewData + 'static> VComponent<ViewData> {
                     }
                 }
                 // Fallthrough case (undo move)
-                let parent = VParent::Component(parent);
+                let parent = VParent(_VParent::Component(parent));
                 return Action::Create(parent, props, construct)
             }
             // Fallthrough case
@@ -117,9 +116,9 @@ impl <ViewData: VViewData + 'static> VComponent<ViewData> {
             permanent_destructors: Vec::new(),
 
             children: HashMap::new(),
-            renderer: match parent {
-                VParent::Root(renderer) => Rc::downgrade(renderer),
-                VParent::Component(component) => component.renderer.clone()
+            renderer: match parent.0 {
+                _VParent::Root(renderer) => Rc::downgrade(renderer),
+                _VParent::Component(component) => component.renderer.clone()
             },
 
             is_being_updated: false,
@@ -132,7 +131,7 @@ impl <ViewData: VViewData + 'static> VComponent<ViewData> {
 }
 
 impl <ViewData: VViewData> VComponent<ViewData> {
-    pub(in core) fn update(mut self: &mut Box<Self>, details: Cow<'static, str>) {
+    pub(in crate::core) fn update(mut self: &mut Box<Self>, details: Cow<'static, str>) {
         if self.is_being_updated {
             // Delay until after this update, especially if there are multiple triggered updates since we only have to update once more
             self.has_pending_updates = true;

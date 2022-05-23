@@ -5,7 +5,7 @@ use crate::core::view::view::VViewData;
 
 pub struct NonUpdatingState<T: Any, ViewData: VViewData> {
     pub index: usize,
-    pub phantom_view_data: PhantomData<ViewData>
+    pub phantom_view_data: PhantomData<(T, ViewData)>
 }
 
 pub fn use_non_updating_state<T: Any, ViewData: VViewData>(c: &mut Box<VComponent<ViewData>>, initial_state: impl FnOnce() -> T) -> NonUpdatingState<T, ViewData> {
@@ -25,14 +25,18 @@ pub fn use_non_updating_state<T: Any, ViewData: VViewData>(c: &mut Box<VComponen
 }
 
 impl <T: Any, ViewData: VViewData> NonUpdatingState<T, ViewData> {
-    pub fn get(&self, c: &mut Box<VComponent<ViewData>>) -> &T {
+    pub fn get<'a>(&'a self, c: &'a Box<VComponent<ViewData>>) -> &'a T {
         c.state
             .get(self.index).expect("unaligned hooks: state index out of bounds")
             .downcast_ref::<T>().expect("unaligned hooks: state type mismatch")
     }
 
-    pub fn get_mut(&self, c: &mut Box<VComponent<ViewData>>) -> &mut T {
-        c.state
+    pub fn get_mut<'a>(&'a self, c: &'a mut Box<VComponent<ViewData>>) -> &'a mut T {
+        self._get_mut(&mut c.state)
+    }
+
+    pub fn _get_mut<'a>(&'a self, c_state: &'a mut Vec<Box<dyn Any>>) -> &'a mut T {
+        c_state
             .get_mut(self.index).expect("unaligned hooks: state index out of bounds")
             .downcast_mut::<T>().expect("unaligned hooks: state type mismatch")
     }

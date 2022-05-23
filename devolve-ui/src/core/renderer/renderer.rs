@@ -9,8 +9,8 @@ use tokio::time::{interval, Interval};
 #[cfg(feature = "time")]
 use tokio::task::{spawn, JoinHandle};
 use crate::core::component::component::{VComponent, VComponentRoot};
-use crate::core::component::context::VParent;
 use crate::core::component::node::{NodeId, VNode};
+use crate::core::component::parent::{_VParent, VParent};
 use crate::core::view::layout::geom::Rectangle;
 use crate::core::view::layout::parent_bounds::ParentBounds;
 use crate::core::view::view::{VView, VViewData};
@@ -95,7 +95,7 @@ impl <Engine: RenderEngine> Renderer<Engine> where Engine::RenderLayer: VRenderL
 
     pub fn root(self: &Rc<Self>, construct: impl FnOnce(VParent<'_, Engine::ViewData>) -> Box<VComponent<Engine::ViewData>>) {
         let self_upcast = self.clone().upcast();
-        let root_component = construct(VParent::Root(&self_upcast));
+        let root_component = construct(VParent(_VParent::Root(&self_upcast)));
         self.set_root_component(Some(root_component));
 
         if self.is_visible.get() {
