@@ -212,11 +212,11 @@ impl <Engine: RenderEngine> Renderer<Engine> where Engine::RenderLayer: VRenderL
 
     fn render_view(self: &Rc<Self>, view: &Box<VView<Engine::ViewData>>, parent_bounds: &ParentBounds, prev_sibling: Option<&Rectangle>, r: &mut RenderBorrows<'_, Engine>) -> VRender<Engine::RenderLayer> {
         // Try cached
-        if let Some(cached_render) = r.cached_renders.get(&view.id) {
+        if let Some(cached_render) = r.cached_renders.get(&view.id()) {
             if &cached_render.parent_bounds == parent_bounds && cached_render.prev_sibling.as_ref() == prev_sibling {
                 return cached_render.render.clone();
             } else {
-                r.cached_renders.remove(&view.id).unwrap();
+                r.cached_renders.remove(&view.id()).unwrap();
             }
         }
 
@@ -224,7 +224,7 @@ impl <Engine: RenderEngine> Renderer<Engine> where Engine::RenderLayer: VRenderL
         // Get bounds
         let bounds_result = view.bounds.resolve(parent_bounds, prev_sibling);
         if let Err(error) = bounds_result {
-            eprintln!("Error resolving bounds for view {}: {}", view.id, error);
+            eprintln!("Error resolving bounds for view {}: {}", view.id(), error);
             return VRender::new();
         }
         let (mut bounding_box, child_store) = bounds_result.unwrap();
@@ -254,14 +254,14 @@ impl <Engine: RenderEngine> Renderer<Engine> where Engine::RenderLayer: VRenderL
             height: rendered_children.height()
         }); */
         if bounding_box.width.is_some_and(|width| *width <= 0f32) || bounding_box.height.is_some_and(|height| *height <= 0f32) {
-            eprintln!("Warning: view has zero or negative dimensions: {} has width={}, height={}", view.id, bounding_box.width.unwrap_or(f32::NAN), bounding_box.height.unwrap_or(f32::NAN));
+            eprintln!("Warning: view has zero or negative dimensions: {} has width={}, height={}", view.id(), bounding_box.width.unwrap_or(f32::NAN), bounding_box.height.unwrap_or(f32::NAN));
         }
 
 
         // Render this view
         let render_result = r.engine.make_render(&bounding_box, &parent_bounds.column_size, view, rendered_children);
         render_result.unwrap_or_else(|error| {
-            eprintln!("Error rendering view {}: {}", view.id, error);
+            eprintln!("Error rendering view {}: {}", view.id(), error);
             VRender::new()
         })
     }
@@ -277,7 +277,7 @@ impl <Engine: RenderEngine> VComponentRoot for Renderer<Engine> {
     fn invalidate(self: Rc<Self>, view: &Box<VView<Engine::ViewData>>) {
         // Removes this view and all parents from cached_renders
         let mut cached_renders = self.cached_renders.borrow_mut();
-        let mut next_view_id = view.id;
+        let mut next_view_id = view.id();
         while next_view_id != VNode::<Engine::ViewData>::NULL_ID {
             // This code 1) removes next_view_id from cached_renders,
             // 2) sets next_view_id to the parent (from cached_renders[next_view_id]),

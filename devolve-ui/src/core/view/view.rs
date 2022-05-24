@@ -6,7 +6,7 @@ use crate::core::view::layout::bounds::Bounds;
 use crate::core::view::layout::parent_bounds::SubLayout;
 
 pub struct VView<ViewData: VViewData> {
-    pub id: NodeId,
+    id: NodeId,
     pub bounds: Bounds,
     pub is_visible: bool,
     pub key: Option<Cow<'static, str>>,
@@ -35,6 +35,22 @@ pub trait VViewData: Sized {
     fn typ(&self) -> VViewType;
     fn children(&self) -> Option<(Self::Children<'_>, SubLayout)>;
     fn children_mut(&mut self) -> Option<(Self::ChildrenMut<'_>, SubLayout)>;
+}
+
+impl <ViewData: VViewData> VView<ViewData> {
+    pub fn new(bounds: Bounds, is_visible: bool, key: Option<Cow<'static, str>>, d: ViewData) -> VView<ViewData> {
+        VView {
+            id: VNode::<ViewData>::next_id(),
+            bounds,
+            is_visible,
+            key,
+            d
+        }
+    }
+
+    pub fn id(&self) -> NodeId {
+        self.id
+    }
 }
 
 /*pub enum VViewType {

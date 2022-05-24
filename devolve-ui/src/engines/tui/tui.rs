@@ -120,7 +120,7 @@ impl <Input: Read, Output: Write> TuiEngine<Input, Output> {
 }
 
 impl <Input: Read, Output: Write> RenderEngine for TuiEngine<Input, Output> {
-    type ViewData = TuiViewData<Self::ViewData>;
+    type ViewData = TuiViewData;
     type RenderLayer = RenderLayer;
 
     fn get_root_dimensions(&self) -> ParentBounds {
@@ -201,7 +201,7 @@ impl <Input: Read, Output: Write> RenderEngine for TuiEngine<Input, Output> {
                     let rect = match bounds.as_rectangle() {
                         Ok(rect) => Some(&rect),
                         Err(layout_error) => {
-                            error!("layout error getting rect to clip view {}: {}", view.id, layout_error);
+                            error!("layout error getting rect to clip view {}: {}", view.id(), layout_error);
                             None
                         }
                     };
