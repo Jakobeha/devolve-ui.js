@@ -5,6 +5,7 @@ use crate::core::component::node::{NodeId, VNode};
 use crate::core::view::layout::bounds::Bounds;
 use crate::core::view::layout::parent_bounds::SubLayout;
 
+#[derive(Debug)]
 pub struct VView<ViewData: VViewData> {
     id: NodeId,
     pub bounds: Bounds,
@@ -52,30 +53,3 @@ impl <ViewData: VViewData> VView<ViewData> {
         self.id
     }
 }
-
-/*pub enum VViewType {
-    Box {
-        children: Vec<VNode>,
-        // sub_layout: SubLayout,
-        // clip: bool,
-        // extend: bool
-    },
-    Text {
-        text: String,
-    },
-    Color {
-        color: Color
-    },
-    Border {
-        color: Color,
-        style: BorderStyle
-    },
-    Divider {
-        color: Color,
-        style: DividerStyle
-    },
-    Source {
-        source: String
-    },
-    Custom(dyn VViewCustom)
-}*/

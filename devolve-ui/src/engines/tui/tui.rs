@@ -100,7 +100,7 @@ impl <Input: Read, Output: Write> TuiEngine<Input, Output> {
         }
     }
 
-    fn render_text(&self, bounds: &BoundingBox, color: &Color, wrap_mode: &TextWrapMode, lines: Lines<'_>) -> RenderLayer {
+    fn render_text(&self, bounds: &BoundingBox, color: &Option<Color>, wrap_mode: &TextWrapMode, lines: Lines<'_>) -> RenderLayer {
         todo!()
     }
 
@@ -108,11 +108,11 @@ impl <Input: Read, Output: Write> TuiEngine<Input, Output> {
         todo!()
     }
 
-    fn render_border(&self, bounds: &BoundingBox, color: &Color, style: &BorderStyle) -> RenderLayer {
+    fn render_border(&self, bounds: &BoundingBox, color: &Option<Color>, style: &BorderStyle) -> RenderLayer {
         todo!()
     }
 
-    fn render_divider(&self, bounds: &BoundingBox, color: &Color, style: &DividerStyle) -> RenderLayer {
+    fn render_divider(&self, bounds: &BoundingBox, color: &Option<Color>, style: &DividerStyle) -> RenderLayer {
         todo!()
     }
 
@@ -180,7 +180,7 @@ impl <Input: Read, Output: Write> RenderEngine for TuiEngine<Input, Output> {
     }
 
     fn write_render(&mut self, batch: VRender<RenderLayer>) {
-        RenderLayer::collapse(batch).write(&mut self.config.output);
+        do_io(|| RenderLayer::collapse(batch).write(&mut self.config.output))
     }
 
     fn clear(&mut self) {

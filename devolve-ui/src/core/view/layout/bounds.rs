@@ -73,7 +73,7 @@ impl Bounds {
         let bounding_box = BoundingBox {
             x: Self::apply_layout_x(parent_bounds, prev_sibling, self.layout.x, Self::reify_x(parent_bounds, &PrevSiblingDim::NotApplicable, Some(&mut store.x), &self.x).map_err(|err| err.add_store("x"))?).map_err(|err| err.add_store("x@layout"))?,
             y: Self::apply_layout_y(parent_bounds, prev_sibling, self.layout.y, Self::reify_y(parent_bounds, &PrevSiblingDim::NotApplicable, Some(&mut store.y), &self.y).map_err(|err| err.add_store("y"))?).map_err(|err| err.add_store("y@layout"))?,
-            z: self.z as f64 + parent_bounds.bounding_box.z + (((parent_depth + 1) as f64 * MAX_CHILDREN_EXPECTED_LOG2).exp2() * sibling_index as f64),
+            z: self.z as f64 + parent_bounds.bounding_box.z - f64::floor(parent_bounds.bounding_box.z) + (((parent_depth + 1) as f64 * -MAX_CHILDREN_EXPECTED_LOG2).exp2() * (sibling_index + 1) as f64),
             anchor_x: self.anchor_x,
             anchor_y: self.anchor_y,
             width: self.width.as_ref().map(|width| Self::reify_x(parent_bounds, &prev_sibling.map(|r| r.width()).into(), Some(&mut store.width), &width).map_err(|err| err.add_dimension("width"))).transpose()?.into(),

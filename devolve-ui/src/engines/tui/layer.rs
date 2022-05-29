@@ -50,7 +50,7 @@ impl RenderLayer {
 
     pub fn set_bg(&mut self, color: impl Into<PackedColor>) {
         let color = color.into();
-        for mut line in self.0.iter_mut() {
+        for line in self.0.iter_mut() {
             for mut cell in line.iter_mut() {
                 cell.bg = color
             }
@@ -171,7 +171,6 @@ impl RenderLayer {
                 // Reset colors (termctl will also print the buffer)
                 termctl!(style::ResetColor)?;
                 // Instead of writing a newline, we move the position explicitly
-                may_have_broken_position = true;
             }
 
             // Just to make sure

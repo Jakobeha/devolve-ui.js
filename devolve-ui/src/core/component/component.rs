@@ -184,6 +184,7 @@ impl <ViewData: VViewData> VComponent<ViewData> {
     fn destroy(mut self: Box<Self>) {
         assert!(self.node.is_some(), "tried to destroy uninitialized component");
 
+        self.run_update_destructors();
         self.run_permanent_destructors();
 
         // from devolve-ui.js: "Destroy pixi if pixi component and on web"

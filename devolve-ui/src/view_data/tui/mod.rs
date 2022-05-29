@@ -1,2 +1,2 @@
-pub mod macros;
+pub mod constr;
 pub mod tui;
