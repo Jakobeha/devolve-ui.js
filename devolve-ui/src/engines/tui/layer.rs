@@ -1,9 +1,10 @@
 // Thanks to http://xn--rpa.cc/irl/term.html for explaining obscure terminal escape codes and behaviors
-use std::collections::BTreeMap;
 use std::io;
+use std::fmt::Write;
 use crossterm::{Command, cursor};
 use crossterm::style;
-use crate::core::view::color::{Color, PackedColor};
+use crate::core::misc::io_write_2_fmt_write::IoWrite2FmtWrite;
+use crate::core::view::color::PackedColor;
 use crate::core::view::layout::geom::{BoundingBox, Rectangle};
 use crate::core::renderer::render::{VRender, VRenderLayer};
 
@@ -117,64 +118,67 @@ impl RenderLayer {
     }
 
     pub fn write(&self, output: &mut impl io::Write) -> io::Result<()> {
-        for (y, line) in self.0.iter().enumerate() {
-            let mut prev_fg: PackedColor = PackedColor::transparent();
-            let mut prev_bg: PackedColor = PackedColor::transparent();
-            // Relative addressing leads to weird edge cases, especially with images or weird chars
-            // This is set unless we're absolutely sure after writing, we're at the next (x, y) position
-            // Like at the start and every line, we want to explicitly set the position because images do weird stuff with newlines
-            let mut may_have_broken_position = true;
-            let mut buffer = String::new();
+        IoWrite2FmtWrite::on(output, |output| {
+            for (y, line) in self.0.iter().enumerate() {
+                let mut prev_fg: PackedColor = PackedColor::transparent();
+                let mut prev_bg: PackedColor = PackedColor::transparent();
+                // Relative addressing leads to weird edge cases, especially with images or weird chars
+                // This is set unless we're absolutely sure after writing, we're at the next (x, y) position
+                // Like at the start and every line, we want to explicitly set the position because images do weird stuff with newlines
+                let mut may_have_broken_position = true;
+                let mut buffer = String::new();
 
-            let mut termctl = |command: impl Command| -> io::Result<()> {
-                if !buffer.is_empty() {
-                    output.write_all(buffer.as_bytes())?;
-                    buffer.clear();
-                }
-                command.write_ansi(output)?;
-                Ok(())
-            };
-
-            for (x, cell) in line.iter().enumerate() {
-                // Fix position
-                if may_have_broken_position {
-                    termctl(cursor::MoveTo(x as u16, y as u16))?;
-                    may_have_broken_position = false;
-                }
-
-                // Set foreground and background
-                if prev_fg != cell.fg && prev_bg != cell.bg {
-                    termctl(style::SetColors(style::Colors { foreground: Some(cell.fg.into()), background: Some(cell.bg.into()) }))?;
-                }
-                if prev_fg != cell.fg {
-                    termctl(style::SetForegroundColor(cell.fg.into()).write_ansi(output))?;
-                } else if prev_bg != cell.bg {
-                    termctl(style::SetBackgroundColor(cell.bg.into()).write_ansi(output))?;
-                }
-
-                match &cell.content {
-                    RenderCellContent::TransparentChar => buffer.push(' '),
-                    RenderCellContent::Char(char) => buffer.push(*char),
-                    RenderCellContent::ManyChars(big_content) => {
-                        buffer.push_str(big_content);
-                        may_have_broken_position = true;
+                macro termctl($command:expr) {{
+                    if !buffer.is_empty() {
+                        output.write_str(buffer.as_str()).map_err(|e| io::Error::new(io::ErrorKind::Other, e))?;
+                        buffer.clear();
                     }
-                    RenderCellContent::ZeroChars => {
-                        may_have_broken_position = true;
+                    $command.write_ansi(output).map_err(|e| io::Error::new(io::ErrorKind::Other, e))
+                }}
+
+                for (x, cell) in line.iter().enumerate() {
+                    // Fix position
+                    if may_have_broken_position {
+                        termctl!(cursor::MoveTo(x as u16, y as u16))?;
+                        may_have_broken_position = false;
+                    }
+
+                    // Set foreground and background
+                    if prev_fg != cell.fg && prev_bg != cell.bg {
+                        termctl!(style::SetColors(style::Colors { foreground: Some(cell.fg.into()), background: Some(cell.bg.into()) }))?;
+                    }
+                    if prev_fg != cell.fg {
+                        termctl!(style::SetForegroundColor(cell.fg.into()))?;
+                    } else if prev_bg != cell.bg {
+                        termctl!(style::SetBackgroundColor(cell.bg.into()))?;
+                    }
+                    prev_fg = cell.fg;
+                    prev_bg = cell.bg;
+
+                    match &cell.content {
+                        RenderCellContent::TransparentChar => buffer.push(' '),
+                        RenderCellContent::Char(char) => buffer.push(*char),
+                        RenderCellContent::ManyChars(big_content) => {
+                            buffer.push_str(big_content);
+                            may_have_broken_position = true;
+                        }
+                        RenderCellContent::ZeroChars => {
+                            may_have_broken_position = true;
+                        }
                     }
                 }
+
+                // Reset colors (termctl will also print the buffer)
+                termctl!(style::ResetColor)?;
+                // Instead of writing a newline, we move the position explicitly
+                may_have_broken_position = true;
             }
 
-            // Reset colors (termctl will also print the buffer)
-            termctl(style::ResetColor.write_ansi(output))?;
-            // Instead of writing a newline, we move the position explicitly
-            may_have_broken_position = true;
-        }
+            // Just to make sure
+            output.flush()?;
 
-        // Just to make sure
-        output.flush()?;
-
-        OK(())
+            Ok(())
+        })
     }
 }
 

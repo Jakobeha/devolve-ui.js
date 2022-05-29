@@ -1,16 +1,17 @@
 use std::borrow::Cow;
 use std::collections::HashMap;
+use crate::core::misc::option_f32::OptionF32;
 use crate::core::view::layout::bounds::Measurement;
 use crate::core::view::layout::geom::{BoundingBox, Size};
 
 #[derive(Clone, Copy, Eq, PartialEq)]
 pub enum LayoutDirection {
+    Overlap,
     Horizontal,
-    Vertical,
-    Overlap
+    Vertical
 }
 
-#[derive(Clone, PartialEq)]
+#[derive(Clone, Default, PartialEq)]
 pub struct SubLayout {
     pub direction: LayoutDirection,
     pub gap: Measurement
@@ -35,6 +36,12 @@ impl <T: Default> DimMap<T> {
     }
 }
 
+impl Default for LayoutDirection {
+    fn default() -> Self {
+        LayoutDirection::Overlap
+    }
+}
+
 pub type DimsStore = DimMap<HashMap<&'static str, f32>>;
 
 #[derive(Clone, PartialEq)]
@@ -54,8 +61,8 @@ impl ParentBounds {
                 z: 0.0,
                 anchor_x: 0.0,
                 anchor_y: 0.0,
-                width: Some(size.width),
-                height: Some(size.height)
+                width: OptionF32::from(size.width),
+                height: OptionF32::from(size.height)
             },
             sub_layout: SubLayout {
                 direction: LayoutDirection::Vertical,

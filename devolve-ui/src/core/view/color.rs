@@ -65,3 +65,42 @@ impl PartialEq for PackedColor {
 }
 
 impl Eq for PackedColor {}
+
+// Not supported
+/* #[cfg(feature = "tui")]
+impl From<crossterm::style::Color> for PackedColor {
+    fn from(color: crossterm::style::Color) -> PackedColor {
+        PackedColor(match color {
+            crossterm::style::Color::Reset => Srgba::new(0, 0, 0, 0).into(),
+            crossterm::style::Color::Black => Srgba::new(0, 0, 0, 255).into(),
+            crossterm::style::Color::DarkGrey => Srgba::new(128, 128, 128, 255).into(),
+            crossterm::style::Color::Red => Srgba::new(255, 0, 0, 255).into(),
+            crossterm::style::Color::DarkRed => Srgba::new(128, 0, 0, 255).into(),
+            crossterm::style::Color::Green => Srgba::new(0, 255, 0, 255).into(),
+            crossterm::style::Color::DarkGreen => Srgba::new(0, 128, 0, 255).into(),
+            crossterm::style::Color::Yellow => Srgba::new(255, 255, 0, 255).into(),
+            crossterm::style::Color::DarkYellow => Srgba::new(128, 128, 0, 255).into(),
+            crossterm::style::Color::Blue => Srgba::new(0, 0, 255, 255).into(),
+            crossterm::style::Color::DarkBlue => Srgba::new(0, 0, 128, 255).into(),
+            crossterm::style::Color::Magenta => Srgba::new(255, 0, 255, 255).into(),
+            crossterm::style::Color::DarkMagenta => Srgba::new(128, 0, 128, 255).into(),
+            crossterm::style::Color::Cyan => Srgba::new(0, 255, 255, 255).into(),
+            crossterm::style::Color::DarkCyan => Srgba::new(0, 128, 128, 255).into(),
+            crossterm::style::Color::White => Srgba::new(255, 255, 255, 255).into(),
+            crossterm::style::Color::Grey => Srgba::new(192, 192, 192, 255).into(),
+            crossterm::style::Color::Rgb { r, g, b } => Srgba::new(r, g, b, 255).into(),
+            crossterm::style::Color::AnsiValue(_) => Srgba::new(0, 0, 0, 255).into(),
+        })
+    }
+} */
+
+#[cfg(feature = "tui")]
+impl From<PackedColor> for crossterm::style::Color {
+    fn from(color: PackedColor) -> Self {
+        crossterm::style::Color::Rgb {
+            r: ((color.0.color & 0xFF000000) >> 24) as u8,
+            g: ((color.0.color & 0x00FF0000) >> 16) as u8,
+            b: ((color.0.color & 0x0000FF00) >> 8) as u8,
+        }
+    }
+}

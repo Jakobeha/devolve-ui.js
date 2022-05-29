@@ -1,12 +1,14 @@
+use crate::core::misc::option_f32::OptionF32;
 use crate::core::view::layout::err::{LayoutError, LayoutResult};
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct BoundingBox {
     pub x: f32,
     pub y: f32,
-    pub z: f32,
-    pub width: Option<f32>,
-    pub height: Option<f32>,
+    /// We need the extra precision
+    pub z: f64,
+    pub width: OptionF32,
+    pub height: OptionF32,
     pub anchor_x: f32,
     pub anchor_y: f32,
 }
@@ -29,7 +31,7 @@ impl BoundingBox {
     pub fn left(&self) -> LayoutResult<f32> {
         if self.anchor_x == 0f32 {
             Ok(self.x)
-        } else if let Some(width) = self.width {
+        } else if let Some(width) = self.width.into_option() {
             Ok(self.x - (self.anchor_x * width))
         } else {
             Err(LayoutError::new("bad layout: bounds not anchored at left with no width, so we don't know where its left is"))
@@ -39,7 +41,7 @@ impl BoundingBox {
     pub fn top(&self) -> LayoutResult<f32> {
         if self.anchor_y == 0f32 {
             Ok(self.y)
-        } else if let Some(height) = self.height {
+        } else if let Some(height) = self.height.into_option() {
             Ok(self.y - (self.anchor_y * height))
         } else {
             Err(LayoutError::new("bad layout: bounds not anchored at top with no height, so we don't know where its top is"))
@@ -49,7 +51,7 @@ impl BoundingBox {
     pub fn right(&self) -> LayoutResult<f32> {
         if self.anchor_x == 1f32 {
             Ok(self.x)
-        } else if let Some(width) = self.width {
+        } else if let Some(width) = self.width.into_option() {
             Ok(self.x + width - (self.anchor_x * width))
         } else {
             Err(LayoutError::new("bad layout: bounds not anchored at right with no width, so we don't know where its right is"))
@@ -59,7 +61,7 @@ impl BoundingBox {
     pub fn bottom(&self) -> LayoutResult<f32> {
         if self.anchor_y == 1f32 {
             Ok(self.y)
-        } else if let Some(height) = self.height {
+        } else if let Some(height) = self.height.into_option() {
             Ok(self.y + height - (self.anchor_y * height))
         } else {
             Err(LayoutError::new("bad layout: bounds not anchored at bottom with no height, so we don't know where its bottom is"))
@@ -71,8 +73,8 @@ impl BoundingBox {
             x: self.x,
             y: self.y,
             z: self.z,
-            width: self.width.or(Some(default_size.width)),
-            height: self.height.or(Some(default_size.height)),
+            width: self.width.or(OptionF32::from(default_size.width)),
+            height: self.height.or(OptionF32::from(default_size.height)),
             anchor_x: self.anchor_x,
             anchor_y: self.anchor_y
         }

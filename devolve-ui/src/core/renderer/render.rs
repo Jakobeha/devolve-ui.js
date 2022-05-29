@@ -8,7 +8,7 @@ pub trait VRenderLayer : Clone {
 
 #[derive(Debug, Clone)]
 pub struct VRender<Layer> {
-    layers: BTreeMap<FloatOrd<f32>, Layer>,
+    layers: BTreeMap<FloatOrd<f64>, Layer>,
     rect: Option<Rectangle>
 }
 
@@ -20,7 +20,7 @@ impl <Layer> VRender<Layer> {
         }
     }
 
-    pub fn insert(&mut self, z: f32, rect: Option<&Rectangle>, layer: Layer) {
+    pub fn insert(&mut self, z: f64, rect: Option<&Rectangle>, layer: Layer) {
         self.layers.insert(FloatOrd(z), layer);
         self.rect = Rectangle::union(self.rect(), rect);
     }
@@ -37,11 +37,11 @@ impl <Layer> VRender<Layer> {
         self.rect.as_ref()
     }
 
-    pub fn iter(&self) -> btree_map::Values<FloatOrd<f32>, Layer> {
+    pub fn iter(&self) -> btree_map::Values<FloatOrd<f64>, Layer> {
         self.layers.values()
     }
 
-    pub fn iter_mut(&mut self) -> btree_map::ValuesMut<FloatOrd<f32>, Layer> {
+    pub fn iter_mut(&mut self) -> btree_map::ValuesMut<FloatOrd<f64>, Layer> {
         self.layers.values_mut()
     }
 }
@@ -70,7 +70,7 @@ impl <Layer: VRenderLayer> VRender<Layer> {
 
 impl <Layer> IntoIterator for VRender<Layer> {
     type Item = Layer;
-    type IntoIter = btree_map::IntoValues<FloatOrd<f32>, Layer>;
+    type IntoIter = btree_map::IntoValues<FloatOrd<f64>, Layer>;
 
     fn into_iter(self) -> Self::IntoIter {
         self.layers.into_values()

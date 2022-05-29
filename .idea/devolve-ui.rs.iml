@@ -10,6 +10,7 @@
       <sourceFolder url="file://$MODULE_DIR$/devolve-ui/examples" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/devolve-ui/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/devolve-ui/tests" isTestSource="true" />
+      <sourceFolder url="file://$MODULE_DIR$/dedup-struct-fields/src" isTestSource="false" />
       <excludeFolder url="file://$MODULE_DIR$/target" />
     </content>
     <orderEntry type="inheritedJdk" />

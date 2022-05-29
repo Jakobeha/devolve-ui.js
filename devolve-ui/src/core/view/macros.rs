@@ -1,100 +1,264 @@
-use crate::core::component::node::VNode;
-use crate::core::view::layout::bounds::Bounds;
-use crate::core::view::view::VView;
+use std::borrow::Cow;
+use crate::core::view::layout::bounds::{Bounds, LayoutPosition1D, Measurement};
 
-macro mt {
+pub macro mt {
     (0) => {
-        $crate::Measurement::Zero
+        $crate::core::view::layout::bounds::Measurement::Zero
     },
     (prev) => {
-        $crate::Measurement::Prev
+        $crate::core::view::layout::bounds::Measurement::Prev
     },
     ($lit:literal) => {
-        $crate::Measurement::Units($lit as f32)
+        $crate::core::view::layout::bounds::Measurement::Units($lit as f32)
     },
     ($lit:literal px) => {
-        $crate::Measurement::Pixels($lit as f32)
+        $crate::core::view::layout::bounds::Measurement::Pixels($lit as f32)
     },
     ($lit:literal %) => {
-        $crate::Measurement::Fraction($lit as f32 / 100f32)
+        $crate::core::view::layout::bounds::Measurement::Fraction($lit as f32 / 100f32)
     },
     ($store:ident = $expr:tt) => {
-        $crate::Measurement::Store(stringify!($store), $crate::Box::new(mt!($expr)))
+        $crate::core::view::layout::bounds::Measurement::Store(stringify!($store), Box::new(mt!($expr)))
     },
     ($lhs:tt * $rhs:literal) => {
-        $crate::Measurement::Mul($crate::Box::new(mt!($lhs)), $rhs as f32)
+        $crate::core::view::layout::bounds::Measurement::Mul(Box::new(mt!($lhs)), $rhs as f32)
     },
     ($lhs:tt / $rhs:literal) => {
-        $crate::Measurement::Div($crate::Box::new(mt!($lhs)), $rhs as f32)
+        $crate::core::view::layout::bounds::Measurement::Div(Box::new(mt!($lhs)), $rhs as f32)
     },
     ($lhs:tt + $rhs:tt) => {
-        $crate::Measurement::Add($crate::Box::new(mt!($lhs)), $crate::Box::new(mt!($rhs)))
+        $crate::core::view::layout::bounds::Measurement::Add(Box::new(mt!($lhs)), Box::new(mt!($rhs)))
     },
     ($lhs:tt - $rhs:tt) => {
-        $crate::Measurement::Sub($crate::Box::new(mt!($lhs)), $crate::Box::new(mt!($rhs)))
+        $crate::core::view::layout::bounds::Measurement::Sub(Box::new(mt!($lhs)), Box::new(mt!($rhs)))
     },
     ($load:ident) => {
-        $crate::Measurement::Load(strifify!($load))
+        $crate::core::view::layout::bounds::Measurement::Load(strifify!($load))
     },
-    (($expr:tt)) => {
-        mt!($expr)
+    (($($expr:tt)+)) => {
+        mt!($($expr)+)
+    },
+}
+
+pub macro smt {
+    (auto) => { None },
+    ($($expr:tt)*) => { Some(mt!($($expr)*)) }
+}
+
+#[derive(Default)]
+#[allow(dead_code)]
+pub struct ViewMacroBuiltinAttrs {
+    bounds: Option<Bounds>,
+    layout: Option<LayoutPosition1D>,
+    layout_x: Option<LayoutPosition1D>,
+    layout_y: Option<LayoutPosition1D>,
+    pos: Option<(Measurement, Measurement)>,
+    x: Option<Measurement>,
+    y: Option<Measurement>,
+    z: Option<i32>,
+    size: Option<(Option<Measurement>, Option<Measurement>)>,
+    width: Option<Option<Measurement>>,
+    height: Option<Option<Measurement>>,
+    anchor: Option<(f32, f32)>,
+    anchor_x: Option<f32>,
+    anchor_y: Option<f32>,
+    is_visible: Option<bool>,
+    key: Option<Cow<'static, str>>,
+}
+
+
+/// Usage: `make_view!(text!, TuiViewData::Text, { color: Color::BLACK })`
+pub macro make_view(
+    $vis:vis macro $name:ident,
+    $constr:ident :: $constr2:ident,
+    $( # { $( $builtin_attr:ident : $builtin_value:expr ),* $( , )? } )?
+    $( ( $( $tuple_value:expr ),* $( , )? ) )?
+    $( { $( $field:ident : $field_value:expr ),* $( , )? } )?
+) {
+    /// Usage: `$name!(TuiViewData::Text #{ size: (smt!(80), smt!(40)), anchor: (0.5, 0.5), is_visible: is_visible } { color: Color::BLUE } "Hello world!")`
+    $vis macro $name(
+        $$( # { $$( $$builtin_attr:ident : $$builtin_value:expr ),* $$( , )? } )?
+        $$( ( $$( $$tuple_value:expr ),* $$( , )? ) )?
+        $$( { $$( $$field:ident : $$field_value:expr ),* $$( , )? } )?
+        $$( $$text:literal )?
+        $$( [ $$( $$child:expr ),* $$( , )? ] )?
+    ) {
+        // The way we assign attrs is to first set to defaults,
+        // then macro-expand using (value.$$field = $$value).
+        // We do this for both builtins and custom attrs.
+
+        // Assign builtin attrs
+        // Trick to get around hygeine
+        let $crate::core::view::macros::ViewMacroBuiltinAttrs {
+            bounds,
+            layout,
+            layout_x,
+            layout_y,
+            pos,
+            x,
+            y,
+            z,
+            size,
+            width,
+            height,
+            anchor,
+            anchor_x,
+            anchor_y,
+            is_visible,
+            key
+        } = ::dedup_struct_fields::dedup_struct_fields!($crate::core::view::macros::ViewMacroBuiltinAttrs {
+            $$( $$( $$builtin_attr : Some($$builtin_value), )* )?
+            $( $( $builtin_attr : Some($builtin_value), )* )?
+            ..$crate::core::view::macros::ViewMacroBuiltinAttrs::default()
+        });
+
+        let bounds = bounds.unwrap_or($crate::core::view::layout::bounds::Bounds::default());
+        let pos = pos.unwrap_or((bounds.x, bounds.y));
+        let size = size.unwrap_or((bounds.width, bounds.height));
+        let anchor = anchor.unwrap_or((bounds.anchor_x, bounds.anchor_y));
+        let bounds = $crate::core::view::layout::bounds::Bounds {
+            layout: $crate::core::view::layout::bounds::LayoutPosition {
+                x: layout_x.or(layout).unwrap_or(bounds.layout.x),
+                y: layout_y.or(layout).unwrap_or(bounds.layout.y)
+            },
+            x: x.unwrap_or(pos.0),
+            y: y.unwrap_or(pos.1),
+            z: z.unwrap_or(bounds.z),
+            width: width.unwrap_or(size.0),
+            height: height.unwrap_or(size.1),
+            anchor_x: anchor_x.unwrap_or(anchor.0),
+            anchor_y: anchor_y.unwrap_or(anchor.1)
+        };
+        let is_visible = is_visible.unwrap_or(true);
+
+        // Assign custom attrs
+        let mut d = $constr :: $constr2 $( (
+            $( $tuple_value ),*
+        ) )? $( {
+            $( $field : $field_value ),*
+        } )?;
+        // TODO overrides for tuple attrs
+        $(
+            if let $constr :: $constr2 {
+                $( mut $field ),*
+            } = d {
+                d = ::dedup_struct_fields::dedup_struct_fields!($constr :: $constr2 {
+                    $$( $$( $$field: $$field_value, )* )?
+                    $$( text: $$text, )?
+                    $$( children: vec![$$( $$child ),*], )?
+                    $( $field ),*
+                });
+            } else {
+                panic!("impossible")
+            }
+        )?
+
+        $crate::core::component::node::VNode::View(Box::new($crate::core::view::view::VView::new(
+            bounds,
+            is_visible,
+            key,
+            d
+        )))
     }
 }
 
-// Usage: `view!(TuiViewData::Text | size: (80, 40), anchor: (0.5, 0.5), is_visible: is_visible, text: "Hello world!" })`
-macro view(
-    $constr:path
-    |
-    $( key: $key:ident , )?
-    $( layout : $layout_type:expr , )?
-    $( pos : ($x:tt , $y:tt $(, $z: tt)? ) , )?
-    $( size : ($width:tt , $height:tt) , )?
-    $( anchor : ($anchor_x:expr , $anchor_y:expr) , )?
-    // $( gap : $gap:tt , )?
-    $( is_visible : $visible:expr , )?
-    |
-    $( $attr:ident : $value:expr , )*
-    $text:literal
-    $( [ $( $child:expr ),* ] )?
+/* /// Usage: `remake_view!(red_text, text, { color: Color::RED })`
+pub macro remake_view(
+    $name:ident !,
+    $original:ident !,
+    $( # { $( $builtin_attr:ident : $builtin_value:expr ),* $( , )? } )?
+    $( ( $( $tuple_value:expr ),* $( , )? ) )?
+    $( { $( $field:ident : $field_value:expr ),* $( , )? } )?
+    $( $text:literal )?
+    $( [ $( $child:expr ),* $( , )? ] )?
 ) {
-    $crate::VNode::View($crate::Box::new($crate::VView::new(
-        $crate::Bounds {
-            $(layout_type: $layout_type)?,
-            $(x: mt!($x))?,
-            $(y: mt!($y))?,
-            $(z: $z)?,
-            $(width: mt!($width))?,
-            $(height: mt!($height))?,
-            $(anchor_x: $anchor_x as f32)?,
-            $(anchor_y: $anchor_y as f32)?,
-            ..$crate::Bounds::default()
-        },
-        true $( && $is_visible )?,
-        None $( .or(Some($key)) )?,
-        $constr {
-            $( $attr : $value , )*
-            $( text : $text , )?
-            $( children: vec![$( $child ),*] )?
-        }
-    )))
-}
+    /// Usage: `$name!(TuiViewData::Text(size: (80, 40), anchor: (0.5, 0.5), is_visible: is_visible) { color: Color::BLUE } "Hello world!")`
+    pub macro $name(
+        $$( # { $$( $$builtin_attr:ident : $$builtin_value:expr ),* } )?
+        $$( ( $$( $$tuple_value:expr ),* ) )?
+        $$( { $$( $$field:ident : $$field_value:expr ),* } )?
+        $$( $$text:literal )?
+        $$( [ $$( $$child:expr ),* ] )?
+    ) {
+        $original!(
+            # {
+                $$( $$( $$builtin_attr : $$builtin_value, )* )?
+                $( $( $builtin_attr : $builtin_value, )* )?
+            }
+            $$( ( $$( $$tuple_value, )* $( $( $tuple_value, )* )? ) )?
+            $$( { $$( $$field : $$field_value, )* $( $( $field_value, )* )? } )?
+            $$( $$text )? $( $text )?
+            $$( [ $$( $$child, )* $( $( $child, )* )? ] )?
+        )
+    }
+} */
 
 #[cfg(test)]
+#[cfg(feature = "tui")]
 mod tests {
-    use crate::core::view::layout::bounds::{LayoutPosition, Measurement};
-    use crate::core::view::macros::{view, mt};
-    use crate::view_data::attrs::TextWrapMode;
-    use crate::view_data::tui::TuiViewData;
+    use crate::core::view::layout::bounds::{LayoutPosition1D, Measurement};
+    use crate::core::view::macros::{make_view, remake_view, mt, smt};
+    use crate::view_data::tui::tui::TuiViewData;
 
     #[test]
     fn test_tt() {
         assert_eq!(mt!(50%), Measurement::Fraction(0.5f32));
         assert_eq!(mt!(prev * 2), Measurement::Mul(Box::new(Measurement::Prev), 2f32));
+        assert_eq!(mt!(test = (prev + 10)), Measurement::Store("test", Box::new(Measurement::Add(Box::new(Measurement::Prev), Box::new(Measurement::Units(10f32))))));
         assert_eq!(mt!(test = ((prev + 10) * 2)), Measurement::Store("test", Box::new(Measurement::Mul(Box::new(Measurement::Add(Box::new(Measurement::Prev), Box::new(Measurement::Units(10f32)))), 2f32))));
     }
 
+    make_view!(macro hbox, TuiViewData::Box, {
+        children: vec![],
+        sub_layout: {
+            direction: LayoutDirection::Horizontal
+            ..Default::default()
+        },
+        clip: false,
+        extend: false
+    });
+
+    make_view!(macro vbox, TuiViewData::Box, {
+        children: vec![],
+        sub_layout: {
+            direction: LayoutDirection::Vertical
+            ..Default::default()
+        },
+        clip: false,
+        extend: false
+    });
+
+    make_view!(macro zbox, TuiViewData::Box, {
+        children: vec![],
+        sub_layout: {
+            direction: LayoutDirection::Overlap
+            ..Default::default()
+        },
+        clip: false,
+        extend: false
+    });
+
+    make_view!(macro clip, TuiViewData::Box, {
+        children: vec![],
+        sub_layout: Default::default(),
+        clip: true,
+        extend: false
+    });
+
+    make_view!(macro fix_size, TuiViewData::Box, {
+        children: vec![],
+        sub_layout: Default::default(),
+        clip: true,
+        extend: true
+    });
+
     #[test]
     fn test_view() {
-        view!(TuiViewData::Box | layout: LayoutPosition::Absolute, pos: (0, 0, 1), size: (100%, 100%), []);
+        box_!(#{
+            layout: LayoutPosition1D::Relative,
+            pos: (mt!(0), mt!(0)),
+            z: 1,
+            size: (smt!(100%), smt!(100%))
+        } []);
     }
 }

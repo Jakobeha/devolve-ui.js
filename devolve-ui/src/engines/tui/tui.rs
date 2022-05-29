@@ -11,24 +11,24 @@ use std::io::{Stdin, Stdout, Read, Write, stdin, stdout};
 use std::os::unix::io::{AsRawFd, RawFd};
 use std::str::Lines;
 use crate::core::renderer::engine::RenderEngine;
-use crate::core::renderer::renderer::VRender;
+use crate::core::renderer::render::VRender;
 use crate::core::view::color::Color;
 use crate::core::view::layout::err::LayoutError;
-use crate::core::view::layout::geom::{BoundingBox, Rectangle, Size};
+use crate::core::view::layout::geom::{BoundingBox, Size};
 use crate::core::view::layout::parent_bounds::{DimsStore, ParentBounds};
 use crate::core::view::view::VView;
-use crate::view_data::tui::TuiViewData;
+use crate::view_data::tui::tui::TuiViewData;
 use crate::engines::tui::layer::RenderLayer;
 use crate::view_data::attrs::{BorderStyle, DividerStyle, TextWrapMode};
 
 #[cfg(target_family = "unix")]
 lazy_static! {
-    static ref SIGWINCH_CALLBACKS: RwLock<Vec<Box<dyn Fn() -> ()>>> = RwLock::new(Vec::new());
+    static ref SIGWINCH_CALLBACKS: RwLock<Vec<Box<dyn Fn() + Send + Sync>>> = RwLock::new(Vec::new());
 }
 
 #[cfg(target_family = "unix")]
 extern "C" fn sigwinch_handler_body(_: c_int) {
-    if let Ok(callbacks) = (SIGWINCH_CALLBACKS as RwLock<Vec<Box<dyn FnMut(ParentBounds)>>>).read() {
+    if let Ok(callbacks) = (&SIGWINCH_CALLBACKS as &RwLock<Vec<Box<dyn Fn() + Send + Sync>>>).read() {
         for callback in callbacks.iter() {
             callback();
         }
@@ -36,7 +36,9 @@ extern "C" fn sigwinch_handler_body(_: c_int) {
 }
 
 #[cfg(target_family = "unix")]
-const SIGWINCH_HANDLER: sighandler_t = sigwinch_handler_body as extern "C" fn(c_int) as *mut c_void as sighandler_t;
+fn sigwinch_handler() -> sighandler_t {
+    sigwinch_handler_body as extern "C" fn(c_int) as *mut c_void as sighandler_t
+}
 
 #[derive(Debug)]
 pub struct TuiConfig<Input: Read, Output: Write> {
@@ -114,7 +116,7 @@ impl <Input: Read, Output: Write> TuiEngine<Input, Output> {
         todo!()
     }
 
-    fn render_source(&self, bounds: &BoundingBox, source: &str) -> (RenderLayer, Size) {
+    fn render_source(&self, bounds: &BoundingBox, column_size: &Size, source: &str) -> Result<(RenderLayer, Size), LayoutError> {
         todo!()
     }
 }
@@ -126,7 +128,7 @@ impl <Input: Read, Output: Write> RenderEngine for TuiEngine<Input, Output> {
     fn get_root_dimensions(&self) -> ParentBounds {
         let size = if let Some(size) = &self.config.override_size {
             size.clone()
-        } else if let Some((width, height)) = terminal::size() {
+        } else if let Ok((width, height)) = terminal::size() {
             Size { width: width as f32, height: height as f32 }
         } else {
             DEFAULT_SIZE
@@ -145,11 +147,11 @@ impl <Input: Read, Output: Write> RenderEngine for TuiEngine<Input, Output> {
         ParentBounds::typical_root(size, column_size, DimsStore::new())
     }
 
-    fn on_resize(&mut self, callback: Box<dyn Fn() -> ()>) {
+    fn on_resize(&mut self, callback: Box<dyn Fn() + Send + Sync>) {
         #[cfg(target_family = "unix")]
         unsafe {
             SIGWINCH_CALLBACKS.write().expect("coudln't add resize callback for some reason").push(callback);
-            signal(SIGWINCH, SIGWINCH_HANDLER);
+            signal(SIGWINCH, sigwinch_handler());
         }
     }
 
@@ -189,7 +191,13 @@ impl <Input: Read, Output: Write> RenderEngine for TuiEngine<Input, Output> {
         })
     }
 
-    fn make_render(&self, bounds: &BoundingBox, column_size: &Size, view: &Box<VView<Self::ViewData>>, mut render: VRender<RenderLayer>) -> Result<VRender<RenderLayer>, LayoutError> {
+    fn make_render(
+        &self,
+        bounds: &BoundingBox,
+        column_size: &Size,
+        view: &Box<VView<Self::ViewData>>,
+        mut render: VRender<RenderLayer>
+    ) -> Result<VRender<RenderLayer>, LayoutError> {
         match &view.d {
             TuiViewData::Box {
                 children: _children,
@@ -197,20 +205,20 @@ impl <Input: Read, Output: Write> RenderEngine for TuiEngine<Input, Output> {
                 clip,
                 extend
             } => {
-                if clip || extend {
+                if *clip || *extend {
                     let rect = match bounds.as_rectangle() {
-                        Ok(rect) => Some(&rect),
+                        Ok(rect) => Some(rect),
                         Err(layout_error) => {
-                            error!("layout error getting rect to clip view {}: {}", view.id(), layout_error);
+                            eprintln!("layout error getting rect to clip view {}: {}", view.id(), layout_error);
                             None
                         }
                     };
-                    if clip && extend {
-                        render.clip_and_extend(rect);
-                    } else if clip {
-                        render.clip(rect);
-                    } else if extend {
-                        render.extend(rect);
+                    if *clip && *extend {
+                        render.clip_and_extend(rect.as_ref());
+                    } else if *clip {
+                        render.clip(rect.as_ref());
+                    } else if *extend {
+                        render.extend(rect.as_ref());
                     }
                 }
             }
@@ -218,7 +226,7 @@ impl <Input: Read, Output: Write> RenderEngine for TuiEngine<Input, Output> {
                 let lines = text.lines();
                 let bounds = bounds.with_default_size(&Size {
                     width: lines.clone().map(|line| line.len()).max().unwrap_or(0) as f32,
-                    height: lines.clone().len() as f32
+                    height: lines.clone().count() as f32
                 });
                 let rect = bounds.as_rectangle().expect("didn't expect a layout error would be possible here after with_default_size");
                 let layer = self.render_text(&bounds, color, wrap_mode, lines);
@@ -240,7 +248,7 @@ impl <Input: Read, Output: Write> RenderEngine for TuiEngine<Input, Output> {
                 render.insert(bounds.z, Some(&rect), layer);
             },
             TuiViewData::Source { source } => {
-                let (layer, size) = self.render_image(bounds, column_size, source)?;
+                let (layer, size) = self.render_source(bounds, column_size, source)?;
                 let rect = bounds.as_rectangle_with_default_size(&size);
                 render.insert(bounds.z, Some(&rect), layer);
             }

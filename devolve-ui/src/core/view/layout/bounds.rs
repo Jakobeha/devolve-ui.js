@@ -3,35 +3,35 @@ use crate::core::view::layout::err::{LayoutError, LayoutResult};
 use crate::core::view::layout::geom::{BoundingBox, Rectangle};
 use crate::core::view::layout::parent_bounds::{DimsStore, LayoutDirection, ParentBounds};
 
-#[derive(Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct Bounds {
-    layout: LayoutPosition,
-    x: Measurement,
-    y: Measurement,
+    pub layout: LayoutPosition,
+    pub x: Measurement,
+    pub y: Measurement,
     /// By default, the nodes are rendered next after prev, child after parent but before parent's sibling.
     /// Actually-specified z position takes precedence over this. If 2 nodes have the same z-position,
     /// they will be rendered as specified by the above.
-    z: u32,
-    anchor_x: f32,
-    anchor_y: f32,
-    width: Option<Measurement>,
-    height: Option<Measurement>
+    pub z: i32,
+    pub anchor_x: f32,
+    pub anchor_y: f32,
+    pub width: Option<Measurement>,
+    pub height: Option<Measurement>
 }
 
-#[derive(Clone, Copy, Eq, PartialEq)]
+#[derive(Debug, Clone, Copy, Eq, PartialEq)]
 pub enum LayoutPosition1D {
+    Relative,
     GlobalAbsolute,
-    LocalAbsolute,
-    Relative
+    LocalAbsolute
 }
 
-#[derive(Clone, Eq, PartialEq)]
+#[derive(Debug, Clone, Default, Eq, PartialEq)]
 pub struct LayoutPosition {
-    x: LayoutPosition1D,
-    y: LayoutPosition1D,
+    pub x: LayoutPosition1D,
+    pub y: LayoutPosition1D,
 }
 
-#[derive(Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum Measurement {
     Zero,
     /// To the right of previous node if x, below if y, same as prev's if width or height
@@ -49,10 +49,9 @@ pub enum Measurement {
     Load(&'static str)
 }
 
-const CHILD_Z: f32 = 0.0001f32;
-const SIBLING_Z: f32 = 0.0000001f32;
+const MAX_CHILDREN_EXPECTED_LOG2: f64 = 8f64;
 
-#[derive(Clone, Copy)]
+#[derive(Debug, Clone, Copy)]
 enum PrevSiblingDim {
     NotApplicable,
     FirstChild,
@@ -69,16 +68,16 @@ impl From<Option<f32>> for PrevSiblingDim {
 }
 
 impl Bounds {
-    pub fn resolve(&self, parent_bounds: &ParentBounds, prev_sibling: Option<&Rectangle>) -> LayoutResult<(BoundingBox, DimsStore)> {
+    pub fn resolve(&self, parent_bounds: &ParentBounds, prev_sibling: Option<&Rectangle>, parent_depth: usize, sibling_index: usize) -> LayoutResult<(BoundingBox, DimsStore)> {
         let mut store = parent_bounds.store.clone();
         let bounding_box = BoundingBox {
             x: Self::apply_layout_x(parent_bounds, prev_sibling, self.layout.x, Self::reify_x(parent_bounds, &PrevSiblingDim::NotApplicable, Some(&mut store.x), &self.x).map_err(|err| err.add_store("x"))?).map_err(|err| err.add_store("x@layout"))?,
             y: Self::apply_layout_y(parent_bounds, prev_sibling, self.layout.y, Self::reify_y(parent_bounds, &PrevSiblingDim::NotApplicable, Some(&mut store.y), &self.y).map_err(|err| err.add_store("y"))?).map_err(|err| err.add_store("y@layout"))?,
-            z: self.z as f32 + parent_bounds.bounding_box.z,
+            z: self.z as f64 + parent_bounds.bounding_box.z + (((parent_depth + 1) as f64 * MAX_CHILDREN_EXPECTED_LOG2).exp2() * sibling_index as f64),
             anchor_x: self.anchor_x,
             anchor_y: self.anchor_y,
-            width: self.width.as_ref().map(|width| Self::reify_x(parent_bounds, &prev_sibling.map(|r| r.width()).into(), Some(&mut store.width), &width).map_err(|err| err.add_dimension("width"))).transpose()?,
-            height: self.height.as_ref().map(|height| Self::reify_y(parent_bounds, &prev_sibling.map(|r| r.height()).into(), Some(&mut store.height), &height).map_err(|err| err.add_dimension("height"))).transpose()?
+            width: self.width.as_ref().map(|width| Self::reify_x(parent_bounds, &prev_sibling.map(|r| r.width()).into(), Some(&mut store.width), &width).map_err(|err| err.add_dimension("width"))).transpose()?.into(),
+            height: self.height.as_ref().map(|height| Self::reify_y(parent_bounds, &prev_sibling.map(|r| r.height()).into(), Some(&mut store.height), &height).map_err(|err| err.add_dimension("height"))).transpose()?.into()
         };
         Ok((bounding_box, store))
     }
@@ -93,7 +92,7 @@ impl Bounds {
             },
             Measurement::Units(x) => *x,
             Measurement::Pixels(x) => x / parent_bounds.column_size.width,
-            Measurement::Fraction(x) => match parent_bounds.bounding_box.width {
+            Measurement::Fraction(x) => match parent_bounds.bounding_box.width.into_option() {
                 None => Err(LayoutError::new("can't use fraction for x: parent width not known"))?,
                 Some(width) => x * width,
             },
@@ -129,7 +128,7 @@ impl Bounds {
             },
             Measurement::Units(y) => *y,
             Measurement::Pixels(y) => y / parent_bounds.column_size.height,
-            Measurement::Fraction(y) => match parent_bounds.bounding_box.height {
+            Measurement::Fraction(y) => match parent_bounds.bounding_box.height.into_option() {
                 None => Err(LayoutError::new("can't use fraction for y: parent height not known"))?,
                 Some(height) => y * height
             },
@@ -206,7 +205,7 @@ impl LayoutPosition {
 impl Default for Bounds {
     fn default() -> Self {
         Bounds {
-            layout: LayoutPosition::default(),
+            layout: LayoutPosition::xy(LayoutPosition1D::Relative),
             x: Measurement::Zero,
             y: Measurement::Zero,
             z: 0,
@@ -225,11 +224,10 @@ impl Default for LayoutPosition1D {
     }
 }
 
-impl Default for LayoutPosition {
+
+
+impl Default for Measurement {
     fn default() -> Self {
-        LayoutPosition {
-            x: LayoutPosition1D::default(),
-            y: LayoutPosition1D::default()
-        }
+        Measurement::Zero
     }
 }

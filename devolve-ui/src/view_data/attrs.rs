@@ -1,3 +1,4 @@
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum BorderStyle {
     Single,
     Card,
@@ -9,6 +10,7 @@ pub enum BorderStyle {
     AsciiDashed
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum DividerStyle {
     Single,
     Double,
@@ -18,6 +20,7 @@ pub enum DividerStyle {
     AsciiDashed
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum TextWrapMode {
     Word,
     Char,

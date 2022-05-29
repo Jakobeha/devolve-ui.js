@@ -2,15 +2,17 @@ use std::borrow::Cow;
 use std::cell::{Cell, RefCell, RefMut};
 use std::collections::HashMap;
 use std::rc::Rc;
+use std::sync::Arc;
 #[cfg(feature = "time")]
 use std::time::Duration;
 #[cfg(feature = "time")]
-use tokio::time::{interval, Interval};
+use tokio::time::interval;
 #[cfg(feature = "time")]
 use tokio::task::{spawn, JoinHandle};
 use crate::core::component::component::{VComponent, VComponentRoot};
 use crate::core::component::node::{NodeId, VNode};
 use crate::core::component::parent::{_VParent, VParent};
+use crate::core::misc::notify_bool::NeedsRerenderBool;
 use crate::core::view::layout::geom::Rectangle;
 use crate::core::view::layout::parent_bounds::ParentBounds;
 use crate::core::view::view::{VView, VViewData};
@@ -35,7 +37,7 @@ pub struct Renderer<Engine: RenderEngine + 'static> {
     #[cfg(feature = "time")]
     running_task: RefCell<Option<RunningTask>>,
     cached_renders: RefCell<HashMap<NodeId, CachedRender<Engine::RenderLayer>>>,
-    needs_rerender: Cell<bool>,
+    needs_rerender: Arc<NeedsRerenderBool>,
     root_component: RefCell<Option<Box<VComponent<Engine::ViewData>>>>
 }
 
@@ -83,17 +85,28 @@ impl <Engine: RenderEngine> Renderer<Engine> where Engine::RenderLayer: VRenderL
             #[cfg(feature = "time")]
             running_task: RefCell::new(None),
             cached_renders: RefCell::new(HashMap::new()),
-            needs_rerender: Cell::new(false),
+            needs_rerender: Arc::new(NeedsRerenderBool::new()),
             root_component: RefCell::new(None)
         });
-        let renderer2 = renderer.clone();
+        let needs_rerender_async = Arc::downgrade(renderer.needs_rerender());
         renderer.engine.borrow_mut().on_resize(Box::new(move || {
-            renderer2.needs_rerender.set(true);
+            if let Some(needs_rerender) = needs_rerender_async.upgrade() {
+                needs_rerender.set();
+            }
         }));
         renderer
     }
 
-    pub fn root(self: &Rc<Self>, construct: impl FnOnce(VParent<'_, Engine::ViewData>) -> Box<VComponent<Engine::ViewData>>) {
+    //noinspection RsNeedlessLifetimes needs lifetime
+    pub fn needs_rerender<'a>(self: &'a Rc<Self>) -> &'a Arc<NeedsRerenderBool> {
+        &self.needs_rerender
+    }
+
+    pub fn root(self: &Rc<Self>, construct: impl Fn(&mut Box<VComponent<Engine::ViewData>>) -> VNode<Engine::ViewData> + 'static) {
+        self._root(|parent| VComponent::new(parent, &"root".into(), (), move |c, ()| construct(c)))
+    }
+
+    fn _root(self: &Rc<Self>, construct: impl FnOnce(VParent<'_, Engine::ViewData>) -> Box<VComponent<Engine::ViewData>>) {
         let self_upcast = self.clone().upcast();
         let root_component = construct(VParent(_VParent::Root(&self_upcast)));
         self.set_root_component(Some(root_component));
@@ -180,7 +193,7 @@ impl <Engine: RenderEngine> Renderer<Engine> where Engine::RenderLayer: VRenderL
         let borrowed_root_component = self.root_component.borrow();
         let root_component = borrowed_root_component.as_ref().expect("can't render without root component");
 
-        self.needs_rerender.set(false);
+        self.needs_rerender.clear();
 
         let mut engine = self.engine.borrow_mut();
         if is_first {
@@ -193,7 +206,14 @@ impl <Engine: RenderEngine> Renderer<Engine> where Engine::RenderLayer: VRenderL
             engine
         };
 
-        let final_render = self.render_view(root_component.view(), &root_dimensions, None, &mut render_borrows);
+        let final_render = self.render_view(
+            root_component.view(),
+            &root_dimensions,
+            None,
+            0,
+            0,
+            &mut render_borrows
+        );
         let mut engine = render_borrows.engine;
         engine.write_render(final_render);
     }
@@ -210,7 +230,15 @@ impl <Engine: RenderEngine> Renderer<Engine> where Engine::RenderLayer: VRenderL
         }
     }
 
-    fn render_view(self: &Rc<Self>, view: &Box<VView<Engine::ViewData>>, parent_bounds: &ParentBounds, prev_sibling: Option<&Rectangle>, r: &mut RenderBorrows<'_, Engine>) -> VRender<Engine::RenderLayer> {
+    fn render_view(
+        self: &Rc<Self>,
+        view: &Box<VView<Engine::ViewData>>,
+        parent_bounds: &ParentBounds,
+        prev_sibling: Option<&Rectangle>,
+        parent_depth: usize,
+        sibling_index: usize,
+        r: &mut RenderBorrows<'_, Engine>
+    ) -> VRender<Engine::RenderLayer> {
         // Try cached
         if let Some(cached_render) = r.cached_renders.get(&view.id()) {
             if &cached_render.parent_bounds == parent_bounds && cached_render.prev_sibling.as_ref() == prev_sibling {
@@ -222,7 +250,7 @@ impl <Engine: RenderEngine> Renderer<Engine> where Engine::RenderLayer: VRenderL
 
         // Do render
         // Get bounds
-        let bounds_result = view.bounds.resolve(parent_bounds, prev_sibling);
+        let bounds_result = view.bounds.resolve(parent_bounds, prev_sibling, parent_depth, sibling_index);
         if let Err(error) = bounds_result {
             eprintln!("Error resolving bounds for view {}: {}", view.id(), error);
             return VRender::new();
@@ -239,8 +267,15 @@ impl <Engine: RenderEngine> Renderer<Engine> where Engine::RenderLayer: VRenderL
                 store: child_store
             };
             let mut prev_sibling = None;
-            for child in children {
-                let child_render = self.render_view(child.view(), &parent_bounds, prev_sibling.as_ref(), r);
+            for (sibling_index, child) in children.enumerate() {
+                let child_render = self.render_view(
+                    child.view(),
+                    &parent_bounds,
+                    prev_sibling.as_ref(),
+                    parent_depth + 1,
+                    sibling_index,
+                    r
+                );
                 prev_sibling = child_render.rect().cloned();
                 rendered_children.merge(child_render);
             }
@@ -253,7 +288,7 @@ impl <Engine: RenderEngine> Renderer<Engine> where Engine::RenderLayer: VRenderL
             width: rendered_children.width(),
             height: rendered_children.height()
         }); */
-        if bounding_box.width.is_some_and(|width| *width <= 0f32) || bounding_box.height.is_some_and(|height| *height <= 0f32) {
+        if bounding_box.width.is_some_and(|width| width <= 0f32) || bounding_box.height.is_some_and(|height| height <= 0f32) {
             eprintln!("Warning: view has zero or negative dimensions: {} has width={}, height={}", view.id(), bounding_box.width.unwrap_or(f32::NAN), bounding_box.height.unwrap_or(f32::NAN));
         }
 
@@ -288,7 +323,7 @@ impl <Engine: RenderEngine> VComponentRoot for Renderer<Engine> {
                 .unwrap_or(VNode::<Engine::ViewData>::NULL_ID);
         }
 
-        self.needs_rerender.set(true);
+        self.needs_rerender.set();
     }
 }
 
