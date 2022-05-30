@@ -93,6 +93,8 @@ fn do_io<R>(action: impl FnOnce() -> io::Result<R>) -> R {
     }
 }
 
+// TODO: Remove when implementing render_ functions
+#[allow(unused_variables)]
 impl <Input: Read, Output: Write> TuiEngine<Input, Output> {
     pub fn new(config: TuiConfig<Input, Output>) -> Self {
         TuiEngine {

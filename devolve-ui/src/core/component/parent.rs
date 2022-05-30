@@ -6,11 +6,11 @@ pub struct VParent<'a, ViewData: VViewData>(pub(in crate::core) _VParent<'a, Vie
 
 pub(in crate::core) enum _VParent<'a, ViewData: VViewData> {
     Root(&'a Rc<dyn VComponentRoot<ViewData = ViewData>>),
-    Component(&'a mut VComponent<ViewData>)
+    Component(&'a mut Box<VComponent<ViewData>>)
 }
 
-impl <'a, ViewData: VViewData> From<&'a mut VComponent<ViewData>> for VParent<'a, ViewData> {
-    fn from(component: &'a mut VComponent<ViewData>) -> Self {
+impl <'a, ViewData: VViewData> From<&'a mut Box<VComponent<ViewData>>> for VParent<'a, ViewData> {
+    fn from(component: &'a mut Box<VComponent<ViewData>>) -> Self {
         VParent(_VParent::Component(component))
     }
 }

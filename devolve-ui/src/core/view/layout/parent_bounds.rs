@@ -4,20 +4,20 @@ use crate::core::misc::option_f32::OptionF32;
 use crate::core::view::layout::bounds::Measurement;
 use crate::core::view::layout::geom::{BoundingBox, Size};
 
-#[derive(Clone, Copy, Eq, PartialEq)]
+#[derive(Debug, Clone, Copy, Eq, PartialEq)]
 pub enum LayoutDirection {
     Overlap,
     Horizontal,
     Vertical
 }
 
-#[derive(Clone, Default, PartialEq)]
+#[derive(Debug, Clone, Default, PartialEq)]
 pub struct SubLayout {
     pub direction: LayoutDirection,
     pub gap: Measurement
 }
 
-#[derive(Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct DimMap<T> {
     pub x: T,
     pub y: T,

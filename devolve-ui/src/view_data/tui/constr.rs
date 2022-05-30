@@ -8,180 +8,103 @@ use crate::core::view::layout::parent_bounds::{LayoutDirection, SubLayout};
 use crate::view_data::attrs::TextWrapMode;
 use crate::view_data::tui::tui::TuiViewData;
 
-pub fn hbox(view_args: VViewConstrArgs, gap: Measurement, children: Vec<VNode<TuiViewData>>) -> VNode<TuiViewData> {
-    constr_view(view_args, TuiViewData::Box {
-        children,
-        sub_layout: SubLayout {
-            direction: LayoutDirection::Horizontal,
-            gap
-        },
-        clip: false,
-        extend: false
-    })
+#[derive(Default)]
+pub struct BoxConstrArgs {
+    pub gap: Measurement,
+    pub children: Vec<VNode<TuiViewData>>,
+    pub clip: bool,
+    pub extend: bool
 }
 
-pub macro hbox {
-    ({ $field:ident : $value:expr }, $gap:expr, $children:expr)  => {
-        hbox(VViewConstrArgs {
-            $field: $value,
+#[derive(Default)]
+pub struct TextConstrArgs {
+    pub color: Option<Color>,
+    pub wrap: TextWrapMode,
+    pub text: String
+}
+
+macro _box2(($d:tt) @ $name:ident, $layout_direction: expr) {
+    pub fn $name(view_args: VViewConstrArgs, data_args: BoxConstrArgs) -> VNode<TuiViewData> {
+        constr_view(view_args, TuiViewData::Box {
+            children: data_args.children,
+            sub_layout: SubLayout {
+                direction: $layout_direction,
+                gap: data_args.gap
+            },
+            clip: data_args.clip,
+            extend: data_args.extend
+        })
+    }
+
+    pub macro $name({ $d( $d view_field:ident : $d view_value:expr ),* }, { $d( $d data_field:ident: $d data_value:expr ),* } $d( , $d children:expr )?) {
+        $name(VViewConstrArgs {
+            $d( $d view_field : $d view_value, )*
             ..VViewConstrArgs::default()
-        }, $gap, $children)
-    },
-    ({ $field:ident : $value:expr }, $children:expr)  => {
-        hbox(VViewConstrArgs {
-            $field: $value,
-            ..VViewConstrArgs::default()
-        }, Measruement::Zero, $children)
+        }, BoxConstrArgs {
+            $d( $d data_field : $d data_value, )*
+            $d( children: $d children, )?
+            ..BoxConstrArgs::default()
+        })
     }
 }
 
-pub fn vbox(view_args: VViewConstrArgs, gap: Measurement, children: Vec<VNode<TuiViewData>>) -> VNode<TuiViewData> {
-    constr_view(view_args, TuiViewData::Box {
-        children,
-        sub_layout: SubLayout {
-            direction: LayoutDirection::Vertical,
-            gap
-        },
-        clip: false,
-        extend: false
-    })
+macro _box($name:ident, $layout_direction: expr) {
+    _box2!(($) @ $name, $layout_direction);
 }
 
-pub macro vbox {
-    ({ $field:ident : $value:expr }, $gap:expr, $children:expr)  => {
-        vbox(VViewConstrArgs {
-            $field: $value,
-            ..VViewConstrArgs::default()
-        }, $gap, $children)
-    },
-    ({ $field:ident : $value:expr }, $children:expr)  => {
-        vbox(VViewConstrArgs {
-            $field: $value,
-            ..VViewConstrArgs::default()
-        }, Measruement::Zero, $children)
-    }
-}
-
-pub fn zbox(view_args: VViewConstrArgs, children: Vec<VNode<TuiViewData>>) -> VNode<TuiViewData> {
-    constr_view(view_args, TuiViewData::Box {
-        children,
-        sub_layout: SubLayout {
-            direction: LayoutDirection::Overlap,
-            gap: Measurement::Zero
-        },
-        clip: false,
-        extend: false
-    })
-}
-
-pub macro zbox({ $field:ident : $value:expr }, $children:expr) {
-    zbox(VViewConstrArgs {
-        $field: $value,
-        ..VViewConstrArgs::default()
-    }, $children)
-}
-
-pub fn clip_zbox(view_args: VViewConstrArgs, children: Vec<VNode<TuiViewData>>) -> VNode<TuiViewData> {
-    constr_view(view_args, TuiViewData::Box {
-        children,
-        sub_layout: SubLayout {
-            direction: LayoutDirection::Overlap,
-            gap: Measurement::Zero
-        },
-        clip: true,
-        extend: false
-    })
-}
-
-pub macro clip_zbox({ $field:ident : $value:expr }, $children:expr) {
-    clip_zbox(VViewConstrArgs {
-        $field: $value,
-        ..VViewConstrArgs::default()
-    }, $children)
-}
-
-pub fn extend_zbox(view_args: VViewConstrArgs, children: Vec<VNode<TuiViewData>>) -> VNode<TuiViewData> {
-    constr_view(view_args, TuiViewData::Box {
-        children,
-        sub_layout: SubLayout {
-            direction: LayoutDirection::Overlap,
-            gap: Measurement::Zero
-        },
-        clip: false,
-        extend: true
-    })
-}
-
-
-pub macro extend_zbox({ $field:ident : $value:expr }, $children:expr) {
-    extend_zbox(VViewConstrArgs {
-        $field: $value,
-        ..VViewConstrArgs::default()
-    }, $children)
-}
+_box!(hbox, LayoutDirection::Horizontal);
+_box!(vbox, LayoutDirection::Vertical);
+_box!(zbox, LayoutDirection::Overlap);
 
 pub fn ce_zbox(view_args: VViewConstrArgs, children: Vec<VNode<TuiViewData>>) -> VNode<TuiViewData> {
-    constr_view(view_args, TuiViewData::Box {
+    zbox(view_args, BoxConstrArgs {
         children,
-        sub_layout: SubLayout {
-            direction: LayoutDirection::Overlap,
-            gap: Measurement::Zero
-        },
         clip: true,
-        extend: true
+        extend: true,
+        ..BoxConstrArgs::default()
     })
 }
 
-
-pub macro ce_zbox({ $field:ident : $value:expr }, $children:expr) {
+pub macro ce_zbox({ $( $view_field:ident: $view_value:expr ),* }, $children:expr) {
     ce_zbox(VViewConstrArgs {
-        $field: $value,
+        $( $view_field : $view_value, )*
         ..VViewConstrArgs::default()
     }, $children)
 }
 
-pub fn stext(view_args: VViewConstrArgs, color: Option<Color>, text: String) -> VNode<TuiViewData> {
+
+pub fn text(view_args: VViewConstrArgs, data_args: TextConstrArgs) -> VNode<TuiViewData> {
     constr_view(view_args, TuiViewData::Text {
-        text,
-        color,
-        wrap_mode: TextWrapMode::Undefined
+        text: data_args.text,
+        color: data_args.color,
+        wrap_mode: data_args.wrap
     })
 }
 
-pub macro stext {
-    ({ $field:ident : $value:expr }, $color:expr, $text:expr) => {
-        stext(VViewConstrArgs {
-            $field: $value,
-            ..VViewConstrArgs::default()
-        }, $color, $text)
-    },
-    ({ $field:ident : $value:expr }, $text:expr) => {
-        stext(VViewConstrArgs {
-            $field: $value,
-            ..VViewConstrArgs::default()
-        }, None, $text)
-    }
-}
-
-pub fn ptext(view_args: VViewConstrArgs, color: Option<Color>, text: String) -> VNode<TuiViewData> {
-    constr_view(view_args, TuiViewData::Text {
-        text,
-        color,
-        wrap_mode: TextWrapMode::Word
+pub macro text({ $( $view_field:ident: $view_value:expr ),* }, { $( $data_field:ident: $data_value:expr ),* } $( , $text:expr )?) {
+    text(VViewConstrArgs {
+        $( $view_field : $view_value, )*
+        ..VViewConstrArgs::default()
+    }, TextConstrArgs {
+        $( $data_field : $data_value, )*
+        $( text: $text, )?
+        ..TextConstrArgs::default()
     })
 }
 
-pub macro ptext {
-    ({ $field:ident : $value:expr }, $color:expr, $text:expr) => {
-        ptext(VViewConstrArgs {
-            $field: $value,
-            ..VViewConstrArgs::default()
-        }, $color, $text)
-    },
-    ({ $field:ident : $value:expr }, $text:expr) => {
-        ptext(VViewConstrArgs {
-            $field: $value,
-            ..VViewConstrArgs::default()
-        }, None, $text)
-    }
+pub fn ptext(view_args: VViewConstrArgs, mut data_args: TextConstrArgs) -> VNode<TuiViewData> {
+    data_args.wrap = TextWrapMode::Word;
+    text(view_args, data_args)
 }
+
+pub macro ptext({ $( $view_field:ident: $view_value:expr ),* }, { $( $data_field:ident: $data_value:expr ),* } $( , $text:expr )?) {
+    ptext(VViewConstrArgs {
+        $( $view_field : $view_value, )*
+        ..VViewConstrArgs::default()
+    }, TextConstrArgs {
+        $( $data_field : $data_value, )*
+        $( text: $text, )?
+        ..TextConstrArgs::default()
+    })
+}
+

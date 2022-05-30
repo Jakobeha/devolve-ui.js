@@ -4,12 +4,14 @@ use std::collections::HashMap;
 use std::rc::Rc;
 use std::sync::Arc;
 #[cfg(feature = "time")]
+use std::thread::JoinHandle;
+#[cfg(feature = "time")]
 use std::time::Duration;
 #[cfg(feature = "time")]
 use tokio::time::interval;
 #[cfg(feature = "time")]
 use tokio::task::{spawn, JoinHandle};
-use crate::core::component::component::{VComponent, VComponentRoot};
+use crate::core::component::component::{VComponent, VComponentBody, VComponentRoot};
 use crate::core::component::node::{NodeId, VNode};
 use crate::core::component::parent::{_VParent, VParent};
 use crate::core::misc::notify_bool::NeedsRerenderBool;
@@ -103,7 +105,7 @@ impl <Engine: RenderEngine> Renderer<Engine> where Engine::RenderLayer: VRenderL
     }
 
     pub fn root(self: &Rc<Self>, construct: impl Fn(&mut Box<VComponent<Engine::ViewData>>) -> VNode<Engine::ViewData> + 'static) {
-        self._root(|parent| VComponent::new(parent, &"root".into(), (), move |c, ()| construct(c)))
+        self._root(|parent| VComponent::new(parent, &"root".into(), (), move |c, ()| VComponentBody::new(construct(c))))
     }
 
     fn _root(self: &Rc<Self>, construct: impl FnOnce(VParent<'_, Engine::ViewData>) -> Box<VComponent<Engine::ViewData>>) {

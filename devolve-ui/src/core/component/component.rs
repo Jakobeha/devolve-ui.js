@@ -8,6 +8,16 @@ use std::marker::PhantomData;
 use std::rc::{Rc, Weak};
 use crate::core::view::view::{VView, VViewData};
 
+/// Wrapper for `VNode` so that it's more type-safe,
+/// and you don't accidentally use VComponent functions when you meant to use a component itself
+pub struct VComponentBody<ViewData: VViewData>(VNode<ViewData>);
+
+impl <ViewData: VViewData> VComponentBody<ViewData> {
+    pub fn new(node: VNode<ViewData>) -> Self {
+        Self(node)
+    }
+}
+
 pub(in crate::core) trait VComponentRoot {
     type ViewData: VViewData;
 
@@ -17,10 +27,10 @@ pub(in crate::core) trait VComponentRoot {
 pub trait VComponentConstruct {
     type ViewData: VViewData;
 
-    fn construct(&self, component: &mut Box<VComponent<Self::ViewData>>) -> VNode<Self::ViewData>;
+    fn construct(&self, component: &mut Box<VComponent<Self::ViewData>>) -> VComponentBody<Self::ViewData>;
 }
 
-struct VComponentConstructImpl<ViewData: VViewData, Props: 'static, F: Fn(&mut Box<VComponent<ViewData>>, &Props) -> VNode<ViewData> + 'static> {
+struct VComponentConstructImpl<ViewData: VViewData, Props: 'static, F: Fn(&mut Box<VComponent<ViewData>>, &Props) -> VComponentBody<ViewData> + 'static> {
     props: Props,
     construct: F,
     view_data_type: PhantomData<ViewData>
@@ -33,7 +43,7 @@ pub struct VComponent<ViewData: VViewData> {
     /*readonly*/ key: VComponentKey,
 
     construct: Box<dyn VComponentConstruct<ViewData = ViewData>>,
-    node: Option<VNode<ViewData>>,
+    node: Option<VComponentBody<ViewData>>,
     pub(in crate::core) state: Vec<Box<dyn Any>>,
     // pub(in crate::core::hooks) providedContexts: HashMap<Context, Box<dyn Any>>,
     // pub(in crate::core::hooks) consumedContexts: HashMap<Context, Box<dyn Any>>
@@ -53,7 +63,7 @@ pub struct VComponent<ViewData: VViewData> {
 }
 
 impl <ViewData: VViewData + 'static> VComponent<ViewData> {
-    pub fn new<Props: 'static, F: Fn(&mut Box<VComponent<ViewData>>, &Props) -> VNode<ViewData> + 'static>(parent: VParent<'_, ViewData>, key: &VComponentKey, props: Props, construct: F) -> Box<Self> {
+    pub fn new<Props: 'static, F: Fn(&mut Box<VComponent<ViewData>>, &Props) -> VComponentBody<ViewData> + 'static>(parent: VParent<'_, ViewData>, key: &VComponentKey, props: Props, construct: F) -> Box<Self> {
         enum Action<'a, ViewData_: VViewData, Props_, F_> {
             Reuse(Box<VComponent<ViewData_>>),
             Create(VParent<'a, ViewData_>, Props_, F_)
@@ -96,7 +106,7 @@ impl <ViewData: VViewData + 'static> VComponent<ViewData> {
         }
     }
 
-    fn create<Props: 'static, F: Fn(&mut Box<VComponent<ViewData>>, &Props) -> VNode<ViewData> + 'static>(parent: VParent<'_, ViewData>, key: &VComponentKey, props: Props, construct: F)  -> Box<Self>{
+    fn create<Props: 'static, F: Fn(&mut Box<VComponent<ViewData>>, &Props) -> VComponentBody<ViewData> + 'static>(parent: VParent<'_, ViewData>, key: &VComponentKey, props: Props, construct: F)  -> Box<Self>{
         Box::new(VComponent {
             id: VNode::<ViewData>::next_id(),
             key: key.clone(),
@@ -152,7 +162,7 @@ impl <ViewData: VViewData> VComponent<ViewData> {
                 // should have a hook in view trait we can call through node.view().hook(...)
 
                 // Update children (if box or another component)
-                node.update(child_details);
+                node.0.update(child_details);
 
                 self_.node = Some(node)
             })
@@ -173,7 +183,7 @@ impl <ViewData: VViewData> VComponent<ViewData> {
                 // should have a hook in view trait we can call through node.view().hook(...)
 
                 // Update children (if box or another component)
-                node.update(child_details);
+                node.0.update(child_details);
 
                 self_.invalidate();
                 self_.node = Some(node)
@@ -272,14 +282,14 @@ impl <ViewData: VViewData> VComponent<ViewData> {
     }
 
     pub fn view(&self) -> &Box<VView<ViewData>> {
-        self.node.as_ref().expect("tried to get view of uninitialized component").view()
+        self.node.as_ref().expect("tried to get view of uninitialized component").0.view()
     }
 }
 
-impl <ViewData: VViewData, Props: 'static, F: Fn(&mut Box<VComponent<ViewData>>, &Props) -> VNode<ViewData> + 'static> VComponentConstruct for VComponentConstructImpl<ViewData, Props, F> {
+impl <ViewData: VViewData, Props: 'static, F: Fn(&mut Box<VComponent<ViewData>>, &Props) -> VComponentBody<ViewData> + 'static> VComponentConstruct for VComponentConstructImpl<ViewData, Props, F> {
     type ViewData = ViewData;
 
-    fn construct(&self, component: &mut Box<VComponent<Self::ViewData>>) -> VNode<Self::ViewData> {
+    fn construct(&self, component: &mut Box<VComponent<Self::ViewData>>) -> VComponentBody<Self::ViewData> {
         let construct = &self.construct;
         construct(component, &self.props)
     }

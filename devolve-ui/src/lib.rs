@@ -1,10 +1,7 @@
 #![feature(arbitrary_self_types)]
-#![feature(concat_idents)]
 #![feature(decl_macro)]
 #![feature(explicit_generic_args_with_impl_trait)]
 #![feature(generic_associated_types)]
-#![feature(is_some_with)]
-#![feature(macro_metavar_expr)]
 
 pub mod core;
 pub mod engines;

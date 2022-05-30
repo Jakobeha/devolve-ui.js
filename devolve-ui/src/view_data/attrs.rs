@@ -22,8 +22,14 @@ pub enum DividerStyle {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum TextWrapMode {
+    Undefined,
     Word,
     Char,
-    Clip,
-    Undefined
+    Clip
+}
+
+impl Default for TextWrapMode {
+    fn default() -> Self {
+        TextWrapMode::Undefined
+    }
 }
