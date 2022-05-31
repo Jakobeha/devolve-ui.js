@@ -1,3 +1,4 @@
+#![feature(decl_macro)]
 // Copyright 2019 The Druid Authors.
 // - Modified 2022 jakobeha
 //
@@ -21,6 +22,7 @@ extern crate proc_macro;
 
 mod attr;
 mod data;
+mod obs_ref;
 
 use proc_macro::TokenStream;
 use syn::parse_macro_input;
@@ -56,6 +58,36 @@ use syn::parse_macro_input;
 pub fn derive_data(input: TokenStream) -> TokenStream {
     let input = parse_macro_input!(input as syn::DeriveInput);
     data::derive_data_impl(input)
+        .unwrap_or_else(|err| err.to_compile_error())
+        .into()
+}
+
+/// Generates implementations of the `ObsRefable` trait.
+///
+/// This macro supports a `obs_ref` field attribute with the following arguments:
+///
+/// - `#[obs_ref(ignore)]` makes the generated `ObsRef` not support this field.
+/// - `#[obs_ref(derive)]` is necessary for not-ignored fields whose types don't implement 'ObsRefable'.
+///
+/// # Example
+///
+/// ```rust
+/// use devolve_ui_derive::ObsRefable;
+///
+/// #[derive(Clone, ObsRefable)]
+/// struct State {
+///     number: f64,
+///     indices: Vec<usize>,
+///     #[obs_ref(derive)]
+///     fancy_indices: FancyVec<usize>,
+///     #[obs_ref(ignore)]
+///     id_which_should_be_readonly: usize
+/// }
+/// ```
+#[proc_macro_derive(ObsRefable, attributes(obs_ref))]
+pub fn derive_obs_ref(input: TokenStream) -> TokenStream {
+    let input = parse_macro_input!(input as syn::DeriveInput);
+    obs_ref::derive_obs_ref_impl(input)
         .unwrap_or_else(|err| err.to_compile_error())
         .into()
 }

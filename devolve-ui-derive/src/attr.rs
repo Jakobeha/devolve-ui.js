@@ -21,13 +21,6 @@ use syn::{Error, ExprPath, Meta, NestedMeta};
 
 use quote::{quote, quote_spanned};
 
-const BASE_DATA_ATTR_PATH: &str = "data";
-const BASE_LENS_ATTR_PATH: &str = "lens";
-const IGNORE_ATTR_PATH: &str = "ignore";
-const DATA_SAME_FN_ATTR_PATH: &str = "same_fn";
-const DATA_EQ_ATTR_PATH: &str = "eq";
-const LENS_NAME_OVERRIDE_ATTR_PATH: &str = "name";
-
 /// The fields for a struct or an enum variant.
 #[derive(Debug)]
 pub struct Fields<Attrs> {
@@ -60,6 +53,12 @@ impl FieldIdent {
     }
 }
 
+pub trait Attrs: Default {
+    const BASE_PATH: &'static str;
+
+    fn add_attr(&mut self, attr: &syn::Attribute) -> Result<(), Error>;
+}
+
 #[derive(Debug)]
 pub struct Field<Attrs> {
     pub ident: FieldIdent,
@@ -76,14 +75,14 @@ pub enum DataAttr {
     Eq,
 }
 
-#[derive(Debug)]
-pub struct LensAttrs {
-    /// `true` if this field should be ignored.
-    pub ignore: bool,
-    pub lens_name_override: Option<Ident>,
+#[derive(Debug, PartialEq)]
+pub enum ObsRefAttr {
+    Empty,
+    Ignore,
+    Derive
 }
 
-impl Fields<DataAttr> {
+impl <A: Attrs> Fields<A> {
     pub fn parse_ast(fields: &syn::Fields) -> Result<Self, Error> {
         let kind = match fields {
             syn::Fields::Named(_) => FieldKind::Named,
@@ -93,31 +92,14 @@ impl Fields<DataAttr> {
         let fields = fields
             .iter()
             .enumerate()
-            .map(|(i, field)| Field::<DataAttr>::parse_ast(field, i))
+            .map(|(i, field)| Field::<A>::parse_ast(field, i))
             .collect::<Result<Vec<_>, _>>()?;
 
         Ok(Fields { kind, fields })
     }
 }
 
-impl Fields<LensAttrs> {
-    pub fn parse_ast(fields: &syn::Fields) -> Result<Self, Error> {
-        let kind = match fields {
-            syn::Fields::Named(_) => FieldKind::Named,
-            syn::Fields::Unnamed(_) | syn::Fields::Unit => FieldKind::Unnamed,
-        };
-
-        let fields = fields
-            .iter()
-            .enumerate()
-            .map(|(i, field)| Field::<LensAttrs>::parse_ast(field, i))
-            .collect::<Result<Vec<_>, _>>()?;
-
-        Ok(Fields { kind, fields })
-    }
-}
-
-impl<Attrs> Fields<Attrs> {
+impl <Attrs> Fields<Attrs> {
     pub fn len(&self) -> usize {
         self.fields.len()
     }
@@ -127,7 +109,7 @@ impl<Attrs> Fields<Attrs> {
     }
 }
 
-impl Field<DataAttr> {
+impl <A: Attrs> Field<A> {
     pub fn parse_ast(field: &syn::Field, index: usize) -> Result<Self, Error> {
         let ident = match field.ident.as_ref() {
             Some(ident) => FieldIdent::Named(ident.to_string().trim_start_matches("r#").to_owned()),
@@ -136,53 +118,21 @@ impl Field<DataAttr> {
 
         let ty = field.ty.clone();
 
-        let mut data_attr = DataAttr::Empty;
+        let mut target_attrs = A::default();
         for attr in field.attrs.iter() {
-            if attr.path.is_ident(BASE_DATA_ATTR_PATH) {
-                match attr.parse_meta()? {
-                    Meta::List(meta) => {
-                        assert!(
-                            meta.nested.len() <= 1,
-                            "only single data attribute is allowed"
-                        );
-                        if let Some(nested) = meta.nested.first() {
-                            match nested {
-                                NestedMeta::Meta(Meta::Path(path))
-                                if path.is_ident(IGNORE_ATTR_PATH) =>
-                                    {
-                                        data_attr = DataAttr::Ignore;
-                                    }
-                                NestedMeta::Meta(Meta::NameValue(meta))
-                                if meta.path.is_ident(DATA_SAME_FN_ATTR_PATH) =>
-                                    {
-                                        let path = parse_lit_into_expr_path(&meta.lit)?;
-                                        data_attr = DataAttr::SameFn(path);
-                                    }
-                                NestedMeta::Meta(Meta::Path(path))
-                                if path.is_ident(DATA_EQ_ATTR_PATH) =>
-                                    {
-                                        data_attr = DataAttr::Eq;
-                                    }
-                                other => return Err(Error::new(other.span(), "Unknown attribute")),
-                            }
-                        }
-                    }
-                    other => {
-                        return Err(Error::new(
-                            other.span(),
-                            "Expected attribute list (the form #[data(one, two)])",
-                        ));
-                    }
-                }
+            if attr.path.is_ident(A::BASE_PATH) {
+                target_attrs.add_attr(attr)?;
             }
         }
         Ok(Field {
             ident,
             ty,
-            attrs: data_attr,
+            attrs: target_attrs,
         })
     }
+}
 
+impl Field<DataAttr> {
     /// The tokens to be used as the function for 'same'.
     pub fn same_fn_path_tokens(&self) -> TokenStream {
         match &self.attrs {
@@ -198,66 +148,93 @@ impl Field<DataAttr> {
     }
 }
 
-impl Field<LensAttrs> {
-    pub fn parse_ast(field: &syn::Field, index: usize) -> Result<Self, Error> {
-        let ident = match field.ident.as_ref() {
-            Some(ident) => FieldIdent::Named(ident.to_string().trim_start_matches("r#").to_owned()),
-            None => FieldIdent::Unnamed(index),
-        };
+impl Default for DataAttr {
+    fn default() -> Self {
+        DataAttr::Empty
+    }
+}
 
-        let ty = field.ty.clone();
+impl Attrs for DataAttr {
+    const BASE_PATH: &'static str = "data";
 
-        let mut ignore = false;
-        let mut lens_name_override = None;
-
-        for attr in field.attrs.iter() {
-            if attr.path.is_ident(BASE_LENS_ATTR_PATH) {
-                match attr.parse_meta()? {
-                    Meta::List(meta) => {
-                        for nested in meta.nested.iter() {
-                            match nested {
-                                NestedMeta::Meta(Meta::Path(path))
-                                if path.is_ident(IGNORE_ATTR_PATH) =>
-                                    {
-                                        if ignore {
-                                            return Err(Error::new(
-                                                nested.span(),
-                                                "Duplicate attribute",
-                                            ));
-                                        }
-                                        ignore = true;
-                                    }
-                                NestedMeta::Meta(Meta::NameValue(meta))
-                                if meta.path.is_ident(LENS_NAME_OVERRIDE_ATTR_PATH) =>
-                                    {
-                                        if lens_name_override.is_some() {
-                                            return Err(Error::new(meta.span(), "Duplicate attribute"));
-                                        }
-
-                                        let ident = parse_lit_into_ident(&meta.lit)?;
-                                        lens_name_override = Some(ident);
-                                    }
-                                other => return Err(Error::new(other.span(), "Unknown attribute")),
-                            }
+    fn add_attr(&mut self, attr: &syn::Attribute) -> Result<(), Error> {
+        match attr.parse_meta()? {
+            Meta::List(meta) => {
+                assert!(
+                    meta.nested.len() == 1,
+                    "only single data attribute is allowed"
+                );
+                let nested = meta.nested.first().unwrap();
+                match nested {
+                    NestedMeta::Meta(Meta::Path(path))
+                    if path.is_ident("ignore") =>
+                        {
+                            *self = DataAttr::Ignore;
                         }
-                    }
-                    other => {
-                        return Err(Error::new(
-                            other.span(),
-                            "Expected attribute list (the form #[lens(one, two)])",
-                        ));
-                    }
+                    NestedMeta::Meta(Meta::NameValue(meta))
+                    if meta.path.is_ident("same_fn") =>
+                        {
+                            let path = parse_lit_into_expr_path(&meta.lit)?;
+                            *self = DataAttr::SameFn(path);
+                        }
+                    NestedMeta::Meta(Meta::Path(path))
+                    if path.is_ident("eq") =>
+                        {
+                            *self = DataAttr::Eq;
+                        }
+                    other => return Err(Error::new(other.span(), "Unknown attribute")),
                 }
             }
+            other => {
+                return Err(Error::new(
+                    other.span(),
+                    "Expected attribute list (the form #[data(...)]",
+                ));
+            }
         }
-        Ok(Field {
-            ident,
-            ty,
-            attrs: LensAttrs {
-                ignore,
-                lens_name_override,
-            },
-        })
+        Ok(())
+    }
+}
+
+impl Default for ObsRefAttr {
+    fn default() -> Self {
+        ObsRefAttr::Empty
+    }
+}
+
+impl Attrs for ObsRefAttr {
+    const BASE_PATH: &'static str = "obs_ref";
+
+    fn add_attr(&mut self, attr: &syn::Attribute) -> Result<(), Error> {
+        match attr.parse_meta()? {
+            Meta::List(meta) => {
+                assert!(
+                    meta.nested.len() == 1,
+                    "only single data attribute is allowed"
+                );
+                let nested = meta.nested.first().unwrap();
+                match nested {
+                    NestedMeta::Meta(Meta::Path(path))
+                    if path.is_ident("ignore") =>
+                        {
+                            *self = ObsRefAttr::Ignore;
+                        }
+                    NestedMeta::Meta(Meta::Path(path))
+                    if path.is_ident("derive") =>
+                        {
+                            *self = ObsRefAttr::Derive;
+                        }
+                    other => return Err(Error::new(other.span(), "Unknown attribute")),
+                }
+            }
+            other => {
+                return Err(Error::new(
+                    other.span(),
+                    "Expected attribute list (the form #[obs_ref(...)])",
+                ));
+            }
+        }
+        Ok(())
     }
 }
 
@@ -266,6 +243,13 @@ impl<Attrs> Field<Attrs> {
         match self.ident {
             FieldIdent::Named(ref s) => Ident::new(s, Span::call_site()).into(),
             FieldIdent::Unnamed(num) => Literal::usize_unsuffixed(num).into(),
+        }
+    }
+
+    pub fn coerced_ident(&self) -> Ident {
+        match self.ident {
+            FieldIdent::Named(ref s) => Ident::new(s, Span::call_site()),
+            FieldIdent::Unnamed(num) => Ident::new(&format!("_{}", num), Span::call_site()),
         }
     }
 
