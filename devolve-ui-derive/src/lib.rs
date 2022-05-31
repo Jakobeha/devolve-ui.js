@@ -1,4 +1,6 @@
+#![feature(arbitrary_self_types)]
 #![feature(decl_macro)]
+
 // Copyright 2019 The Druid Authors.
 // - Modified 2022 jakobeha
 //

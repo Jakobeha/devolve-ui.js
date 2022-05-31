@@ -1,5 +1,5 @@
 
-use proc_macro::{TokenStream, TokenTree};
+use proc_macro::TokenStream;
 use syn::{ExprStruct, parse_macro_input};
 use quote::quote;
 use itertools::Itertools;

@@ -1,5 +1,9 @@
 use std::rc::{Rc, Weak};
 use std::cell::RefCell;
+use std::fmt;
+use std::fmt::Debug;
+use std::cmp::Ordering;
+use std::hash::{Hash, Hasher};
 use std::ops::{Deref, DerefMut, Index, IndexMut};
 
 pub type Observer<Root> = Box<dyn Fn(&Root, &str) -> ()>;
@@ -20,6 +24,7 @@ pub trait ObsRef<Root, T> {
     fn base(&self) -> Weak<ObsRefRootBase<Root>>;
 }
 
+#[derive(Debug)]
 pub struct ObsDeref<'a, Root, T> {
     value: &'a mut T,
     path: &'a str,
@@ -34,6 +39,7 @@ pub struct ObsRefRootBase<T> {
     observers: RefCell<Vec<Observer<T>>>
 }
 
+#[derive(Debug)]
 pub struct ObsRefChildBase<Root, T> {
     // This is a pointer because self.root.value contains the real value
     child_value: *mut T,
@@ -50,15 +56,15 @@ pub trait ObsRefableRoot: Sized {
 pub trait ObsRefableChild<Root>: Sized {
     type ObsRefImpl : ObsRef<Root, Self>;
 
-    unsafe fn _to_obs_ref(self: *mut Self, path: String, root: Weak<ObsRefRootBase<Root>>) -> Self::ObsRefImpl;
+    unsafe fn _to_obs_ref_child(this: *mut Self, path: String, root: Weak<ObsRefRootBase<Root>>) -> Self::ObsRefImpl;
 
-    unsafe fn to_obs_ref(&self, path_head: &str, extension: &str, root: Weak<ObsRefRootBase<Root>>) -> Self::ObsRefImpl {
+    unsafe fn to_obs_ref_child(&self, path_head: &str, extension: &str, root: Weak<ObsRefRootBase<Root>>) -> Self::ObsRefImpl {
         let path = if extension.starts_with('[') {
             format!("{}{}", path_head, extension)
         } else {
             format!("{}.{}", path_head, extension)
         };
-        ((self as *const Self) as *mut Self)._to_obs_ref(path, root)
+        Self::_to_obs_ref_child((self as *const Self) as *mut Self, path, root)
     }
 }
 
@@ -69,6 +75,10 @@ impl <T> ObsRefRootBase<T> {
             observers: RefCell::new(Vec::new())
         })
     }
+
+    pub fn root_value(&self) -> &T {
+        &self.root_value
+    }
 }
 
 impl <Root, T> ObsRefChildBase<Root, T> {
@@ -78,6 +88,56 @@ impl <Root, T> ObsRefChildBase<Root, T> {
             path,
             root
         }
+    }
+
+    pub fn child_value(&self) -> &T {
+        unsafe { &*self.child_value }
+    }
+
+    pub fn path(&self) -> &str {
+        self.path.as_str()
+    }
+}
+
+impl <T: Debug> Debug for ObsRefRootBase<T> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "ObsRefRootBase({:?})", self.root_value)
+    }
+}
+
+impl <T: PartialEq> PartialEq for ObsRefRootBase<T> {
+    fn eq(&self, other: &Self) -> bool {
+        self.root_value() == other.root_value()
+    }
+}
+
+impl <T: PartialOrd> PartialOrd for ObsRefRootBase<T> {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        self.root_value().partial_cmp(&other.root_value())
+    }
+}
+
+impl <T: Hash> Hash for ObsRefRootBase<T> {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.root_value().hash(state)
+    }
+}
+
+impl <Root, T: PartialEq> PartialEq for ObsRefChildBase<Root, T> {
+    fn eq(&self, other: &Self) -> bool {
+        self.child_value() == other.child_value()
+    }
+}
+
+impl <Root, T: PartialOrd> PartialOrd for ObsRefChildBase<Root, T> {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        self.child_value().partial_cmp(&other.child_value())
+    }
+}
+
+impl <Root, T: Hash> Hash for ObsRefChildBase<Root, T> {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.child_value().hash(state)
     }
 }
 
@@ -203,11 +263,13 @@ impl Leaf for u16 {}
 impl Leaf for u32 {}
 impl Leaf for u64 {}
 impl Leaf for u128 {}
+impl Leaf for usize {}
 impl Leaf for i8 {}
 impl Leaf for i16 {}
 impl Leaf for i32 {}
 impl Leaf for i64 {}
 impl Leaf for i128 {}
+impl Leaf for isize {}
 impl Leaf for f32 {}
 impl Leaf for f64 {}
 impl Leaf for bool {}
@@ -224,9 +286,9 @@ impl <T : Leaf> ObsRefableRoot for T {
 impl <Root, T : Leaf> ObsRefableChild<Root> for T {
     type ObsRefImpl = ObsRefChildBase<Root, T>;
 
-    unsafe fn _to_obs_ref(self: *mut Self, path: String, root: Weak<ObsRefRootBase<Root>>) -> Self::ObsRefImpl {
+    unsafe fn _to_obs_ref_child(this: *mut Self, path: String, root: Weak<ObsRefRootBase<Root>>) -> Self::ObsRefImpl {
         ObsRefChildBase {
-            child_value: self,
+            child_value: this,
             path,
             root
         }
@@ -296,10 +358,10 @@ impl <T : ObsRefableChild<Vec<T>>> ObsRefableRoot for Vec<T> {
 impl <Root, T : ObsRefableChild<Root>> ObsRefableChild<Root> for Vec<T> {
     type ObsRefImpl = ObsRefVecChild<Root, T>;
 
-    unsafe fn _to_obs_ref(self: *mut Vec<T>, path: String, root: Weak<ObsRefRootBase<Root>>) -> Self::ObsRefImpl {
+    unsafe fn _to_obs_ref_child(this: *mut Vec<T>, path: String, root: Weak<ObsRefRootBase<Root>>) -> Self::ObsRefImpl {
         ObsRefVecChild {
             base: ObsRefChildBase {
-                child_value: self,
+                child_value: this,
                 path,
                 root
             },
@@ -317,7 +379,7 @@ impl <T : ObsRefableChild<Vec<T>>> ObsRefVecRoot<T> {
         let children = self.children.as_ptr().as_mut().expect("ObsRefVecRoot children is null");
         children[index].get_or_insert_with(|| {
             let extension = format!("[{}]", index);
-            self.i()[index].to_obs_ref("", &extension, self.base())
+            self.i()[index].to_obs_ref_child("", &extension, self.base())
         })
     }
 }
@@ -350,7 +412,7 @@ impl <Root, T : ObsRefableChild<Root>> ObsRefVecChild<Root, T> {
         children[index].get_or_insert_with(|| {
             let extension = format!("[{}]", index);
             let root = self.base.root.clone();
-            self.i()[index].to_obs_ref("", &extension, root)
+            self.i()[index].to_obs_ref_child("", &extension, root)
         })
     }
 }
