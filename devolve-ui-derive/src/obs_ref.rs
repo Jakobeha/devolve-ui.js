@@ -16,11 +16,11 @@
 //! The implementation for #[derive(ObsRef)]
 
 use proc_macro2::TokenStream;
-use crate::attr::{ObsRefAttr, Field, FieldKind, Fields};
+use crate::attr::{ObsRefAttr, Field, Fields};
 
 use quote::{quote, quote_spanned};
 use syn;
-use syn::{spanned::Spanned, Data, DataEnum, DataStruct};
+use syn::{spanned::Spanned, Data, DataStruct};
 
 pub(crate) fn derive_obs_ref_impl(
     input: syn::DeriveInput,
@@ -58,7 +58,6 @@ fn derive_struct(
 
     let field_ids: Vec<_> = fields().map(Field::coerced_ident).collect();
     let types: Vec<_> = fields().map(|field| &field.ty).collect();
-    let obs_ref_fields = quote!( #( #field_ids: <#types as ::devolve_ui::core::data::obs_ref::ObsRefableChild<#ident>>::ObsRefImpl ),* );
     let obs_ref_base_field = ident_from_str("__base");
 
     let obs_ref_root = ident_from_str(&format!("ObsRefRootFor{}", ident));
@@ -155,7 +154,6 @@ fn ident_from_str(s: &str) -> proc_macro2::Ident {
 
 fn generics_bounds(generics: &syn::Generics, root_ident: &TokenStream) -> TokenStream {
     let res = generics.params.iter().map(|gp| {
-        use syn::GenericParam::*;
         match gp {
             syn::GenericParam::Type(ty) => {
                 let ident = &ty.ident;

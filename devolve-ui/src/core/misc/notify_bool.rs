@@ -1,10 +1,12 @@
 use std::sync::atomic::AtomicBool;
 
-/// An atomic bool which can be set to true and checked / cleared only in this crate
+/// An atomic bool which can be set to true and checked / cleared only in this crate.
+/// Usually this is set by other threads to be checked by a `!Send + !Sync` target,
+/// although it can be set from the target's thread as well.
 #[derive(Debug)]
-pub struct NeedsRerenderBool(AtomicBool);
+pub struct FlagForOtherThreads(AtomicBool);
 
-impl NeedsRerenderBool {
+impl FlagForOtherThreads {
     pub fn new() -> Self {
         Self(AtomicBool::new(false))
     }

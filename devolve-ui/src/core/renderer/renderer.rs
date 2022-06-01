@@ -1,20 +1,19 @@
 use std::borrow::Cow;
 use std::cell::{Cell, RefCell, RefMut};
 use std::collections::HashMap;
-use std::rc::Rc;
+use std::future::Future;
+use std::pin::Pin;
+use std::rc::{Rc, Weak};
 use std::sync::Arc;
-#[cfg(feature = "time")]
-use std::thread::JoinHandle;
+use std::task::{Context, Poll};
 #[cfg(feature = "time")]
 use std::time::Duration;
 #[cfg(feature = "time")]
-use tokio::time::interval;
-#[cfg(feature = "time")]
-use tokio::task::{spawn, JoinHandle};
+use tokio::time::{Interval, interval, MissedTickBehavior};
 use crate::core::component::component::{VComponent, VComponentBody, VComponentRoot};
 use crate::core::component::node::{NodeId, VNode};
 use crate::core::component::parent::{_VParent, VParent};
-use crate::core::misc::notify_bool::NeedsRerenderBool;
+use crate::core::misc::notify_bool::FlagForOtherThreads;
 use crate::core::view::layout::geom::Rectangle;
 use crate::core::view::layout::parent_bounds::ParentBounds;
 use crate::core::view::view::{VView, VViewData};
@@ -29,7 +28,77 @@ struct CachedRender<Layer> {
 }
 
 #[cfg(feature = "time")]
-type RunningTask = JoinHandle<()>;
+pub struct Running<Engine: RenderEngine + 'static> {
+    renderer: Weak<Renderer<Engine>>,
+    interval: RefCell<Interval>,
+    is_done: FlagForOtherThreads
+}
+
+#[cfg(feature = "time")]
+impl <Engine: RenderEngine + 'static> Running<Engine> where Engine::RenderLayer: VRenderLayer {
+    fn new(renderer: &Rc<Renderer<Engine>>) -> Self {
+        // Render once at start if necessary; polling waits interval before re-rendering
+        if renderer.needs_rerender.get() && renderer.is_visible.get() {
+            renderer.rerender();
+        }
+
+        Running {
+            renderer: Rc::downgrade(renderer),
+            interval: RefCell::new(Self::mk_interval(renderer)),
+            is_done: FlagForOtherThreads::new()
+        }
+    }
+
+    fn tick(self: Pin<&mut Self>) -> Poll<()> {
+        let renderer = self.renderer.upgrade();
+        if self.is_done.get() || renderer.is_none() {
+            // Done
+            return Poll::Ready(());
+        }
+        let renderer = renderer.unwrap();
+
+        if renderer.needs_rerender.get() && renderer.is_visible.get() {
+            renderer.rerender();
+        }
+
+        // Not done (gets polled again and calls interval's poll)
+        Poll::Pending
+    }
+}
+
+#[cfg(feature = "time")]
+impl <Engine: RenderEngine + 'static> Running<Engine> {
+    fn mk_interval(renderer: &Rc<Renderer<Engine>>) -> Interval {
+        let mut interval = interval(renderer.interval_between_frames.get());
+        interval.set_missed_tick_behavior(MissedTickBehavior::Skip);
+        interval
+    }
+
+    #[allow(clippy::needless_lifetimes)] // Not needless
+    pub fn is_done<'a>(&'a self) -> &'a FlagForOtherThreads {
+        &self.is_done
+    }
+
+    fn sync_interval(&self) {
+        let renderer = self.renderer.upgrade();
+        if renderer.is_none() {
+            return;
+        }
+        let renderer = renderer.unwrap();
+        *self.interval.borrow_mut() = Self::mk_interval(&renderer);
+    }
+}
+
+impl <Engine: RenderEngine + 'static> Future for Running<Engine> where Engine::RenderLayer: VRenderLayer {
+    type Output = ();
+
+    fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
+        match self.interval.get_mut().poll_tick(cx) {
+            Poll::Ready(_) => self.tick(),
+            Poll::Pending => Poll::Pending
+        }
+    }
+}
 
 pub struct Renderer<Engine: RenderEngine + 'static> {
     engine: RefCell<Engine>,
@@ -37,9 +106,9 @@ pub struct Renderer<Engine: RenderEngine + 'static> {
     #[cfg(feature = "time")]
     interval_between_frames: Cell<Duration>,
     #[cfg(feature = "time")]
-    running_task: RefCell<Option<RunningTask>>,
+    running: RefCell<Option<Rc<Running<Engine>>>>,
     cached_renders: RefCell<HashMap<NodeId, CachedRender<Engine::RenderLayer>>>,
-    needs_rerender: Arc<NeedsRerenderBool>,
+    needs_rerender: Arc<FlagForOtherThreads>,
     root_component: RefCell<Option<Box<VComponent<Engine::ViewData>>>>
 }
 
@@ -55,7 +124,11 @@ impl <Engine: RenderEngine> Renderer<Engine> where Engine::RenderLayer: VRenderL
     /// Creates a new renderer.
     ///
     /// # Examples
-    /// Start a renderer which re-renders automatically
+    /// Start a renderer which re-renders automatically.
+    /// Note that the renderer blocks the current thread to re-render,
+    /// `Renderer` is not thread-safe: if you want multiple threads,
+    /// run this on a background thread, or copy the reference from `running.is_done` to
+    /// another thread, and call `.set()` to stop:
     /// ```
     /// use devolve_ui::core::renderer::renderer::Renderer;
     /// use devolve_ui::rsx;
@@ -65,7 +138,7 @@ impl <Engine: RenderEngine> Renderer<Engine> where Engine::RenderLayer: VRenderL
     /// renderer.root(rsx! { ... });
     /// renderer.interval_between_frames(Duration::from_millis(25)); // optional
     /// renderer.show();
-    /// renderer.resume();
+    /// let running = renderer.resume().await;
     /// ```
     ///
     /// Start a renderer which re-renders manually (renders once, then can be re-rendered via `renderer.rerender()`)
@@ -85,9 +158,9 @@ impl <Engine: RenderEngine> Renderer<Engine> where Engine::RenderLayer: VRenderL
             #[cfg(feature = "time")]
             interval_between_frames: Cell::new(Self::DEFAULT_INTERVAL_BETWEEN_FRAMES),
             #[cfg(feature = "time")]
-            running_task: RefCell::new(None),
+            running: RefCell::new(None),
             cached_renders: RefCell::new(HashMap::new()),
-            needs_rerender: Arc::new(NeedsRerenderBool::new()),
+            needs_rerender: Arc::new(FlagForOtherThreads::new()),
             root_component: RefCell::new(None)
         });
         let needs_rerender_async = Arc::downgrade(renderer.needs_rerender());
@@ -99,8 +172,8 @@ impl <Engine: RenderEngine> Renderer<Engine> where Engine::RenderLayer: VRenderL
         renderer
     }
 
-    //noinspection RsNeedlessLifetimes needs lifetime
-    pub fn needs_rerender<'a>(self: &'a Rc<Self>) -> &'a Arc<NeedsRerenderBool> {
+    #[allow(clippy::needless_lifetimes)] // Not needless
+    pub fn needs_rerender<'a>(self: &'a Rc<Self>) -> &'a Arc<FlagForOtherThreads> {
         &self.needs_rerender
     }
 
@@ -128,44 +201,41 @@ impl <Engine: RenderEngine> Renderer<Engine> where Engine::RenderLayer: VRenderL
     }
 
     #[cfg(feature = "time")]
-    pub fn resume(self: &Rc<Self>) {
+    pub fn resume(self: &Rc<Self>) -> Rc<Running<Engine>> {
         assert!(!self.is_running(), "already running");
         assert!(self.is_visible.get(), "can't resume render while invisible");
 
-        *self.running_task.borrow_mut() = Some(spawn(async {
-            let mut interval = interval(self.interval_between_frames.get());
-
-            loop {
-                if self.needs_rerender.get() && self.is_visible.get() {
-                    self.rerender();
-                }
-                interval.tick().await;
-            }
-        }));
+        let running = Rc::new(Running::new(self));
+        *self.running.borrow_mut() = Some(running.clone());
+        running
     }
 
     #[cfg(feature = "time")]
     pub fn pause(self: &Rc<Self>) {
-        assert!(self.is_running(), "not running");
+        let running = self.running.take().expect("not running");
+        running.is_done.set();
+    }
 
-        self.running_task.take().unwrap().abort();
+    /// Will be empty if not running
+    #[cfg(feature = "time")]
+    pub fn running(self: &Rc<Self>) -> Weak<Running<Engine>> {
+        match self.running.borrow().as_ref() {
+            None => Weak::new(),
+            Some(running) => Rc::downgrade(running),
+        }
     }
 
     #[cfg(feature = "time")]
     pub fn is_running(self: &Rc<Self>) -> bool {
-        self.running_task.borrow().is_some()
+        self.running.borrow().is_some()
     }
 
     #[cfg(feature = "time")]
     pub fn set_interval(self: &Rc<Self>, interval_between_frames: Duration) {
         // Need to pause and resume if running to change the interval
-        let is_running = self.is_running();
-        if is_running {
-            self.pause();
-        }
         self.interval_between_frames.set(interval_between_frames);
-        if is_running {
-            self.resume()
+        if let Some(running) = self.running.borrow().as_ref() {
+            running.sync_interval();
         }
     }
 

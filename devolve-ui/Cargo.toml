@@ -27,7 +27,7 @@ dedup-struct-fields = { path = "../dedup-struct-fields" }
 palette = "0.6"
 replace_with = "0.1.7"
 float-ord = "0.3.2"
-tokio = { version = "1.18.2", features = ["rt", "time"], optional = true }
+tokio = { version = "1.18.2", features = ["time"], optional = true }
 libc = { version = "0.2.126", optional = true }
 crossterm = { version = "0.23.2", optional = true }
 backtrace = { version = "0.3.65", optional = true }
