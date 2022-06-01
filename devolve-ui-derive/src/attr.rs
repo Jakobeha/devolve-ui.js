@@ -42,17 +42,6 @@ pub enum FieldIdent {
     Unnamed(usize),
 }
 
-impl FieldIdent {
-    //noinspection RsUnnecessaryQualifications
-    pub fn unwrap_named(&self) -> syn::Ident {
-        if let FieldIdent::Named(s) = self {
-            syn::Ident::new(s, Span::call_site())
-        } else {
-            panic!("Unwrap named called on unnamed FieldIdent");
-        }
-    }
-}
-
 pub trait Attrs: Default {
     const BASE_PATH: &'static str;
 
@@ -273,17 +262,4 @@ fn parse_lit_into_expr_path(lit: &syn::Lit) -> Result<ExprPath, Error> {
 
     let tokens = syn::parse_str(&string.value())?;
     syn::parse2(tokens)
-}
-
-fn parse_lit_into_ident(lit: &syn::Lit) -> Result<Ident, Error> {
-    let ident = if let syn::Lit::Str(lit) = lit {
-        Ident::new(&lit.value(), lit.span())
-    } else {
-        return Err(Error::new(
-            lit.span(),
-            "expected str, found... something else",
-        ));
-    };
-
-    Ok(ident)
 }
