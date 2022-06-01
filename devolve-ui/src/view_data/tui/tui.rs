@@ -2,7 +2,7 @@ use crate::core::component::node::VNode;
 use crate::core::view::color::Color;
 use crate::core::view::layout::parent_bounds::SubLayout;
 use crate::core::view::view::{VViewData, VViewType};
-use crate::view_data::attrs::{BorderStyle, DividerStyle, TextWrapMode};
+use crate::view_data::attrs::{BorderStyle, DividerDirection, DividerStyle, TextWrapMode};
 use std::slice::{Iter, IterMut};
 
 pub enum TuiViewData {
@@ -26,6 +26,7 @@ pub enum TuiViewData {
     },
     Divider {
         color: Option<Color>,
+        direction: DividerDirection,
         style: DividerStyle,
     },
     Source {

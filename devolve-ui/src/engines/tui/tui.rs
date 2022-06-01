@@ -12,14 +12,14 @@ use std::os::unix::io::{AsRawFd, RawFd};
 use std::str::Lines;
 use crate::core::renderer::engine::RenderEngine;
 use crate::core::renderer::render::VRender;
-use crate::core::view::color::Color;
+use crate::core::view::color::{Color, PackedColor};
 use crate::core::view::layout::err::LayoutError;
-use crate::core::view::layout::geom::{BoundingBox, Size};
+use crate::core::view::layout::geom::{BoundingBox, Rectangle, Size};
 use crate::core::view::layout::parent_bounds::{DimsStore, ParentBounds};
 use crate::core::view::view::VView;
 use crate::view_data::tui::tui::TuiViewData;
-use crate::engines::tui::layer::RenderLayer;
-use crate::view_data::attrs::{BorderStyle, DividerStyle, TextWrapMode};
+use crate::engines::tui::layer::{RenderCell, RenderLayer};
+use crate::view_data::attrs::{BorderStyle, DividerDirection, DividerStyle, TextWrapMode};
 
 #[cfg(target_family = "unix")]
 lazy_static! {
@@ -103,19 +103,196 @@ impl <Input: Read, Output: Write> TuiEngine<Input, Output> {
     }
 
     fn render_text(&self, bounds: &BoundingBox, color: &Option<Color>, wrap_mode: &TextWrapMode, lines: Lines<'_>) -> RenderLayer {
-        todo!()
+        let width = bounds.width.map_or(usize::MAX, |width| f32::round(width) as usize);
+        let height = bounds.height.map_or(usize::MAX, |height| f32::round(height) as usize);
+
+        let mut result = RenderLayer::with_capacity(height);
+        let mut next_out_line = Vec::new();
+        'outer: for line in lines {
+            let mut next_word = Vec::new();
+            for char in line.chars() {
+                if *wrap_mode == TextWrapMode::Word && char.is_alphanumeric() {
+                    // add to word
+                    // width will never be 0
+                    for cell in RenderCell::char(char) {
+                        next_word.push(cell)
+                    }
+                } else {
+                    if next_word.len() > 0 {
+                        // wrap line if necessary and add word
+                        if next_out_line.len() + next_word.len() > width {
+                            // next_word.length > 0 implies wrap == TextWrapMode::Word
+                            // so wrap line
+                            if result.height() == height {
+                                // no more room
+                                break 'outer;
+                            }
+                            result.push(next_out_line);
+                            next_out_line = Vec::new();
+                        }
+
+                        // add word
+                        next_out_line.append(&mut next_word);
+                    }
+
+                    let char_width = char.width().unwrap_or(0);
+                    if char_width == 0 {
+                        // zero-width char, so we add it to the last character so it's outside on overlap
+                        next_out_line[next_out_line.length - 1] += char
+                    } else {
+                        // wrap if necessary and add char
+                        if next_out_line.len() + char_width > width {
+                            match wrap_mode {
+                                TextWrapMode::Word | TextWrapMode::Char => {
+                                    if result.height() == height {
+                                        // no more room
+                                        break 'outer;
+                                    }
+                                    result.push(next_out_line);
+                                    next_out_line = Vec::new();
+                                }
+                                TextWrapMode::Clip => {
+                                    // This breaks out of the switch and continues the for loop, avoiding next_out_line.push(char)
+                                    continue;
+                                }
+                                TextWrapMode::Undefined => {
+                                    eprintln!("text extended past width but wrap is undefined")
+                                }
+                            }
+                        }
+
+                        // add char
+                        for cell in RenderCell::char(char) {
+                            next_out_line.push(cell);
+                        }
+                    }
+                }
+            }
+
+
+            // wrap line if necessary and add word
+            if next_out_line.len() + next_word.len() > width {
+                // next_word.length > 0 implies wrap == TextWrapMode::Word
+                // so wrap line
+                if result.height() == height {
+                    // no more room
+                    break;
+                }
+                result.push(next_out_line);
+                next_out_line = Vec::new();
+            }
+
+            // add word
+            next_out_line.append(&mut next_word);
+
+            // add line
+            if result.height() == height {
+                // no more room
+                break
+            }
+            result.push(next_out_line);
+            next_out_line = Vec::new();
+        }
+
+        if let Some(color) = color {
+            result.set_fg(color);
+        }
+        result.translate1(bounds);
+
+        result
     }
 
-    fn render_color(&self, bounds: &BoundingBox, color: &Color) -> RenderLayer {
-        todo!()
+    fn render_color(&self, rect: &Rectangle, color: &Color) -> RenderLayer {
+        let width = f32::round(rect.width()) as usize;
+        let height = f32::round(rect.height()) as usize;
+        let color = PackedColor::from(*color);
+        if width == 0 || height == 0 {
+            return RenderLayer::default();
+        }
+
+        let mut result = RenderLayer::of(width, height, RenderCell::simple_char(' ', PackedColor::transparent(), color))
+        result.translate2(rect.left, rect.top);
+        result
     }
 
-    fn render_border(&self, bounds: &BoundingBox, color: &Option<Color>, style: &BorderStyle) -> RenderLayer {
-        todo!()
+    fn render_border(&self, rect: &Rectangle, color: &Option<Color>, style: &BorderStyle) -> RenderLayer {
+        let width = f32::round(rect.width()) as usize;
+        let height = f32::round(rect.height()) as usize;
+        let color = color.map_or(PackedColor::transparent(), PackedColor::from);
+        if width == 0 || height == 0 {
+            return RenderLayer::default();
+        }
+
+        let border = style.ascii_border();
+        let mut result = RenderLayer::of(width, height, RenderCell::transparent());
+
+        result[(0, 0)] = RenderCell::simple_char(border.top_left, color, PackedColor::transparent());
+        result[(width - 1, 0)] = RenderCell::simple_char(border.top_right, color, PackedColor::transparent());
+        result[(0, height - 1)] = RenderCell::simple_char(border.bottom_left, color, PackedColor::transparent());
+        result[(width - 1, height - 1)] = RenderCell::simple_char(border.bottom_right, color, PackedColor::transparent());
+        for x in 1..<(width - 1) {
+            result[(x, 0)] = RenderCell::simple_char(if let Some(top_alt) = border.top_alt.and(x % 2 == 1) {
+                top_alt
+            } else {
+                border.top
+            }, color, PackedColor::transparent());
+            result[(x, height - 1)] = RenderCell::simple_char(if let Some(bottom_alt) = border.bottom_alt.and(x % 2 == 1) {
+                bottom_alt
+            } else {
+                border.bottom
+            }, color, PackedColor::transparent());
+        }
+        for y in 1..<(height - 1) {
+            result[(0, y)] = RenderCell::simple_char(if let Some(left_alt) = border.left_alt.and(y % 2 == 1) {
+                left_alt
+            } else {
+                border.left
+            }, color, PackedColor::transparent());
+            result[(width - 1, y)] = RenderCell::simple_char(if let Some(right_alt) = border.right_alt.and(y % 2 == 1) {
+                right_alt
+            } else {
+                border.right
+            }, color, PackedColor::transparent());
+        }
+
+        result.translate2(rect.left, rect.top);
+        result
     }
 
-    fn render_divider(&self, bounds: &BoundingBox, color: &Option<Color>, style: &DividerStyle) -> RenderLayer {
-        todo!()
+    fn render_divider(&self, x: f32, y: f32, length: f32, thickness: f32, color: &Option<Color>, style: &DividerStyle, direction: &DividerDirection) -> RenderLayer {
+        let length = f32::round(length) as usize;
+        let thickness = f32::round(thickness) as usize;
+        let color = color.map_or(PackedColor::transparent(), PackedColor::from);
+        if length == 0 || thickness == 0 {
+            return RenderLayer::default();
+        }
+
+        let divider = style.ascii_divider();
+        let mut result = match direction {
+            DividerDirection::Horizontal => {
+                let mut result = RenderLayer::of(length, 1, RenderCell::simple_char(divider.horizontal, color, PackedColor::transparent()));
+                if let Some(horizontal_alt) = divider.horizontal_alt {
+                    for x in 1..<length {
+                        if x % 2 == 1 {
+                            result[(x, 0)] = RenderCell::simple_char(horizontal_alt, color, PackedColor::transparent());
+                        }
+                    }
+                }
+                result
+            }
+            DividerDirection::Vertical => {
+                let mut result = RenderLayer::of(1, length, RenderCell::simple_char(divider.vertical, color, PackedColor::transparent()));
+                if let Some(vertical_alt) = divider.vertical_alt {
+                    for y in 1..<length {
+                        if y % 2 == 1 {
+                            result[(0, y)] = RenderCell::simple_char(vertical_alt, color, None);
+                        }
+                    }
+                }
+            }
+        };
+        result.translate2(x, y);
+        result
     }
 
     fn render_source(&self, bounds: &BoundingBox, column_size: &Size, source: &str) -> Result<(RenderLayer, Size), LayoutError> {
@@ -236,17 +413,24 @@ impl <Input: Read, Output: Write> RenderEngine for TuiEngine<Input, Output> {
             }
             TuiViewData::Color { color } => {
                 let rect = bounds.as_rectangle().map_err(|err| err.add_description("Fill-color requires explicit size"))?;
-                let layer = self.render_color(bounds, color);
+                let layer = self.render_color(rect, color);
                 render.insert(bounds.z, Some(&rect), layer);
             },
             TuiViewData::Border { color, style } => {
                 let rect = bounds.as_rectangle().map_err(|err| err.add_description("Border requires explicit size"))?;
-                let layer = self.render_border(bounds, color, style);
+                let layer = self.render_border(rect, color, style);
                 render.insert(bounds.z, Some(&rect), layer);
             },
-            TuiViewData::Divider { color, style } => {
+            TuiViewData::Divider { color, direction, style } => {
                 let rect = bounds.as_rectangle().map_err(|err| err.add_description("Divider requires explicit size"))?;
-                let layer = self.render_divider(bounds, color, style);
+                let (length, thickness) = match direction {
+                    DividerDirection::Horizontal => (rect.width(), rect.height()),
+                    DividerDirection::Vertical => (rect.height(), rect.width()),
+                };
+                if thickness > 1f32 {
+                    return Err(LayoutError::new("divider with thickness > 1 not supported in CLI mode"));
+                }
+                let layer = self.render_divider(rect.x, rect.y, length, thickness, color, style, direction)?;
                 render.insert(bounds.z, Some(&rect), layer);
             },
             TuiViewData::Source { source } => {
