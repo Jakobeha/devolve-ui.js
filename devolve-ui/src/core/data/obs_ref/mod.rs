@@ -4,7 +4,7 @@ pub mod vec;
 use std::rc::{Rc, Weak};
 use std::cell::RefCell;
 use std::fmt;
-use std::fmt::Debug;
+use std::fmt::{Debug, Formatter};
 use std::cmp::Ordering;
 use std::hash::{Hash, Hasher};
 use std::ops::{Deref, DerefMut};
@@ -198,7 +198,7 @@ impl <'a, Root, T> Drop for ObsDeref<'a, Root, T> {
 // region boilerplate impls
 
 impl <T: Debug> Debug for ObsRefRootBase<T> {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         write!(f, "ObsRefRootBase({:?})", self.root_value)
     }
 }

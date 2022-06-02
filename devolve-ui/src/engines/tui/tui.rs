@@ -4,9 +4,9 @@ use std::sync::RwLock;
 #[cfg(target_family = "unix")]
 use lazy_static::lazy_static;
 #[cfg(target_family = "unix")]
-use libc::{ioctl, TIOCGWINSZ, winsize, signal, SIGWINCH, sighandler_t, c_int, c_void, SIGINT};
+use libc::{c_int, c_void, ioctl, sighandler_t, SIGINT, signal, SIGWINCH, TIOCGWINSZ, winsize};
 use std::io;
-use std::io::{Stdin, Stdout, Read, Write, stdin, stdout};
+use std::io::{Read, Stdin, stdin, Stdout, stdout, Write};
 #[cfg(target_family = "unix")]
 use std::os::unix::io::{AsRawFd, RawFd};
 use std::str::Lines;
@@ -19,8 +19,10 @@ use crate::core::view::layout::parent_bounds::{DimsStore, ParentBounds};
 use crate::core::view::view::VView;
 use crate::view_data::tui::tui::TuiViewData;
 use crate::engines::tui::layer::{RenderCell, RenderLayer};
+use crate::engines::tui::terminal_image;
 use crate::engines::tui::terminal_image::Image;
 use crate::view_data::attrs::{BorderStyle, DividerDirection, DividerStyle, TextWrapMode};
+use crate::view_data::tui::terminal_image::{HandleAspectRatio, Source};
 
 #[cfg(target_family = "unix")]
 lazy_static! {
@@ -211,7 +213,7 @@ impl <Input: Read, Output: Write> TuiEngine<Input, Output> {
             return RenderLayer::default();
         }
 
-        let mut result = RenderLayer::of(width, height, RenderCell::simple_char(' ', PackedColor::transparent(), color));
+        let mut result = RenderLayer::of(RenderCell::simple_char(' ', PackedColor::transparent(), color), width, height);
         result.translate2(rect.left, rect.top);
         result
     }
@@ -225,7 +227,7 @@ impl <Input: Read, Output: Write> TuiEngine<Input, Output> {
         }
 
         let border = style.ascii_border();
-        let mut result = RenderLayer::of(width, height, RenderCell::transparent());
+        let mut result = RenderLayer::of(RenderCell::transparent(), width, height);
 
         result[(0, 0)] = RenderCell::simple_char(border.top_left, color, PackedColor::transparent());
         result[(width - 1, 0)] = RenderCell::simple_char(border.top_right, color, PackedColor::transparent());
@@ -271,7 +273,7 @@ impl <Input: Read, Output: Write> TuiEngine<Input, Output> {
         let divider = style.ascii_divider();
         let mut result = match direction {
             DividerDirection::Horizontal => {
-                let mut result = RenderLayer::of(length, 1, RenderCell::simple_char(divider.horizontal, color, PackedColor::transparent()));
+                let mut result = RenderLayer::of(RenderCell::simple_char(divider.horizontal, color, PackedColor::transparent()), length, 1);
                 if let Some(horizontal_alt) = divider.horizontal_alt {
                     for x in 1..<length {
                         if x % 2 == 1 {
@@ -282,7 +284,7 @@ impl <Input: Read, Output: Write> TuiEngine<Input, Output> {
                 result
             }
             DividerDirection::Vertical => {
-                let mut result = RenderLayer::of(1, length, RenderCell::simple_char(divider.vertical, color, PackedColor::transparent()));
+                let mut result = RenderLayer::of(RenderCell::simple_char(divider.vertical, color, PackedColor::transparent()), 1, length);
                 if let Some(vertical_alt) = divider.vertical_alt {
                     for y in 1..<length {
                         if y % 2 == 1 {
@@ -296,11 +298,15 @@ impl <Input: Read, Output: Write> TuiEngine<Input, Output> {
         result
     }
 
-    fn render_source(&self, bounds: &BoundingBox, column_size: &Size, source: &str) -> Result<(RenderLayer, Size), LayoutError> {
-        let width = todo!();
-        let height = todo!();
-        let handle_aspect_ratio = todo!();
-        let (render, (width_pixels, height_pixels)) = Image::from_source(source).render(width, height, handle_aspect_ratio, column_size).map_err(|msg| LayoutError::new(format!("failed to render source {}: {}", source, msg)))?;
+    fn render_source(&self, bounds: &BoundingBox, column_size: &Size, source: &Source, handle_aspect_ratio: HandleAspectRatio) -> Result<(RenderLayer, Size), LayoutError> {
+        let width = bounds.width.map_or(terminal_image::Measurement::Auto, |width| {
+            terminal_image::Measurement::Pixels((width / column_size.width) as u16)
+        });
+        let height = bounds.height.map_or(terminal_image::Measurement::Auto, |height| {
+            terminal_image::Measurement::Pixels((height / column_size.height) as u16)
+        });
+        let image = Image::try_from(source).map_err(|err| LayoutError::new(format!("failed to load source: {}", err)))?;
+        let (render, (width_pixels, height_pixels)) = image.render(width, height, handle_aspect_ratio, column_size).map_err(|msg| LayoutError::new(format!("failed to render source {}: {}", source, msg)))?;
         let width = width_pixels as f32 / column_size.width;
         let height = height_pixels as f32 / column_size.height;
         Ok((render, Size { width, height }))
@@ -440,8 +446,8 @@ impl <Input: Read, Output: Write> RenderEngine for TuiEngine<Input, Output> {
                 let layer = self.render_divider(rect.x, rect.y, length, thickness, color, style, direction)?;
                 render.insert(bounds.z, Some(&rect), layer);
             },
-            TuiViewData::Source { source } => {
-                let (layer, size) = self.render_source(bounds, column_size, source)?;
+            TuiViewData::Source { source, handle_aspect_ratio } => {
+                let (layer, size) = self.render_source(bounds, column_size, source, *handle_aspect_ratio)?;
                 let rect = bounds.as_rectangle_with_default_size(&size);
                 render.insert(bounds.z, Some(&rect), layer);
             }

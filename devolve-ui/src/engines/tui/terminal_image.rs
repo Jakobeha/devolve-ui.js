@@ -1,15 +1,19 @@
 use std::cmp::{max, min};
 use std::{env, ptr};
+use std::fmt;
+use std::fmt::{Display, Formatter};
+use std::io;
 use std::io::Read;
 use std::os::raw::{c_char, c_int, c_uchar, c_void};
 use std::slice;
 use semver::Version;
 use png;
 use sixel_sys;
-use sixel_sys::status::{Status as SixelStatus};
+use sixel_sys::status::Status as SixelStatus;
 use base64;
 use crate::core::view::color::PackedColor;
 use crate::engines::tui::layer::{RenderCell, RenderLayer};
+use crate::view_data::tui::terminal_image::{HandleAspectRatio, InferredFileExtension, Measurement, Source, SourceFormat};
 
 pub enum ImageSupport {
     Fallback,
@@ -108,19 +112,42 @@ impl <R: Read> ImageData<R> {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, PartialOrd)]
-pub enum Measurement {
-    Auto,
-    Pixels(u16),
-    Ratio(f32)
+#[derive(Debug, Clone)]
+pub enum Source2ImageDataError {
+    UnsupportedFormat(InferredFileExtension),
+    IOError(io::Error)
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
-pub enum HandleAspectRatio {
-    Complain,
-    Fit,
-    Fill,
-    Stretch
+impl From<io::Error> for Source2ImageDataError {
+    fn from(err: io::Error) -> Self {
+        Self::IOError(err)
+    }
+}
+
+impl Display for Source2ImageDataError {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        match self {
+            Source2ImageDataError::UnsupportedFormat(InferredFileExtension(None)) => write!(f, "unsupported format"),
+            Source2ImageDataError::UnsupportedFormat(InferredFileExtension(Some(str))) => write!(f, "unsupported format: {}", str),
+            Source2ImageDataError::IOError(err) => write!(f, "IO error: {}", err)
+        }
+    }
+}
+
+impl TryFrom<Source> for ImageData<Box<dyn Reader>> {
+    type Error = Source2ImageDataError;
+
+    fn try_from(value: Source) -> Result<Self, Self::Error> {
+        match value.try_get_format() {
+            Err(extension) => Err(Source2ImageDataError::UnsupportedFormat(extension)),
+            Ok(SourceFormat::RawRGBA8Image) => {
+                let mut data = Vec::new();
+                value.try_into_reader()?.read_to_end(&mut data)?;
+                Ok(ImageData::RGBA8(data))
+            },
+            Ok(SourceFormat::PNG) => Ok(ImageData::PNG(value.try_into_reader()?)),
+        }
+    }
 }
 
 fn calculate_scaled_width_height(image_width: u16, image_height: u16, width: Measurement, height: Measurement, handle_aspect_ratio: HandleAspectRatio) -> Result<(u16, u16), String> {

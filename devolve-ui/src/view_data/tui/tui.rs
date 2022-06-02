@@ -4,6 +4,7 @@ use crate::core::view::layout::parent_bounds::SubLayout;
 use crate::core::view::view::{VViewData, VViewType};
 use crate::view_data::attrs::{BorderStyle, DividerDirection, DividerStyle, TextWrapMode};
 use std::slice::{Iter, IterMut};
+use crate::view_data::tui::terminal_image::{HandleAspectRatio, Source};
 
 pub enum TuiViewData {
     Box {
@@ -30,7 +31,8 @@ pub enum TuiViewData {
         style: DividerStyle,
     },
     Source {
-        source: String,
+        source: Source,
+        handle_aspect_ratio: HandleAspectRatio
     },
 }
 
