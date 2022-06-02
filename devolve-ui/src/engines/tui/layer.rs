@@ -81,8 +81,15 @@ impl RenderLayer {
         Self(lines.map(|line| line.collect()).collect())
     }
 
-    pub fn of(width: usize, height: usize, cell: RenderCell) -> Self {
+    pub fn of(cell: RenderCell, width: usize, height: usize) -> Self {
         Self(vec![vec![cell; width]; height])
+    }
+
+    pub fn escape_sequence_and_filler(escape_sequence: String, width: usize, height: usize) -> Self {
+        assert!(width != 0 && height != 0, "width and height must be non-zero");
+        let mut layer = Self::of(RenderCell::zero_width(), width, height);
+        layer[(0, 0)].content = RenderCellContent::ManyChars(escape_sequence);
+        layer
     }
 
     pub fn set_fg(&mut self, color: impl Into<PackedColor>) {
@@ -237,7 +244,7 @@ impl Index<(usize, usize)> for RenderLayer {
 
 impl IndexMut<(usize, usize)> for RenderLayer {
     fn index_mut(&mut self, (x, y): (usize, usize)) -> &mut Self::Output {
-        &self.0[x][y]
+        &mut self.0[x][y]
     }
 }
 

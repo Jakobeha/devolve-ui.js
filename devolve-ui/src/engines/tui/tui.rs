@@ -19,6 +19,7 @@ use crate::core::view::layout::parent_bounds::{DimsStore, ParentBounds};
 use crate::core::view::view::VView;
 use crate::view_data::tui::tui::TuiViewData;
 use crate::engines::tui::layer::{RenderCell, RenderLayer};
+use crate::engines::tui::terminal_image::Image;
 use crate::view_data::attrs::{BorderStyle, DividerDirection, DividerStyle, TextWrapMode};
 
 #[cfg(target_family = "unix")]
@@ -210,7 +211,7 @@ impl <Input: Read, Output: Write> TuiEngine<Input, Output> {
             return RenderLayer::default();
         }
 
-        let mut result = RenderLayer::of(width, height, RenderCell::simple_char(' ', PackedColor::transparent(), color))
+        let mut result = RenderLayer::of(width, height, RenderCell::simple_char(' ', PackedColor::transparent(), color));
         result.translate2(rect.left, rect.top);
         result
     }
@@ -231,24 +232,24 @@ impl <Input: Read, Output: Write> TuiEngine<Input, Output> {
         result[(0, height - 1)] = RenderCell::simple_char(border.bottom_left, color, PackedColor::transparent());
         result[(width - 1, height - 1)] = RenderCell::simple_char(border.bottom_right, color, PackedColor::transparent());
         for x in 1..<(width - 1) {
-            result[(x, 0)] = RenderCell::simple_char(if let Some(top_alt) = border.top_alt.and(x % 2 == 1) {
+            result[(x, 0)] = RenderCell::simple_char(if let Some(top_alt) = border.top_alt.filter(|_| x % 2 == 1) {
                 top_alt
             } else {
                 border.top
             }, color, PackedColor::transparent());
-            result[(x, height - 1)] = RenderCell::simple_char(if let Some(bottom_alt) = border.bottom_alt.and(x % 2 == 1) {
+            result[(x, height - 1)] = RenderCell::simple_char(if let Some(bottom_alt) = border.bottom_alt.filter(|_| x % 2 == 1) {
                 bottom_alt
             } else {
                 border.bottom
             }, color, PackedColor::transparent());
         }
         for y in 1..<(height - 1) {
-            result[(0, y)] = RenderCell::simple_char(if let Some(left_alt) = border.left_alt.and(y % 2 == 1) {
+            result[(0, y)] = RenderCell::simple_char(if let Some(left_alt) = border.left_alt.filter(|_| y % 2 == 1) {
                 left_alt
             } else {
                 border.left
             }, color, PackedColor::transparent());
-            result[(width - 1, y)] = RenderCell::simple_char(if let Some(right_alt) = border.right_alt.and(y % 2 == 1) {
+            result[(width - 1, y)] = RenderCell::simple_char(if let Some(right_alt) = border.right_alt.filter(|_| y % 2 == 1) {
                 right_alt
             } else {
                 border.right
@@ -285,7 +286,7 @@ impl <Input: Read, Output: Write> TuiEngine<Input, Output> {
                 if let Some(vertical_alt) = divider.vertical_alt {
                     for y in 1..<length {
                         if y % 2 == 1 {
-                            result[(0, y)] = RenderCell::simple_char(vertical_alt, color, None);
+                            result[(0, y)] = RenderCell::simple_char(vertical_alt, color, PackedColor::transparent());
                         }
                     }
                 }
@@ -296,7 +297,13 @@ impl <Input: Read, Output: Write> TuiEngine<Input, Output> {
     }
 
     fn render_source(&self, bounds: &BoundingBox, column_size: &Size, source: &str) -> Result<(RenderLayer, Size), LayoutError> {
-        todo!()
+        let width = todo!();
+        let height = todo!();
+        let handle_aspect_ratio = todo!();
+        let (render, (width_pixels, height_pixels)) = Image::from_source(source).render(width, height, handle_aspect_ratio, column_size).map_err(|msg| LayoutError::new(format!("failed to render source {}: {}", source, msg)))?;
+        let width = width_pixels as f32 / column_size.width;
+        let height = height_pixels as f32 / column_size.height;
+        Ok((render, Size { width, height }))
     }
 }
 
@@ -413,12 +420,12 @@ impl <Input: Read, Output: Write> RenderEngine for TuiEngine<Input, Output> {
             }
             TuiViewData::Color { color } => {
                 let rect = bounds.as_rectangle().map_err(|err| err.add_description("Fill-color requires explicit size"))?;
-                let layer = self.render_color(rect, color);
+                let layer = self.render_color(&rect, color);
                 render.insert(bounds.z, Some(&rect), layer);
             },
             TuiViewData::Border { color, style } => {
                 let rect = bounds.as_rectangle().map_err(|err| err.add_description("Border requires explicit size"))?;
-                let layer = self.render_border(rect, color, style);
+                let layer = self.render_border(&rect, color, style);
                 render.insert(bounds.z, Some(&rect), layer);
             },
             TuiViewData::Divider { color, direction, style } => {

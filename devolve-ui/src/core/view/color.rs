@@ -48,6 +48,12 @@ impl PackedColor {
     }
 }
 
+impl From<u32> for PackedColor {
+    fn from(rgba: u32) -> Self {
+        Self(Packed::from(rgba))
+    }
+}
+
 impl Debug for PackedColor {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         write!(f, "{:?}", Srgba::from(self.0))
