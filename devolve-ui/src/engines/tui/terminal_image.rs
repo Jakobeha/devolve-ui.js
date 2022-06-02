@@ -74,14 +74,14 @@ pub struct Image<R: Read> {
 }
 
 pub enum ImageData<R: Read> {
-    RGBA8(Vec<u8>),
+    RGBA32(Vec<u8>),
     PNG(R)
 }
 
 impl <R: Read> ImageData<R> {
-    fn into_rgba8(self) -> Result<Vec<u8>, String> {
+    fn into_rgba32(self) -> Result<Vec<u8>, String> {
         Ok(match self {
-            ImageData::RGBA8(data) => data,
+            ImageData::RGBA32(data) => data,
             ImageData::PNG(input) => {
                 let mut decoder = png::Decoder::new(input);
                 let mut reader = decoder.read_info()?;
@@ -140,10 +140,10 @@ impl TryFrom<Source> for ImageData<Box<dyn Reader>> {
     fn try_from(value: Source) -> Result<Self, Self::Error> {
         match value.try_get_format() {
             Err(extension) => Err(Source2ImageDataError::UnsupportedFormat(extension)),
-            Ok(SourceFormat::RawRGBA8Image) => {
+            Ok(SourceFormat::RawRGBA32Image) => {
                 let mut data = Vec::new();
                 value.try_into_reader()?.read_to_end(&mut data)?;
-                Ok(ImageData::RGBA8(data))
+                Ok(ImageData::RGBA32(data))
             },
             Ok(SourceFormat::PNG) => Ok(ImageData::PNG(value.try_into_reader()?)),
         }
@@ -234,7 +234,7 @@ impl <R: Read> Image<R> {
     fn render_fallback(self, width: u16, height: u16) -> Result<RenderLayer, String> {
         let width = width as f32 / column_size.width;
         let height = height as f32 / column_size.height;
-        let data = self.data.into_rgba8()?;
+        let data = self.data.into_rgba32()?;
         let scale_width = self.width as f32 / width;
         let scale_height = self.height as f32 / height;
 
@@ -290,17 +290,17 @@ impl <R: Read> Image<R> {
     }
 
     fn render_sixel(self, width: u16, height: u16) -> Result<RenderLayer, String> {
-        let data = self.data.into_rgba8()?;
+        let data = self.data.into_rgba32()?;
         let escape_sequence = _render_sixel(&data, width, height).map_err(|status| format!("libsixel error code: {}", status))?;
         Ok(RenderLayer::escape_sequence_and_filler(escape_sequence, width as usize, height as usize))
     }
 }
 
-fn _render_sixel(rgba8: &[u8], width: u16, height: u16) -> Result<String, SixelStatus> {
+fn _render_sixel(rgba32: &[u8], width: u16, height: u16) -> Result<String, SixelStatus> {
     unsafe {
         let mut output_str = String::new();
         let output = sixel_sys::sixel_output_create(Some(read_sixel), &mut output_str as *mut String as *mut c_void);
-        let status = sixel_sys::sixel_encode(rgba8 as *mut c_uchar, width as c_int, height as c_int, 8, ptr::null_mut(), output);
+        let status = sixel_sys::sixel_encode(rgba32 as *mut c_uchar, width as c_int, height as c_int, 8, ptr::null_mut(), output);
         if status != SixelStatus::Ok {
             return Err(status)
         }

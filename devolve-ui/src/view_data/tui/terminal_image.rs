@@ -6,7 +6,7 @@ use std::path::PathBuf;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub enum SourceFormat {
-    RawRGBA8Image,
+    RawRGBA32Image,
     PNG,
 }
 
@@ -62,14 +62,14 @@ impl SourceFormat {
     fn try_from_extension(extension: &str) -> Option<SourceFormat> {
         match extension {
             "png" => Some(SourceFormat::PNG),
-            "rgba8" => Some(SourceFormat::RawRGBA8Image),
+            "rgba32" => Some(SourceFormat::RawRGBA32Image),
             _ => None
         }
     }
 
     fn extension(&self) -> &'static str {
         match self {
-            SourceFormat::RawRGBA8Image => "rgba8",
+            SourceFormat::RawRGBA32Image => "rgba32",
             SourceFormat::PNG => "png"
         }
     }
@@ -87,7 +87,7 @@ impl Display for Source {
 impl Display for SourceFormat {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         match self {
-            SourceFormat::RawRGBA8Image => write!(f, "RGBA8"),
+            SourceFormat::RawRGBA32Image => write!(f, "RGBA32"),
             SourceFormat::PNG => write!(f, "PNG")
         }
     }
