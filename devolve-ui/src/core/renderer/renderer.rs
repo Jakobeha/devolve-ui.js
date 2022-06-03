@@ -2,14 +2,17 @@ use std::borrow::Cow;
 use std::cell::{Cell, RefCell, RefMut};
 use std::collections::HashMap;
 use std::future::Future;
+use std::ops::Deref;
 use std::pin::Pin;
 use std::rc::{Rc, Weak};
-use std::sync::Arc;
+use std::sync::{Arc, Weak as WeakArc};
 use std::task::{Context, Poll};
 #[cfg(feature = "time")]
 use std::time::Duration;
 #[cfg(feature = "time")]
 use tokio::time::{Interval, interval, MissedTickBehavior};
+#[cfg(feature = "time-blocking")]
+use tokio::runtime;
 use crate::core::component::component::{VComponent, VComponentBody, VComponentRoot};
 use crate::core::component::node::{NodeId, VNode};
 use crate::core::component::parent::{_VParent, VParent};
@@ -31,25 +34,28 @@ struct CachedRender<Layer> {
 pub struct Running<Engine: RenderEngine + 'static> {
     renderer: Weak<Renderer<Engine>>,
     interval: RefCell<Interval>,
-    is_done: FlagForOtherThreads
+    is_done: Arc<FlagForOtherThreads>
 }
 
 #[cfg(feature = "time")]
-impl <Engine: RenderEngine + 'static> Running<Engine> where Engine::RenderLayer: VRenderLayer {
+pub struct RcRunning<Engine: RenderEngine + 'static>(pub Rc<Running<Engine>>);
+
+#[cfg(feature = "time")]
+impl <Engine: RenderEngine + 'static> RcRunning<Engine> where Engine::RenderLayer: VRenderLayer {
     fn new(renderer: &Rc<Renderer<Engine>>) -> Self {
         // Render once at start if necessary; polling waits interval before re-rendering
         if renderer.needs_rerender.get() && renderer.is_visible.get() {
             renderer.rerender();
         }
 
-        Running {
+        Self(Rc::new(Running {
             renderer: Rc::downgrade(renderer),
             interval: RefCell::new(Self::mk_interval(renderer)),
-            is_done: FlagForOtherThreads::new()
-        }
+            is_done: Arc::new(FlagForOtherThreads::new())
+        }))
     }
 
-    fn tick(self: Pin<&mut Self>) -> Poll<()> {
+    fn tick(self: &Pin<&mut Self>) -> Poll<()> {
         let renderer = self.renderer.upgrade();
         if self.is_done.get() || renderer.is_none() {
             // Done
@@ -67,15 +73,15 @@ impl <Engine: RenderEngine + 'static> Running<Engine> where Engine::RenderLayer:
 }
 
 #[cfg(feature = "time")]
-impl <Engine: RenderEngine + 'static> Running<Engine> {
+impl <Engine: RenderEngine + 'static> RcRunning<Engine> {
     fn mk_interval(renderer: &Rc<Renderer<Engine>>) -> Interval {
         let mut interval = interval(renderer.interval_between_frames.get());
         interval.set_missed_tick_behavior(MissedTickBehavior::Skip);
         interval
     }
 
-    #[allow(clippy::needless_lifetimes)] // Not needless
-    pub fn is_done<'a>(&'a self) -> &'a FlagForOtherThreads {
+    #[allow(clippy::needless_lifetimes)] // Not needless for some reason
+    pub fn is_done<'a>(&'a self) -> &'a Arc<FlagForOtherThreads> {
         &self.is_done
     }
 
@@ -89,14 +95,42 @@ impl <Engine: RenderEngine + 'static> Running<Engine> {
     }
 }
 
-impl <Engine: RenderEngine + 'static> Future for Running<Engine> where Engine::RenderLayer: VRenderLayer {
+impl <Engine: RenderEngine + 'static> Future for RcRunning<Engine> where Engine::RenderLayer: VRenderLayer {
     type Output = ();
 
-    fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
-        match self.interval.get_mut().poll_tick(cx) {
+    fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
+        match self.interval.borrow_mut().poll_tick(cx) {
             Poll::Ready(_) => self.tick(),
             Poll::Pending => Poll::Pending
         }
+    }
+}
+
+impl <Engine: RenderEngine + 'static> Clone for RcRunning<Engine> {
+    fn clone(&self) -> Self {
+        Self(self.0.clone())
+    }
+
+    fn clone_from(&mut self, source: &Self) {
+        self.0.clone_from(&source.0);
+    }
+}
+
+impl <Engine: RenderEngine + 'static> Deref for RcRunning<Engine> {
+    type Target = Running<Engine>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+pub trait WeakRunning<Engine: RenderEngine + 'static> {
+    fn upgrade(&self) -> Option<RcRunning<Engine>>;
+}
+
+impl <Engine: RenderEngine + 'static> WeakRunning<Engine> for Weak<Running<Engine>> {
+    fn upgrade(&self) -> Option<RcRunning<Engine>> {
+        self.upgrade().map(RcRunning)
     }
 }
 
@@ -106,7 +140,7 @@ pub struct Renderer<Engine: RenderEngine + 'static> {
     #[cfg(feature = "time")]
     interval_between_frames: Cell<Duration>,
     #[cfg(feature = "time")]
-    running: RefCell<Option<Rc<Running<Engine>>>>,
+    running: RefCell<Option<RcRunning<Engine>>>,
     cached_renders: RefCell<HashMap<NodeId, CachedRender<Engine::RenderLayer>>>,
     needs_rerender: Arc<FlagForOtherThreads>,
     root_component: RefCell<Option<Box<VComponent<Engine::ViewData>>>>
@@ -125,10 +159,7 @@ impl <Engine: RenderEngine> Renderer<Engine> where Engine::RenderLayer: VRenderL
     ///
     /// # Examples
     /// Start a renderer which re-renders automatically.
-    /// Note that the renderer blocks the current thread to re-render,
-    /// `Renderer` is not thread-safe: if you want multiple threads,
-    /// run this on a background thread, or copy the reference from `running.is_done` to
-    /// another thread, and call `.set()` to stop:
+    /// The renderer will fully block the current thread until your app exits.
     /// ```
     /// use devolve_ui::core::renderer::renderer::Renderer;
     /// use devolve_ui::rsx;
@@ -138,7 +169,40 @@ impl <Engine: RenderEngine> Renderer<Engine> where Engine::RenderLayer: VRenderL
     /// renderer.root(rsx! { ... });
     /// renderer.interval_between_frames(Duration::from_millis(25)); // optional
     /// renderer.show();
-    /// let running = renderer.resume().await;
+    /// renderer.resume_blocking();
+    /// ```
+    ///
+    /// Start a renderer which re-renders automatically in an async block.
+    /// The renderer will `await` in the current future but not block other concurrent futures.
+    /// ```
+    /// use devolve_ui::core::renderer::renderer::Renderer;
+    /// use devolve_ui::rsx;
+    /// use std::time::Duration;
+    ///
+    /// let renderer = Renderer::new(TODOEngine);
+    /// renderer.root(rsx! { ... });
+    /// renderer.interval_between_frames(Duration::from_millis(25)); // optional
+    /// renderer.show();
+    /// renderer.resume().await;
+    /// ```
+    ///
+    /// Start a renderer which re-renders on a background thread.
+    /// You can stop the renderer by closing the thread, or calling `escape.upgrade.expect("renderer was already stopped").set()`.
+    /// ```
+    /// use devolve_ui::core::renderer::renderer::Renderer;
+    /// use devolve_ui::rsx;
+    /// use std::time::Duration;
+    /// use std::thread;
+    /// use std::sync::Weak;
+    ///
+    /// let mut escape: Weak<FlagForOtherThread> = Weak::new();
+    /// thread::spawn(move || {
+    ///     let renderer = Renderer::new(TODOEngine);
+    ///     renderer.root(rsx! { ... });
+    ///     renderer.interval_between_frames(Duration::from_millis(25)); // optional
+    ///     renderer.show();
+    ///     renderer.resume_blocking_with_escape(|e| escape = e);
+    /// });
     /// ```
     ///
     /// Start a renderer which re-renders manually (renders once, then can be re-rendered via `renderer.rerender()`)
@@ -201,13 +265,30 @@ impl <Engine: RenderEngine> Renderer<Engine> where Engine::RenderLayer: VRenderL
     }
 
     #[cfg(feature = "time")]
-    pub fn resume(self: &Rc<Self>) -> Rc<Running<Engine>> {
+    #[must_use]
+    pub fn resume(self: &Rc<Self>) -> RcRunning<Engine> {
         assert!(!self.is_running(), "already running");
         assert!(self.is_visible.get(), "can't resume render while invisible");
 
-        let running = Rc::new(Running::new(self));
+        let running = RcRunning::new(self);
         *self.running.borrow_mut() = Some(running.clone());
         running
+    }
+
+    #[cfg(feature = "time-blocking")]
+    pub fn resume_blocking_with_escape(self: &Rc<Self>, set_escape: impl FnOnce(WeakArc<FlagForOtherThreads>)) {
+        let async_runtime = runtime::Builder::new_current_thread()
+            .enable_time()
+            .build()
+            .unwrap();
+        let running = self.resume();
+        set_escape(Arc::downgrade(running.is_done()));
+        async_runtime.block_on(running);
+    }
+
+    #[cfg(feature = "time-blocking")]
+    pub fn resume_blocking(self: &Rc<Self>) {
+        self.resume_blocking_with_escape(|_| ());
     }
 
     #[cfg(feature = "time")]
@@ -218,10 +299,11 @@ impl <Engine: RenderEngine> Renderer<Engine> where Engine::RenderLayer: VRenderL
 
     /// Will be empty if not running
     #[cfg(feature = "time")]
+    #[must_use]
     pub fn running(self: &Rc<Self>) -> Weak<Running<Engine>> {
         match self.running.borrow().as_ref() {
             None => Weak::new(),
-            Some(running) => Rc::downgrade(running),
+            Some(running) => Rc::downgrade(&running.0),
         }
     }
 

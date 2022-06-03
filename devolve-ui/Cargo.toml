@@ -11,11 +11,12 @@ edition = "2021"
 
 [features]
 # Include debug features by default
-default = ["obs-ref", "time", "debug"]
+default = ["obs-ref", "time", "time-blocking", "debug"]
 obs-ref = ["smallvec"]
 time = ["tokio"]
-tui = ["libc", "crossterm", "lazy_static", "unicode-width", "tui-images"]
-tui-images = ["semver", "sixel-sys", "png", "base64"]
+time-blocking = ["time", "tokio/rt"]
+tui = ["libc", "crossterm", "lazy_static", "unicode-width"]
+tui-images = ["tui", "semver", "sixel-sys", "png", "base64"]
 debug = ["backtrace"]
 
 [package.metadata.docs.rs]
