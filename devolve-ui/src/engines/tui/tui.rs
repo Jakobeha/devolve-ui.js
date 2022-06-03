@@ -20,7 +20,7 @@ use crate::core::view::view::VView;
 use crate::view_data::tui::tui::TuiViewData;
 use crate::engines::tui::layer::{RenderCell, RenderLayer};
 use crate::engines::tui::terminal_image;
-use crate::engines::tui::terminal_image::Image;
+use crate::engines::tui::terminal_image::{Image, ImageRender};
 use crate::view_data::attrs::{BorderStyle, DividerDirection, DividerStyle, TextWrapMode};
 use crate::view_data::tui::terminal_image::{HandleAspectRatio, Source};
 
@@ -306,10 +306,10 @@ impl <Input: Read, Output: Write> TuiEngine<Input, Output> {
             terminal_image::Measurement::Pixels((height / column_size.height) as u16)
         });
         let image = Image::try_from(source).map_err(|err| LayoutError::new(format!("failed to load source: {}", err)))?;
-        let (render, (width_pixels, height_pixels)) = image.render(width, height, handle_aspect_ratio, column_size).map_err(|msg| LayoutError::new(format!("failed to render source {}: {}", source, msg)))?;
+        let ImageRender { layer, size_in_pixels: (width_pixels, height_pixels) } = image.render(width, height, handle_aspect_ratio, column_size).map_err(|msg| LayoutError::new(format!("failed to render source {}: {}", source, msg)))?;
         let width = width_pixels as f32 / column_size.width;
         let height = height_pixels as f32 / column_size.height;
-        Ok((render, Size { width, height }))
+        Ok((layer, Size { width, height }))
     }
 }
 

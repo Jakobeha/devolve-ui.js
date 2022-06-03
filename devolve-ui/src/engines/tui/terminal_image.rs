@@ -12,10 +12,11 @@ use sixel_sys;
 use sixel_sys::status::Status as SixelStatus;
 use base64;
 use crate::core::view::color::PackedColor;
+use crate::core::view::layout::geom::Size;
 use crate::engines::tui::layer::{RenderCell, RenderLayer};
 use crate::view_data::tui::terminal_image::{HandleAspectRatio, InferredFileExtension, Measurement, Source, SourceFormat};
 
-pub enum ImageSupport {
+enum ImageSupport {
     Fallback,
     Iterm,
     Kitty,
@@ -39,7 +40,7 @@ const SIXEL_TERMINALS: [&'static str; 13] = [
 ];
 
 impl ImageSupport {
-    pub fn get() -> Self {
+    fn get() -> Self {
         let terminal = env::var("LC_TERMINAL")
             .or_else(|| env::var("TERM_PROGRAM"))
             .unwrap_or_else(|| String::new());
@@ -216,22 +217,45 @@ fn calculate_scaled_width_height_ratio(image_width: y16, image_height: u16, widt
     }
 }
 
+pub struct ImageRender {
+    layer: RenderLayer,
+    size_in_pixels: (u16, u16)
+}
+
+impl ImageRender {
+    pub fn empty() -> Self {
+        Self {
+            layer: RenderLayer::new(),
+            size_in_pixels: (0, 0)
+        }
+    }
+}
+
 impl <R: Read> Image<R> {
-    pub fn render(self, width: Measurement, height: Measurement, handle_aspect_ratio: HandleAspectRatio) -> Result<(RenderLayer, (u16, u16)), String> {
+    pub fn render(
+        self,
+        width: Measurement,
+        height: Measurement,
+        handle_aspect_ratio: HandleAspectRatio,
+        column_size: &Size
+    ) -> Result<ImageRender, String> {
         let (width, height) = calculate_scaled_width_height(self.width, self.height, width, height, handle_aspect_ratio)?;
         if width == 0 || height == 0 {
-            return Ok((RenderLayer::new(), (0, 0)));
+            return Ok(ImageRender::empty());
         }
         let render = match ImageSupport::get() {
-            ImageSupport::Fallback => self.render_fallback(width, height),
+            ImageSupport::Fallback => self.render_fallback(width, height, column_size),
             ImageSupport::Iterm => self.render_iterm(width, height),
-            ImageSupport::Kitty => self.render_kitty(width, height),
+            ImageSupport::Kitty => self.render_kitty(width, height, column_size),
             ImageSupport::Sixel => self.render_sixel(width, height)
         }?;
-        Ok((render, (width, height)))
+        Ok(ImageRender {
+            layer: render,
+            size_in_pixels: (width, height)
+        })
     }
 
-    fn render_fallback(self, width: u16, height: u16) -> Result<RenderLayer, String> {
+    fn render_fallback(self, width: u16, height: u16, column_size: &Size) -> Result<RenderLayer, String> {
         let width = width as f32 / column_size.width;
         let height = height as f32 / column_size.height;
         let data = self.data.into_rgba32()?;
@@ -272,7 +296,7 @@ impl <R: Read> Image<R> {
         Ok(RenderLayer::escape_sequence_and_filler(escape_sequence, width as usize, height as usize))
     }
 
-    fn render_kitty(self, width: u16, height: u16) -> Result<RenderLayer, String> {
+    pub fn render_kitty(self, width: u16, height: u16, column_size: &Size) -> Result<RenderLayer, String> {
         let width = width as f32 / column_size.width;
         let height = height as f32 / column_size.height;
         let data = self.data.into_rgba()?;
