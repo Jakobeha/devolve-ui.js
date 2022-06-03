@@ -17,7 +17,7 @@ fn test_obs_ref() {
         indices: vec![1, 2, 3],
         id_which_should_be_readonly: 0
     };
-    let mut obs_ref = state.to_obs_ref();
+    let mut obs_ref = state.into_obs_ref();
 
     assert_eq!(*obs_ref.number.i(), 1.0f64);
     *obs_ref.number.m() = 2.0;

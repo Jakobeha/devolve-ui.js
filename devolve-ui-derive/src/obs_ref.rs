@@ -81,12 +81,12 @@ fn derive_struct(
         impl <#impl_generics_root> ::devolve_ui::core::data::obs_ref::ObsRefableRoot for #ident #ty_generics #where_clause {
             type ObsRefImpl = #obs_ref_root #ty_generics #where_clause;
 
-            fn to_obs_ref(self: Self) -> Self::ObsRefImpl {
+            fn into_obs_ref(self: Self) -> Self::ObsRefImpl {
                 use ::devolve_ui::core::data::obs_ref::ObsRefableChild;
                 unsafe {
                     let mut base = ::devolve_ui::core::data::obs_ref::ObsRefRootBase::new(self);
                     #obs_ref_root {
-                        #( #field_ids: base.root_value().#field_ids.to_obs_ref_child("", stringify!(#field_ids), ::std::rc::Rc::downgrade(&base)), )*
+                        #( #field_ids: base.root_value().#field_ids.as_obs_ref_child("", stringify!(#field_ids), ::std::rc::Rc::downgrade(&base)), )*
                         #obs_ref_base_field: base
                     }
                 }
@@ -97,11 +97,11 @@ fn derive_struct(
         impl <Root, #impl_generics_child> ::devolve_ui::core::data::obs_ref::ObsRefableChild<Root> for #ident #ty_generics #where_clause {
             type ObsRefImpl = #obs_ref_child<Root #ty_generics2> #where_clause;
 
-            unsafe fn _to_obs_ref_child(this: *mut Self, path: String, root: ::std::rc::Weak<::devolve_ui::core::data::obs_ref::ObsRefRootBase<Root>>) -> Self::ObsRefImpl {
+            unsafe fn _as_obs_ref_child(this: *mut Self, path: String, root: ::std::rc::Weak<::devolve_ui::core::data::obs_ref::ObsRefRootBase<Root>>) -> Self::ObsRefImpl {
                 use ::devolve_ui::core::data::obs_ref::ObsRefableChild;
                 let mut base = ::devolve_ui::core::data::obs_ref::ObsRefChildBase::new(this, path, root.clone());
                 #obs_ref_child {
-                    #( #field_ids: base.child_value().#field_ids.to_obs_ref_child(base.path(), stringify!(#field_ids), root.clone()), )*
+                    #( #field_ids: base.child_value().#field_ids.as_obs_ref_child(base.path(), stringify!(#field_ids), root.clone()), )*
                     #obs_ref_base_field: base
                 }
             }

@@ -8,6 +8,7 @@ use std::fmt::{Debug, Formatter};
 use std::cmp::Ordering;
 use std::hash::{Hash, Hasher};
 use std::ops::{Deref, DerefMut};
+use smallvec::SmallVec;
 
 // region types
 
@@ -45,7 +46,8 @@ pub struct ObsDeref<'a, Root, T> {
 //   if root_value has mutable access (since they also have mutable access)
 pub struct ObsRefRootBase<T> {
     root_value: T,
-    observers: RefCell<Vec<Observer<T>>>
+    // SmallVec is ideal here because we usually don't have many observers
+    observers: RefCell<SmallVec<[Observer<T>; 3]>>
 }
 
 #[derive(Debug)]
@@ -62,21 +64,21 @@ pub struct ObsRefChildBase<Root, T> {
 pub trait ObsRefableRoot: Sized {
     type ObsRefImpl : ObsRef<Self, Self>;
 
-    fn to_obs_ref(self: Self) -> Self::ObsRefImpl;
+    fn into_obs_ref(self: Self) -> Self::ObsRefImpl;
 }
 
 pub trait ObsRefableChild<Root>: Sized {
     type ObsRefImpl : ObsRef<Root, Self>;
 
-    unsafe fn _to_obs_ref_child(this: *mut Self, path: String, root: Weak<ObsRefRootBase<Root>>) -> Self::ObsRefImpl;
+    unsafe fn _as_obs_ref_child(this: *mut Self, path: String, root: Weak<ObsRefRootBase<Root>>) -> Self::ObsRefImpl;
 
-    unsafe fn to_obs_ref_child(&self, path_head: &str, extension: &str, root: Weak<ObsRefRootBase<Root>>) -> Self::ObsRefImpl {
+    unsafe fn as_obs_ref_child(&self, path_head: &str, extension: &str, root: Weak<ObsRefRootBase<Root>>) -> Self::ObsRefImpl {
         let path = if extension.starts_with('[') {
             format!("{}{}", path_head, extension)
         } else {
             format!("{}.{}", path_head, extension)
         };
-        Self::_to_obs_ref_child((self as *const Self) as *mut Self, path, root)
+        Self::_as_obs_ref_child((self as *const Self) as *mut Self, path, root)
     }
 }
 
@@ -87,7 +89,7 @@ impl <T> ObsRefRootBase<T> {
     pub fn new(root_value: T) -> Rc<Self> {
         Rc::new(Self {
             root_value,
-            observers: RefCell::new(Vec::new())
+            observers: RefCell::new(SmallVec::new())
         })
     }
 

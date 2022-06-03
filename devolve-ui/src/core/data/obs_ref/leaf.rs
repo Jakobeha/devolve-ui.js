@@ -25,7 +25,7 @@ impl Leaf for char {}
 impl <T : Leaf> ObsRefableRoot for T {
     type ObsRefImpl = Rc<ObsRefRootBase<T>>;
 
-    fn to_obs_ref(self: Self) -> Self::ObsRefImpl {
+    fn into_obs_ref(self: Self) -> Self::ObsRefImpl {
         ObsRefRootBase::new(self)
     }
 }
@@ -33,7 +33,7 @@ impl <T : Leaf> ObsRefableRoot for T {
 impl <Root, T : Leaf> ObsRefableChild<Root> for T {
     type ObsRefImpl = ObsRefChildBase<Root, T>;
 
-    unsafe fn _to_obs_ref_child(this: *mut Self, path: String, root: Weak<ObsRefRootBase<Root>>) -> Self::ObsRefImpl {
+    unsafe fn _as_obs_ref_child(this: *mut Self, path: String, root: Weak<ObsRefRootBase<Root>>) -> Self::ObsRefImpl {
         ObsRefChildBase {
             child_value: this,
             path,

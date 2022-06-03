@@ -1,10 +1,13 @@
 // Thanks to http://xn--rpa.cc/irl/term.html for explaining obscure terminal escape codes and behaviors
 use std::io;
 use std::iter;
+use std::mem;
 use std::fmt::Write;
 use std::ops::{Index, IndexMut};
 use crossterm::{Command, cursor};
 use crossterm::style;
+use unicode_width::UnicodeWidthChar;
+use replace_with::replace_with_or_abort;
 use crate::core::misc::io_write_2_fmt_write::IoWrite2FmtWrite;
 use crate::core::view::color::PackedColor;
 use crate::core::view::layout::geom::{BoundingBox, Rectangle};
@@ -17,7 +20,11 @@ pub enum RenderCellContent {
     // e.g. image
     ManyChars(String),
     // e.g. padding where image would be
-    ZeroChars
+    ZeroChars,
+    TransparentCharWithZeroWidths {
+        prefix: String,
+        suffix: String
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -44,7 +51,7 @@ impl RenderCell {
     }
 
     pub fn simple_char(char: char, fg: PackedColor, bg: PackedColor) -> Self {
-        assert!(char.width().is(1), "char width is not 1, use RenderCell::char() instead");
+        assert_eq!(char.width(), Some(1), "char width is not 1, use RenderCell::char() instead");
         RenderCell {
             content: RenderCellContent::Char(char),
             fg: fg,
@@ -53,9 +60,10 @@ impl RenderCell {
     }
 
     pub fn char(char: char) -> impl Iterator<Item = Self> {
-        assert!(char.width().unwrap_or(0) != 0, "char width is 0, handle explicitly");
-        iter::once(Self::new(RenderCellContent::Char(char))).concat(
-            (1..char.width()).map(|_i| Self::transparent())
+        let char_width = char.width().unwrap_or(0);
+        assert_ne!(char_width, 0, "char width is 0, handle explicitly");
+        iter::once(Self::new(RenderCellContent::Char(char))).chain(
+            (1..char_width).map(|_i| Self::transparent())
         )
     }
 
@@ -65,6 +73,58 @@ impl RenderCell {
 
     pub fn zero_width() -> Self {
         Self::new(RenderCellContent::ZeroChars)
+    }
+
+    pub fn prepend_zw_char(&mut self, prefix_char: char) {
+        replace_with_or_abort(&mut self.content, |content| match content {
+            RenderCellContent::TransparentChar => RenderCellContent::TransparentCharWithZeroWidths {
+                prefix: prefix_char.to_string(),
+                suffix: String::new()
+            },
+            RenderCellContent::Char(char) => RenderCellContent::ManyChars(format!("{}{}", prefix_char, char)),
+            RenderCellContent::ManyChars(str) => RenderCellContent::ManyChars(format!("{}{}", prefix_char, str)),
+            RenderCellContent::ZeroChars => RenderCellContent::Char(prefix_char),
+            RenderCellContent::TransparentCharWithZeroWidths { prefix, suffix } => RenderCellContent::TransparentCharWithZeroWidths {
+                prefix: format!("{}{}", prefix_char, prefix),
+                suffix
+            }
+        })
+    }
+
+    pub fn append_zw_char(&mut self, suffix_char: char) {
+        replace_with_or_abort(&mut self.content, |content| match content {
+            RenderCellContent::TransparentChar => RenderCellContent::TransparentCharWithZeroWidths {
+                prefix: String::new(),
+                suffix: suffix_char.to_string()
+            },
+            RenderCellContent::Char(char) => RenderCellContent::ManyChars(format!("{}{}", char, suffix_char)),
+            RenderCellContent::ManyChars(str) => RenderCellContent::ManyChars(format!("{}{}", str, suffix_char)),
+            RenderCellContent::ZeroChars => RenderCellContent::Char(suffix_char),
+            RenderCellContent::TransparentCharWithZeroWidths { prefix, suffix } => RenderCellContent::TransparentCharWithZeroWidths {
+                prefix,
+                suffix: format!("{}{}", suffix, suffix_char)
+            }
+        })
+    }
+
+    pub fn add_zw_prefix_suffix(&mut self, prefix: String, suffix: String) {
+        if !prefix.is_empty() || !suffix.is_empty() {
+            replace_with_or_abort(&mut self.content, |content| match content {
+                RenderCellContent::TransparentChar => RenderCellContent::TransparentCharWithZeroWidths {
+                    prefix,
+                    suffix
+                },
+                RenderCellContent::Char(char) => RenderCellContent::ManyChars(format!("{}{}{}", prefix, char, suffix)),
+                RenderCellContent::ManyChars(str) => RenderCellContent::ManyChars(format!("{}{}{}", prefix, str, suffix)),
+                RenderCellContent::ZeroChars if prefix.len() == 1 && suffix.is_empty() => RenderCellContent::Char(prefix.chars().next().unwrap()),
+                RenderCellContent::ZeroChars if prefix.is_empty() && suffix.len() == 1 => RenderCellContent::Char(suffix.chars().next().unwrap()),
+                RenderCellContent::ZeroChars => RenderCellContent::ManyChars(format!("{}{}", prefix, suffix)),
+                RenderCellContent::TransparentCharWithZeroWidths { prefix: prefix2, suffix: suffix2 } => RenderCellContent::TransparentCharWithZeroWidths {
+                    prefix: format!("{}{}", prefix, prefix2),
+                    suffix: format!("{}{}", suffix2, suffix)
+                }
+            })
+        }
     }
 }
 
@@ -160,6 +220,15 @@ impl RenderLayer {
                     if let RenderCellContent::TransparentChar = result_cell.content {
                         // Fall through
                         *result_cell = layer_cell;
+                    } else if let RenderCellContent::TransparentCharWithZeroWidths { .. } = result_cell.content {
+                        // Add prefix / suffix and fall through
+                        // First we need to reassign result_cell so we can move prefix and suffix
+                        let old_result_cell = mem::replace(result_cell, layer_cell);
+                        let (prefix, suffix) = match old_result_cell.content {
+                            RenderCellContent::TransparentCharWithZeroWidths { prefix, suffix } => (prefix, suffix),
+                            _ => panic!("this can't happen")
+                        };
+                        result_cell.add_zw_prefix_suffix(prefix, suffix);
                     } else if !result_cell.bg.is_opaque() && !layer_cell.bg.is_transparent() {
                         // Add background color
                         result_cell.bg = PackedColor::stack(result_cell.bg, layer_cell.bg);
@@ -218,6 +287,12 @@ impl RenderLayer {
                         RenderCellContent::ZeroChars => {
                             may_have_broken_position = true;
                         }
+                        RenderCellContent::TransparentCharWithZeroWidths { prefix, suffix } => {
+                            buffer.push_str(prefix);
+                            buffer.push(' ');
+                            buffer.push_str(suffix);
+                            may_have_broken_position = true;
+                        }
                     }
                 }
 
@@ -245,6 +320,12 @@ impl Index<(usize, usize)> for RenderLayer {
 impl IndexMut<(usize, usize)> for RenderLayer {
     fn index_mut(&mut self, (x, y): (usize, usize)) -> &mut Self::Output {
         &mut self.0[x][y]
+    }
+}
+
+impl From<Vec<Vec<RenderCell>>> for RenderLayer {
+    fn from(lines: Vec<Vec<RenderCell>>) -> Self {
+        Self::from_iter(lines.into_iter().map(|line| line.into_iter()))
     }
 }
 

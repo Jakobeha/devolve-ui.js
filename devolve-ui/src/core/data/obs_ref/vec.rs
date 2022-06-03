@@ -52,7 +52,7 @@ impl <Root, T : ObsRefableChild<Root>> ObsRef<Root, Vec<T>> for ObsRefChildForVe
 impl <T : ObsRefableChild<Vec<T>>> ObsRefableRoot for Vec<T> {
     type ObsRefImpl = ObsRefRootForVec<T>;
 
-    fn to_obs_ref(self: Vec<T>) -> Self::ObsRefImpl {
+    fn into_obs_ref(self: Vec<T>) -> Self::ObsRefImpl {
         ObsRefRootForVec {
             base: ObsRefRootBase::new(self),
             children: RefCell::new(Vec::new())
@@ -63,7 +63,7 @@ impl <T : ObsRefableChild<Vec<T>>> ObsRefableRoot for Vec<T> {
 impl <Root, T : ObsRefableChild<Root>> ObsRefableChild<Root> for Vec<T> {
     type ObsRefImpl = ObsRefChildForVec<Root, T>;
 
-    unsafe fn _to_obs_ref_child(this: *mut Vec<T>, path: String, root: Weak<ObsRefRootBase<Root>>) -> Self::ObsRefImpl {
+    unsafe fn _as_obs_ref_child(this: *mut Vec<T>, path: String, root: Weak<ObsRefRootBase<Root>>) -> Self::ObsRefImpl {
         ObsRefChildForVec {
             base: ObsRefChildBase {
                 child_value: this,
@@ -84,7 +84,7 @@ impl <T : ObsRefableChild<Vec<T>>> ObsRefRootForVec<T> {
         let children = self.children.as_ptr().as_mut().expect("ObsRefVecRoot children is null");
         children[index].get_or_insert_with(|| {
             let extension = format!("[{}]", index);
-            self.i()[index].to_obs_ref_child("", &extension, self.base())
+            self.i()[index].as_obs_ref_child("", &extension, self.base())
         })
     }
 }
@@ -117,7 +117,7 @@ impl <Root, T : ObsRefableChild<Root>> ObsRefChildForVec<Root, T> {
         children[index].get_or_insert_with(|| {
             let extension = format!("[{}]", index);
             let root = self.base.root.clone();
-            self.i()[index].to_obs_ref_child("", &extension, root)
+            self.i()[index].as_obs_ref_child("", &extension, root)
         })
     }
 }

@@ -4,12 +4,13 @@ use std::sync::RwLock;
 #[cfg(target_family = "unix")]
 use lazy_static::lazy_static;
 #[cfg(target_family = "unix")]
-use libc::{c_int, c_void, ioctl, sighandler_t, SIGINT, signal, SIGWINCH, TIOCGWINSZ, winsize};
+use libc::{c_int, c_void, ioctl, sighandler_t, signal, SIGWINCH, TIOCGWINSZ, winsize};
 use std::io;
 use std::io::{Read, Stdin, stdin, Stdout, stdout, Write};
 #[cfg(target_family = "unix")]
 use std::os::unix::io::{AsRawFd, RawFd};
 use std::str::Lines;
+use unicode_width::UnicodeWidthChar;
 use crate::core::renderer::engine::RenderEngine;
 use crate::core::renderer::render::VRender;
 use crate::core::view::color::{Color, PackedColor};
@@ -19,9 +20,9 @@ use crate::core::view::layout::parent_bounds::{DimsStore, ParentBounds};
 use crate::core::view::view::VView;
 use crate::view_data::tui::tui::TuiViewData;
 use crate::engines::tui::layer::{RenderCell, RenderLayer};
-use crate::engines::tui::terminal_image;
 use crate::engines::tui::terminal_image::{Image, ImageRender};
 use crate::view_data::attrs::{BorderStyle, DividerDirection, DividerStyle, TextWrapMode};
+use crate::view_data::tui::terminal_image;
 use crate::view_data::tui::terminal_image::{HandleAspectRatio, Source};
 
 #[cfg(target_family = "unix")]
@@ -109,28 +110,39 @@ impl <Input: Read, Output: Write> TuiEngine<Input, Output> {
         let width = bounds.width.map_or(usize::MAX, |width| f32::round(width) as usize);
         let height = bounds.height.map_or(usize::MAX, |height| f32::round(height) as usize);
 
-        let mut result = RenderLayer::with_capacity(height);
-        let mut next_out_line = Vec::new();
+        let mut result_lines = Vec::with_capacity(height);
         'outer: for line in lines {
+            let mut first_zero_width_chars = Vec::new();
+            let add_char = |vec: &mut Vec<RenderCell>, char: char, first_zero_width_chars: &mut Vec<char>| {
+                let mut first = true;
+                for mut cell in RenderCell::char(char) {
+                    if first {
+                        first = false;
+                        for first_zero_width_char in first_zero_width_chars.drain(..) {
+                            cell.prepend_zw_char(first_zero_width_char);
+                        }
+                    }
+                    vec.push(cell)
+                }
+            };
+
+            let mut next_out_line = Vec::new();
             let mut next_word = Vec::new();
             for char in line.chars() {
                 if *wrap_mode == TextWrapMode::Word && char.is_alphanumeric() {
-                    // add to word
-                    // width will never be 0
-                    for cell in RenderCell::char(char) {
-                        next_word.push(cell)
-                    }
+                    // width will never be 0 so we don't need to check that
+                    add_char(&mut next_word, char, &mut first_zero_width_chars);
                 } else {
                     if next_word.len() > 0 {
                         // wrap line if necessary and add word
                         if next_out_line.len() + next_word.len() > width {
                             // next_word.length > 0 implies wrap == TextWrapMode::Word
                             // so wrap line
-                            if result.height() == height {
+                            if result_lines.len() == height {
                                 // no more room
                                 break 'outer;
                             }
-                            result.push(next_out_line);
+                            result_lines.push(next_out_line);
                             next_out_line = Vec::new();
                         }
 
@@ -140,18 +152,24 @@ impl <Input: Read, Output: Write> TuiEngine<Input, Output> {
 
                     let char_width = char.width().unwrap_or(0);
                     if char_width == 0 {
-                        // zero-width char, so we add it to the last character so it's outside on overlap
-                        next_out_line[next_out_line.length - 1] += char
+                        // zero-width char, so we want to add it to the previous char in case it's a terminal escape.
+                        // Otherwise we handle the case very specially with first_zero_width_chars
+                        if next_out_line.is_empty() {
+                            first_zero_width_chars.insert(0, char);
+                        } else {
+                            let next_out_line_len = next_out_line.len();
+                            next_out_line[next_out_line_len - 1].append_zw_char(char);
+                        }
                     } else {
                         // wrap if necessary and add char
                         if next_out_line.len() + char_width > width {
                             match wrap_mode {
                                 TextWrapMode::Word | TextWrapMode::Char => {
-                                    if result.height() == height {
+                                    if result_lines.len() == height {
                                         // no more room
                                         break 'outer;
                                     }
-                                    result.push(next_out_line);
+                                    result_lines.push(next_out_line);
                                     next_out_line = Vec::new();
                                 }
                                 TextWrapMode::Clip => {
@@ -164,10 +182,7 @@ impl <Input: Read, Output: Write> TuiEngine<Input, Output> {
                             }
                         }
 
-                        // add char
-                        for cell in RenderCell::char(char) {
-                            next_out_line.push(cell);
-                        }
+                        add_char(&mut next_out_line, char, &mut first_zero_width_chars);
                     }
                 }
             }
@@ -177,11 +192,11 @@ impl <Input: Read, Output: Write> TuiEngine<Input, Output> {
             if next_out_line.len() + next_word.len() > width {
                 // next_word.length > 0 implies wrap == TextWrapMode::Word
                 // so wrap line
-                if result.height() == height {
+                if result_lines.len() == height {
                     // no more room
                     break;
                 }
-                result.push(next_out_line);
+                result_lines.push(next_out_line);
                 next_out_line = Vec::new();
             }
 
@@ -189,16 +204,17 @@ impl <Input: Read, Output: Write> TuiEngine<Input, Output> {
             next_out_line.append(&mut next_word);
 
             // add line
-            if result.height() == height {
+            if result_lines.len() == height {
                 // no more room
                 break
             }
-            result.push(next_out_line);
-            next_out_line = Vec::new();
+            result_lines.push(next_out_line);
         }
 
+        let mut result = RenderLayer::from(result_lines);
+
         if let Some(color) = color {
-            result.set_fg(color);
+            result.set_fg(*color);
         }
         result.translate1(bounds);
 
@@ -229,11 +245,11 @@ impl <Input: Read, Output: Write> TuiEngine<Input, Output> {
         let border = style.ascii_border();
         let mut result = RenderLayer::of(RenderCell::transparent(), width, height);
 
-        result[(0, 0)] = RenderCell::simple_char(border.top_left, color, PackedColor::transparent());
-        result[(width - 1, 0)] = RenderCell::simple_char(border.top_right, color, PackedColor::transparent());
-        result[(0, height - 1)] = RenderCell::simple_char(border.bottom_left, color, PackedColor::transparent());
-        result[(width - 1, height - 1)] = RenderCell::simple_char(border.bottom_right, color, PackedColor::transparent());
-        for x in 1..<(width - 1) {
+        result[(0, 0)] = RenderCell::simple_char(border.left_top, color, PackedColor::transparent());
+        result[(width - 1, 0)] = RenderCell::simple_char(border.right_top, color, PackedColor::transparent());
+        result[(0, height - 1)] = RenderCell::simple_char(border.left_bottom, color, PackedColor::transparent());
+        result[(width - 1, height - 1)] = RenderCell::simple_char(border.right_bottom, color, PackedColor::transparent());
+        for x in 1..(width - 1) {
             result[(x, 0)] = RenderCell::simple_char(if let Some(top_alt) = border.top_alt.filter(|_| x % 2 == 1) {
                 top_alt
             } else {
@@ -245,7 +261,7 @@ impl <Input: Read, Output: Write> TuiEngine<Input, Output> {
                 border.bottom
             }, color, PackedColor::transparent());
         }
-        for y in 1..<(height - 1) {
+        for y in 1..(height - 1) {
             result[(0, y)] = RenderCell::simple_char(if let Some(left_alt) = border.left_alt.filter(|_| y % 2 == 1) {
                 left_alt
             } else {
@@ -275,7 +291,7 @@ impl <Input: Read, Output: Write> TuiEngine<Input, Output> {
             DividerDirection::Horizontal => {
                 let mut result = RenderLayer::of(RenderCell::simple_char(divider.horizontal, color, PackedColor::transparent()), length, 1);
                 if let Some(horizontal_alt) = divider.horizontal_alt {
-                    for x in 1..<length {
+                    for x in 1..length {
                         if x % 2 == 1 {
                             result[(x, 0)] = RenderCell::simple_char(horizontal_alt, color, PackedColor::transparent());
                         }
@@ -286,12 +302,13 @@ impl <Input: Read, Output: Write> TuiEngine<Input, Output> {
             DividerDirection::Vertical => {
                 let mut result = RenderLayer::of(RenderCell::simple_char(divider.vertical, color, PackedColor::transparent()), 1, length);
                 if let Some(vertical_alt) = divider.vertical_alt {
-                    for y in 1..<length {
+                    for y in 1..length {
                         if y % 2 == 1 {
                             result[(0, y)] = RenderCell::simple_char(vertical_alt, color, PackedColor::transparent());
                         }
                     }
                 }
+                result
             }
         };
         result.translate2(x, y);
@@ -443,7 +460,7 @@ impl <Input: Read, Output: Write> RenderEngine for TuiEngine<Input, Output> {
                 if thickness > 1f32 {
                     return Err(LayoutError::new("divider with thickness > 1 not supported in CLI mode"));
                 }
-                let layer = self.render_divider(rect.x, rect.y, length, thickness, color, style, direction)?;
+                let layer = self.render_divider(rect.left, rect.top, length, thickness, color, style, direction);
                 render.insert(bounds.z, Some(&rect), layer);
             },
             TuiViewData::Source { source, handle_aspect_ratio } => {

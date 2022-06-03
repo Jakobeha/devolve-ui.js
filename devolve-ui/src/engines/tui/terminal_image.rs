@@ -1,4 +1,3 @@
-use std::cmp::{max, min};
 use std::{env, ptr};
 use std::fmt;
 use std::fmt::{Display, Formatter};
@@ -14,7 +13,7 @@ use base64;
 use crate::core::view::color::PackedColor;
 use crate::core::view::layout::geom::Size;
 use crate::engines::tui::layer::{RenderCell, RenderLayer};
-use crate::view_data::tui::terminal_image::{HandleAspectRatio, InferredFileExtension, Measurement, Source, SourceFormat};
+use crate::view_data::tui::terminal_image::{FailedToGetSize, HandleAspectRatio, InferredFileExtension, Measurement, Source, SourceFormat};
 
 enum ImageSupport {
     Fallback,
@@ -42,14 +41,14 @@ const SIXEL_TERMINALS: [&'static str; 13] = [
 impl ImageSupport {
     fn get() -> Self {
         let terminal = env::var("LC_TERMINAL")
-            .or_else(|| env::var("TERM_PROGRAM"))
-            .unwrap_or_else(|| String::new());
+            .or_else(|_err| env::var("TERM_PROGRAM"))
+            .unwrap_or_else(|_err| String::new());
         let terminal_version = env::var("LC_TERMINAL_VERSION")
-            .or_else(|| env::var("TERM_PROGRAM_VERSION"))
+            .or_else(|_err| env::var("TERM_PROGRAM_VERSION"))
             .ok()
             .and_then(|s| Version::parse(&s).ok());
         let konsole_version: usize = env::var("KONSOLE_VERSION")
-            .unwrap_or_else(|| String::new())
+            .unwrap_or_else(|_err| String::new())
             .parse()
             .unwrap_or(0);
         if terminal.starts_with("iterm") && terminal_version.is_some_and(|v| v.major >= 3) {
@@ -60,7 +59,7 @@ impl ImageSupport {
             // Konsole doesn't seem to set LC_TERMINAL or LC_TERMINAL_VERSION,
             // however it does set KONSOLE_VERSION.
             Self::Sixel
-        } else if SIXEL_TERMINALS.any(|prefix| terminal.start_with(prefix)) {
+        } else if SIXEL_TERMINALS.iter().any(|prefix| terminal.starts_with(prefix)) {
             Self::Sixel
         } else {
             Self::Fallback
@@ -75,19 +74,19 @@ pub struct Image<R: Read> {
 }
 
 pub enum ImageData<R: Read> {
-    RGBA32(Vec<u8>),
-    PNG(R)
+    Rgba32(Vec<u8>),
+    Png(R)
 }
 
 impl <R: Read> ImageData<R> {
     fn into_rgba32(self) -> Result<Vec<u8>, String> {
         Ok(match self {
-            ImageData::RGBA32(data) => data,
-            ImageData::PNG(input) => {
-                let mut decoder = png::Decoder::new(input);
-                let mut reader = decoder.read_info()?;
+            ImageData::Rgba32(data) => data,
+            ImageData::Png(input) => {
+                let decoder = png::Decoder::new(input);
+                let mut reader = decoder.read_info().map_err(|err| err.to_string())?;
                 let mut buf = vec![0; reader.output_buffer_size()];
-                let _info = reader.next_frame(&mut buf)?;
+                let _info = reader.next_frame(&mut buf).map_err(|err| err.to_string())?;
                 buf
             }
         })
@@ -95,33 +94,46 @@ impl <R: Read> ImageData<R> {
 
     fn into_png(self, width: u32, height: u32) -> Result<Vec<u8>, String> {
         Ok(match self {
-            ImageData::RGB8(data) => {
+            ImageData::Rgba32(data) => {
                 let mut result = vec![0; width as usize * height as usize * 4];
-                let mut encoder = png::Encoder::new(&mut result, width, height);
-                encoder.set_color(png::ColorType::Rgba);
-                encoder.set_depth(png::BitDepth::Eight);
-                let mut writer = encoder.write_header()?;
-                writer.write_image_data(&data)?;
+                {
+                    let mut encoder = png::Encoder::new(&mut result, width, height);
+                    encoder.set_color(png::ColorType::Rgba);
+                    encoder.set_depth(png::BitDepth::Eight);
+                    let mut writer = encoder.write_header().map_err(|err| err.to_string())?;
+                    writer.write_image_data(&data).map_err(|err| err.to_string())?;
+                }
                 result
             }
-            ImageData::PNG(mut input) => {
+            ImageData::Png(mut input) => {
                 let mut result = Vec::new();
-                input.read_to_end(&mut result)?;
+                input.read_to_end(&mut result).map_err(|err| err.to_string())?;
                 result
             }
         })
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub enum Source2ImageDataError {
     UnsupportedFormat(InferredFileExtension),
-    IOError(io::Error)
+    IoError(io::Error),
+    PngDecodingError(png::DecodingError)
 }
 
 impl From<io::Error> for Source2ImageDataError {
     fn from(err: io::Error) -> Self {
-        Self::IOError(err)
+        Self::IoError(err)
+    }
+}
+
+impl From<FailedToGetSize> for Source2ImageDataError {
+    fn from(err: FailedToGetSize) -> Self {
+        match err {
+            FailedToGetSize::UnsupportedFileExtension(ext) => Self::UnsupportedFormat(ext),
+            FailedToGetSize::IoError(err) => Self::IoError(err),
+            FailedToGetSize::PngDecodingError(err) => Self::PngDecodingError(err)
+        }
     }
 }
 
@@ -130,24 +142,27 @@ impl Display for Source2ImageDataError {
         match self {
             Source2ImageDataError::UnsupportedFormat(InferredFileExtension(None)) => write!(f, "unsupported format"),
             Source2ImageDataError::UnsupportedFormat(InferredFileExtension(Some(str))) => write!(f, "unsupported format: {}", str),
-            Source2ImageDataError::IOError(err) => write!(f, "IO error: {}", err)
+            Source2ImageDataError::IoError(err) => write!(f, "IO error: {}", err),
+            Source2ImageDataError::PngDecodingError(err) => write!(f, "PNG decoding error: {}", err)
         }
     }
 }
 
-impl TryFrom<Source> for ImageData<Box<dyn Reader>> {
+impl TryFrom<&Source> for Image<Box<dyn Read>> {
     type Error = Source2ImageDataError;
 
-    fn try_from(value: Source) -> Result<Self, Self::Error> {
-        match value.try_get_format() {
-            Err(extension) => Err(Source2ImageDataError::UnsupportedFormat(extension)),
-            Ok(SourceFormat::RawRGBA32Image) => {
+    fn try_from(value: &Source) -> Result<Self, Self::Error> {
+        let (width, height) = value.try_get_size()?;
+        let data = match value.try_get_format() {
+            Err(extension) => Err(Source2ImageDataError::UnsupportedFormat(extension))?,
+            Ok(SourceFormat::RawRgba32Image { size: _size }) => {
                 let mut data = Vec::new();
-                value.try_into_reader()?.read_to_end(&mut data)?;
-                Ok(ImageData::RGBA32(data))
+                value.try_get_reader()?.read_to_end(&mut data)?;
+                ImageData::Rgba32(data)
             },
-            Ok(SourceFormat::PNG) => Ok(ImageData::PNG(value.try_into_reader()?)),
-        }
+            Ok(SourceFormat::Png) => ImageData::Png(value.try_get_reader()?),
+        };
+        Ok(Image { data, width, height })
     }
 }
 
@@ -188,29 +203,29 @@ fn calculate_scaled_width_height_pixels(image_width: u16, image_height: u16, wid
         _ if (width as f32 / image_width as f32 * image_height as f32) as u16 == height => Ok((width, height)),
         HandleAspectRatio::Complain => Err(format!("HandleAspectRatio::Complain is set but image aspect ratio ({}x{} = {}) does not match specified aspect ratio ({}x{} = {})", image_width, image_height, image_width as f32 / image_height as f32, width, height, width as f32 / height as f32)),
         HandleAspectRatio::Fit => {
-            let fixed_width = min(width as f32, (height as f32 / image_height as f32) * image_width as f32) as u16;
-            let fixed_height = min(height as f32, (width as f32 / image_width as f32) * image_height as f32) as u16;
+            let fixed_width = f32::min(width as f32, (height as f32 / image_height as f32) * image_width as f32) as u16;
+            let fixed_height = f32::min(height as f32, (width as f32 / image_width as f32) * image_height as f32) as u16;
             Ok((fixed_width, fixed_height))
         }
         HandleAspectRatio::Fill => {
-            let fixed_width = max(width as f32, (height as f32 / image_height as f32) * image_width as f32) as u16;
-            let fixed_height = max(height as f32, (width as f32 / image_width as f32) * image_height as f32) as u16;
+            let fixed_width = f32::max(width as f32, (height as f32 / image_height as f32) * image_width as f32) as u16;
+            let fixed_height = f32::max(height as f32, (width as f32 / image_width as f32) * image_height as f32) as u16;
             Ok((fixed_width, fixed_height))
         }
         HandleAspectRatio::Stretch => Ok((width, height))
     }
 }
 
-fn calculate_scaled_width_height_ratio(image_width: y16, image_height: u16, width_ratio: f32, height_ratio: f32, handle_aspect_ratio: HandleAspectRatio) -> Result<(u16, u16), String> {
+fn calculate_scaled_width_height_ratio(image_width: u16, image_height: u16, width_ratio: f32, height_ratio: f32, handle_aspect_ratio: HandleAspectRatio) -> Result<(u16, u16), String> {
     match handle_aspect_ratio {
-        _ if width == height => Ok(((image_width as f32 * width_ratio) as u16, (image_height as f32 * height_ratio) as u16)),
+        _ if width_ratio == height_ratio => Ok(((image_width as f32 * width_ratio) as u16, (image_height as f32 * height_ratio) as u16)),
         HandleAspectRatio::Complain => Err(format!("HandleAspectRatio::Complain is set but ratio is not 1:1)")),
         HandleAspectRatio::Fit => {
-            let ratio = min(width_ratio, height_ratio);
+            let ratio = f32::min(width_ratio, height_ratio);
             Ok(((image_width as f32 * ratio) as u16, (image_height as f32 * ratio) as u16))
         },
         HandleAspectRatio::Fill => {
-            let ratio = max(width_ratio, height_ratio);
+            let ratio = f32::max(width_ratio, height_ratio);
             Ok(((image_width as f32 * ratio) as u16, (image_height as f32 * ratio) as u16))
         },
         HandleAspectRatio::Stretch => Ok(((image_width as f32 * width_ratio) as u16, (image_height as f32 * height_ratio) as u16))
@@ -218,8 +233,8 @@ fn calculate_scaled_width_height_ratio(image_width: y16, image_height: u16, widt
 }
 
 pub struct ImageRender {
-    layer: RenderLayer,
-    size_in_pixels: (u16, u16)
+    pub layer: RenderLayer,
+    pub size_in_pixels: (u16, u16)
 }
 
 impl ImageRender {
@@ -263,10 +278,10 @@ impl <R: Read> Image<R> {
         let scale_height = self.height as f32 / height;
 
         let mut result = RenderLayer::of(RenderCell::transparent(), width as usize, height as usize);
-        for y1 in 0..<(f32::round(height) as usize) {
+        for y1 in 0..(f32::round(height) as usize) {
             let y2 = f32::floor(y1 as f32 * scale_height) as u16;
             let y2p1 = f32::floor((y1 as f32 + 0.5f32) * scale_height) as u16;
-            for x1 in 0..<(f32::round(width) as usize) {
+            for x1 in 0..(f32::round(width) as usize) {
                 let x2 = f32::floor(x1 as f32 * scale_width) as u16;
                 let offset_bg = y2 as usize * self.width as usize + x2 as usize;
                 let rgba_bg = u32::from_be_bytes(data[offset_bg..offset_bg +4].try_into().unwrap());
@@ -299,11 +314,11 @@ impl <R: Read> Image<R> {
     pub fn render_kitty(self, width: u16, height: u16, column_size: &Size) -> Result<RenderLayer, String> {
         let width = width as f32 / column_size.width;
         let height = height as f32 / column_size.height;
-        let data = self.data.into_rgba()?;
+        let data = self.data.into_rgba32()?;
         // Kitty proprietary format: https://sw.kovidgoyal.net/kitty/graphics-protocol/#png-data
-        // Kitty also supports PNG, which one is faster / preferred?
+        // Kitty also supports Png, which one is faster / preferred?
         let escape_sequence = format!(
-            "\x1b_Gf=32;s={},v={},c={},r={},t=d,{}\x1b\\"
+            "\x1b_Gf=32;s={},v={},c={},r={},t=d,{}\x1b\\",
             self.width,
             self.height,
             f32::round(width) as u16,
@@ -324,8 +339,11 @@ fn _render_sixel(rgba32: &[u8], width: u16, height: u16) -> Result<String, Sixel
     unsafe {
         let mut output_str = String::new();
         let output = sixel_sys::sixel_output_create(Some(read_sixel), &mut output_str as *mut String as *mut c_void);
-        let status = sixel_sys::sixel_encode(rgba32 as *mut c_uchar, width as c_int, height as c_int, 8, ptr::null_mut(), output);
-        if status != SixelStatus::Ok {
+        // I don't believe sixel_encode actually mutates the first argument,
+        // but the signature requires *mut c_char. Is this an oversight?
+        // If not we have to make rgba32 &mut [u8]
+        let status = sixel_sys::sixel_encode(rgba32.as_ptr() as *mut c_uchar, width as c_int, height as c_int, 8, ptr::null_mut(), output);
+        if status != sixel_sys::status::OK {
             return Err(status)
         }
         sixel_sys::sixel_output_destroy(output);
@@ -334,8 +352,8 @@ fn _render_sixel(rgba32: &[u8], width: u16, height: u16) -> Result<String, Sixel
 }
 
 unsafe extern "C" fn read_sixel(data: *mut c_char, size: c_int, priv_: *mut c_void) -> c_int {
-    let output_str = priv_ as *mut String as &mut String;
+    let output_str = (priv_ as *mut String).as_mut().expect("read_sixel called with null priv_");
     let data = slice::from_raw_parts(data as *mut u8, size as usize);
-    output_str.push_str(str::from_utf8(data).unwrap());
+    output_str.push_str(std::str::from_utf8(data).unwrap());
     size
 }
