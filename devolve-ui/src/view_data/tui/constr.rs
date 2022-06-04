@@ -87,7 +87,7 @@ pub macro text({ $( $view_field:ident: $view_value:expr ),* }, { $( $data_field:
         ..VViewConstrArgs::default()
     }, TextConstrArgs {
         $( $data_field : $data_value, )*
-        $( text: $text, )?
+        $( text: String::from($text), )?
         ..TextConstrArgs::default()
     })
 }
@@ -103,7 +103,7 @@ pub macro ptext({ $( $view_field:ident: $view_value:expr ),* }, { $( $data_field
         ..VViewConstrArgs::default()
     }, TextConstrArgs {
         $( $data_field : $data_value, )*
-        $( text: $text, )?
+        $( text: String::from($text), )?
         ..TextConstrArgs::default()
     })
 }

@@ -2,34 +2,78 @@
 #![feature(macro_metavar_expr)]
 #![cfg(feature = "tui")]
 
-use std::borrow::Cow;
-use devolve_ui::core::component::component::VComponent;
+use std::cell::RefCell;
+use std::ffi::OsStr;
+use std::io;
+use std::io::Write;
+use std::os::unix::ffi::OsStrExt;
+use std::rc::Rc;
 use devolve_ui::core::component::constr::make_component;
-use devolve_ui::core::component::node::VNode;
 use devolve_ui::core::renderer::renderer::Renderer;
-use devolve_ui::core::view::layout::bounds::{Bounds, Measurement};
-use devolve_ui::core::view::layout::parent_bounds::{LayoutDirection, SubLayout};
-use devolve_ui::core::view::view::VView;
+use devolve_ui::core::view::layout::geom::Size;
 use devolve_ui::engines::tui::tui::{TuiConfig, TuiEngine};
 use devolve_ui::view_data::tui::tui::TuiViewData;
 use devolve_ui::view_data::tui::constr::{vbox, text};
 
-struct WordleProps {
-    text: String,
-}
-
-make_component!(pub wordle, WordleProps { text: String }, { text: Default::default() }, <TuiViewData>|c, text| {
-    vbox!({}, {}, [
-        text!("Hello world!")
+make_component!(pub wordle, WordleProps { text: String }, { text: Default::default() }, <TuiViewData>|_c, text| {
+    vbox!({}, {}, vec![
+        text!({}, {}, "Hello world!")
     ])
 });
 
+struct TestOutput {
+    buf: Rc<RefCell<Vec<u8>>>
+}
+
+impl TestOutput {
+    fn new() -> Self {
+        Self {
+            buf: Rc::new(RefCell::new(Vec::new()))
+        }
+    }
+
+    fn snapshot_buf(&self) -> Vec<u8> {
+        self.buf.borrow().clone()
+    }
+}
+
+impl Clone for TestOutput {
+    fn clone(&self) -> Self {
+        Self {
+            buf: self.buf.clone()
+        }
+    }
+}
+
+impl Write for TestOutput {
+    fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
+        self.buf.borrow_mut().extend_from_slice(buf);
+        Ok(buf.len())
+    }
+
+    fn flush(&mut self) -> io::Result<()> {
+        Ok(())
+    }
+}
+
 #[test]
-fn wordle() {
-    let mut renderer = Renderer::new(TuiEngine::new(TuiConfig::default()));
-    renderer.root(|c| wordle!(wordle_fn, { text: "Hello world".into() }));
+fn test_wordle_render() {
+    let output = TestOutput::new();
+    let renderer = Renderer::new(TuiEngine::new(TuiConfig {
+        input: io::empty(),
+        output: output.clone(),
+        raw_mode: true,
+        #[cfg(target_family = "unix")]
+        termios_fd: None,
+        override_size: Some(Size { width: 80f32, height: 40f32 })
+    }));
+    renderer.root(|c| wordle!(c, "wordle", { text: "Hello world".into() }));
     // renderer.interval_between_frames(Duration::from_millis(25)); // optional
     renderer.show();
     // renderer.resume();
-
+    // TODO: Windows support
+    assert_eq!(
+        OsStr::from_bytes(&output.snapshot_buf()),
+        OsStr::new("\u{1b}[?1049h\u{1b}[2J\u{1b}[25l\u{1b}[1;1HHello world!\u{1b}[0m")
+    )
 }
