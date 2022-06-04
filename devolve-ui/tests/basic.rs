@@ -15,7 +15,7 @@ use devolve_ui::engines::tui::tui::{TuiConfig, TuiEngine};
 use devolve_ui::view_data::tui::tui::TuiViewData;
 use devolve_ui::view_data::tui::constr::{vbox, text};
 
-make_component!(pub wordle, WordleProps { text: String }, { text: Default::default() }, <TuiViewData>|_c, text| {
+make_component!(pub basic, BasicProps { text: String }, { text: Default::default() }, <TuiViewData>|_c, text| {
     vbox!({}, {}, vec![
         text!({}, {}, "Hello world!")
     ])
@@ -57,7 +57,7 @@ impl Write for TestOutput {
 }
 
 #[test]
-fn test_wordle_render() {
+fn test_basic_render() {
     let output = TestOutput::new();
     let renderer = Renderer::new(TuiEngine::new(TuiConfig {
         input: io::empty(),
@@ -67,7 +67,7 @@ fn test_wordle_render() {
         termios_fd: None,
         override_size: Some(Size { width: 80f32, height: 40f32 })
     }));
-    renderer.root(|c| wordle!(c, "wordle", { text: "Hello world".into() }));
+    renderer.root(|c| basic!(c, "basic", { text: "Hello world".into() }));
     // renderer.interval_between_frames(Duration::from_millis(25)); // optional
     renderer.show();
     // renderer.resume();
