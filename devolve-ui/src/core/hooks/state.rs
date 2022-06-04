@@ -7,6 +7,7 @@ use crate::core::component::component::VComponent;
 use crate::core::view::view::VViewData;
 use crate::core::hooks::state_internal::{NonUpdatingState, use_non_updating_state};
 
+#[derive(Debug, Clone)]
 pub struct State<T: Any, ViewData: VViewData>(NonUpdatingState<T, ViewData>);
 
 /// Smart pointer which allows access to the state, and calls `update` when it gets dropped.

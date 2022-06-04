@@ -3,6 +3,7 @@ use std::marker::PhantomData;
 use crate::core::component::component::VComponent;
 use crate::core::view::view::VViewData;
 
+#[derive(Debug, Clone)]
 pub struct NonUpdatingState<T: Any, ViewData: VViewData> {
     pub index: usize,
     pub phantom_view_data: PhantomData<(T, ViewData)>

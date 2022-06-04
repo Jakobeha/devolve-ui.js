@@ -1,3 +1,5 @@
+#[cfg(feature = "input")]
+use crate::core::misc::input::{MouseEvent, KeyEvent};
 use crate::core::view::layout::geom::{BoundingBox, Size};
 use crate::core::view::layout::parent_bounds::ParentBounds;
 use crate::core::view::view::{VView, VViewData};
@@ -7,6 +9,10 @@ use crate::core::view::layout::err::LayoutError;
 pub trait RenderEngine {
     type ViewData: VViewData;
     type RenderLayer;
+    #[cfg(feature = "input")]
+    type MouseListenerHandle;
+    #[cfg(feature = "input")]
+    type KeyListenerHandle;
 
     fn get_root_dimensions(&self) -> ParentBounds;
     fn on_resize(&mut self, callback: Box<dyn Fn() + Send + Sync>);
@@ -24,5 +30,12 @@ pub trait RenderEngine {
         rendered_children: VRender<Self::RenderLayer>
     ) -> Result<VRender<Self::RenderLayer>, LayoutError>;
 
-    // fn use_input(handler: impl FnMut(Key) -> ()) -> dyn FnOnce() -> ();
+    #[cfg(feature = "input")]
+    fn listen_for_mouse_events(&mut self, listener: Box<dyn FnMut(MouseEvent)>) -> Self::MouseListenerHandle;
+    #[cfg(feature = "input")]
+    fn unlisten_for_mouse_events(&mut self, handle: Self::MouseListenerHandle);
+    #[cfg(feature = "input")]
+    fn listen_for_key_events(&mut self, listener: Box<dyn FnMut(KeyEvent)>) -> Self::KeyListenerHandle;
+    #[cfg(feature = "input")]
+    fn unlisten_for_key_events(&mut self, handle: Self::KeyListenerHandle);
 }

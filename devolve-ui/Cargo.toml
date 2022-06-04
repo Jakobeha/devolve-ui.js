@@ -11,10 +11,11 @@ edition = "2021"
 
 [features]
 # Include debug features by default
-default = ["obs-ref", "time", "time-blocking", "debug"]
+default = ["obs-ref", "input", "time", "time-blocking", "debug"]
 obs-ref = ["smallvec"]
 time = ["tokio"]
 time-blocking = ["time", "tokio/rt"]
+input = ["bitflags"]
 tui = ["libc", "crossterm", "lazy_static", "unicode-width"]
 tui-images = ["tui", "semver", "sixel-sys", "png", "base64"]
 debug = ["backtrace"]
@@ -32,6 +33,7 @@ replace_with = "0.1.7"
 float-ord = "0.3.2"
 smallvec = { version = "1.8.0", optional = true }
 tokio = { version = "1.18.2", features = ["time"], optional = true }
+bitflags = { version = "1.3.2", optional = true }
 libc = { version = "0.2.126", optional = true }
 crossterm = { version = "0.23.2", optional = true }
 backtrace = { version = "0.3.65", optional = true }

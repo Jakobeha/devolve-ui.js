@@ -11,9 +11,11 @@ use std::rc::Rc;
 use devolve_ui::core::component::constr::make_component;
 use devolve_ui::core::renderer::renderer::Renderer;
 use devolve_ui::core::view::layout::geom::Size;
+use devolve_ui::core::view::layout::macros::{mt, smt};
 use devolve_ui::engines::tui::tui::{TuiConfig, TuiEngine};
 use devolve_ui::view_data::tui::tui::TuiViewData;
-use devolve_ui::view_data::tui::constr::{vbox, text};
+use devolve_ui::view_data::attrs::BorderStyle;
+use devolve_ui::view_data::tui::constr::{border, source, vbox, text, zbox};
 
 make_component!(
     header,
@@ -23,10 +25,10 @@ make_component!(
     {
         name: Default::default()
     },
-    <TuiViewData>|_c, name| {
+    <TuiViewData>|c, name| {
         let mut counter = use_state(c, || 0);
-        use_interval(c, 1000, || {
-            counter.get_mut()++;
+        use_interval(c, 1000, |c| {
+            counter.get_mut(c)++;
         })
 
         zbox!({ width: smt!(100%) }, {}, vec![

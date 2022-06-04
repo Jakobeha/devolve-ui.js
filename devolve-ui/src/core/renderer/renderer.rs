@@ -264,63 +264,6 @@ impl <Engine: RenderEngine> Renderer<Engine> where Engine::RenderLayer: VRenderL
         }
     }
 
-    #[cfg(feature = "time")]
-    #[must_use]
-    pub fn resume(self: &Rc<Self>) -> RcRunning<Engine> {
-        assert!(!self.is_running(), "already running");
-        assert!(self.is_visible.get(), "can't resume render while invisible");
-
-        let running = RcRunning::new(self);
-        *self.running.borrow_mut() = Some(running.clone());
-        running
-    }
-
-    #[cfg(feature = "time-blocking")]
-    pub fn resume_blocking_with_escape(self: &Rc<Self>, set_escape: impl FnOnce(WeakArc<FlagForOtherThreads>)) {
-        let async_runtime = runtime::Builder::new_current_thread()
-            .enable_time()
-            .build()
-            .unwrap();
-        let running = self.resume();
-        set_escape(Arc::downgrade(running.is_done()));
-        async_runtime.block_on(running);
-    }
-
-    #[cfg(feature = "time-blocking")]
-    pub fn resume_blocking(self: &Rc<Self>) {
-        self.resume_blocking_with_escape(|_| ());
-    }
-
-    #[cfg(feature = "time")]
-    pub fn pause(self: &Rc<Self>) {
-        let running = self.running.take().expect("not running");
-        running.is_done.set();
-    }
-
-    /// Will be empty if not running
-    #[cfg(feature = "time")]
-    #[must_use]
-    pub fn running(self: &Rc<Self>) -> Weak<Running<Engine>> {
-        match self.running.borrow().as_ref() {
-            None => Weak::new(),
-            Some(running) => Rc::downgrade(&running.0),
-        }
-    }
-
-    #[cfg(feature = "time")]
-    pub fn is_running(self: &Rc<Self>) -> bool {
-        self.running.borrow().is_some()
-    }
-
-    #[cfg(feature = "time")]
-    pub fn set_interval(self: &Rc<Self>, interval_between_frames: Duration) {
-        // Need to pause and resume if running to change the interval
-        self.interval_between_frames.set(interval_between_frames);
-        if let Some(running) = self.running.borrow().as_ref() {
-            running.sync_interval();
-        }
-    }
-
     /// Make the renderer visible and render once
     pub fn show(self: &Rc<Self>) {
         self.is_visible.set(true);
@@ -458,6 +401,72 @@ impl <Engine: RenderEngine> Renderer<Engine> where Engine::RenderLayer: VRenderL
     fn upcast(self: Rc<Self>) -> Rc<dyn VComponentRoot<ViewData = Engine::ViewData>> {
         self
     }
+}
+
+// TODO: pub(crate) register and unregister input and time handlers.
+//   These should be available even if time and input features aren't enabled.
+//   Additionally, the renderer can send mock events via pub methods.
+//   Real events will probable go through these mock methods
+
+#[cfg(feature = "time")]
+impl <Engine: RenderEngine> Renderer<Engine> where Engine::RenderLayer: VRenderLayer {
+    #[must_use]
+    pub fn resume(self: &Rc<Self>) -> RcRunning<Engine> {
+        assert!(!self.is_running(), "already running");
+        assert!(self.is_visible.get(), "can't resume render while invisible");
+
+        let running = RcRunning::new(self);
+        *self.running.borrow_mut() = Some(running.clone());
+        running
+    }
+
+    pub fn pause(self: &Rc<Self>) {
+        let running = self.running.take().expect("not running");
+        running.is_done.set();
+    }
+
+    /// Will be empty if not running
+    #[must_use]
+    pub fn running(self: &Rc<Self>) -> Weak<Running<Engine>> {
+        match self.running.borrow().as_ref() {
+            None => Weak::new(),
+            Some(running) => Rc::downgrade(&running.0),
+        }
+    }
+
+    pub fn is_running(self: &Rc<Self>) -> bool {
+        self.running.borrow().is_some()
+    }
+
+    pub fn set_interval(self: &Rc<Self>, interval_between_frames: Duration) {
+        // Need to pause and resume if running to change the interval
+        self.interval_between_frames.set(interval_between_frames);
+        if let Some(running) = self.running.borrow().as_ref() {
+            running.sync_interval();
+        }
+    }
+}
+
+#[cfg(feature = "time-blocking")]
+impl <Engine: RenderEngine> Renderer<Engine> where Engine::RenderLayer: VRenderLayer {
+    pub fn resume_blocking_with_escape(self: &Rc<Self>, set_escape: impl FnOnce(WeakArc<FlagForOtherThreads>)) {
+        let async_runtime = runtime::Builder::new_current_thread()
+            .enable_time()
+            .build()
+            .unwrap();
+        let running = self.resume();
+        set_escape(Arc::downgrade(running.is_done()));
+        async_runtime.block_on(running);
+    }
+
+    pub fn resume_blocking(self: &Rc<Self>) {
+        self.resume_blocking_with_escape(|_| ());
+    }
+}
+
+#[cfg(feature = "input")]
+impl <Engine: RenderEngine> Renderer<Engine> where Engine::RenderLayer: VRenderLayer {
+
 }
 
 impl <Engine: RenderEngine> VComponentRoot for Renderer<Engine> {
