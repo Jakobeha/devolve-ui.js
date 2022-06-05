@@ -9,10 +9,6 @@ use crate::core::view::layout::err::LayoutError;
 pub trait RenderEngine {
     type ViewData: VViewData;
     type RenderLayer;
-    #[cfg(feature = "input")]
-    type MouseListenerHandle;
-    #[cfg(feature = "input")]
-    type KeyListenerHandle;
 
     fn get_root_dimensions(&self) -> ParentBounds;
     fn on_resize(&mut self, callback: Box<dyn Fn() + Send + Sync>);
@@ -31,11 +27,15 @@ pub trait RenderEngine {
     ) -> Result<VRender<Self::RenderLayer>, LayoutError>;
 
     #[cfg(feature = "input")]
-    fn listen_for_mouse_events(&mut self, listener: Box<dyn FnMut(MouseEvent)>) -> Self::MouseListenerHandle;
+    fn start_listening_for_key_events(&mut self);
     #[cfg(feature = "input")]
-    fn unlisten_for_mouse_events(&mut self, handle: Self::MouseListenerHandle);
+    fn stop_listening_for_key_events(&mut self);
     #[cfg(feature = "input")]
-    fn listen_for_key_events(&mut self, listener: Box<dyn FnMut(KeyEvent)>) -> Self::KeyListenerHandle;
+    fn start_listening_for_mouse_events(&mut self);
     #[cfg(feature = "input")]
-    fn unlisten_for_key_events(&mut self, handle: Self::KeyListenerHandle);
+    fn stop_listening_for_mouse_events(&mut self);
+    #[cfg(feature = "input")]
+    fn start_listening_for_resize_events(&mut self);
+    #[cfg(feature = "input")]
+    fn stop_listening_for_resize_events(&mut self);
 }

@@ -2,6 +2,7 @@ use std::borrow::Cow;
 use std::cell::{Cell, RefCell, RefMut};
 use std::collections::HashMap;
 use std::future::Future;
+use std::marker::PhantomData;
 use std::ops::Deref;
 use std::pin::Pin;
 use std::rc::{Rc, Weak};
@@ -16,12 +17,16 @@ use tokio::runtime;
 use crate::core::component::component::{VComponent, VComponentBody, VComponentRoot};
 use crate::core::component::node::{NodeId, VNode};
 use crate::core::component::parent::{_VParent, VParent};
+#[cfg(feature = "input")]
+use crate::core::misc::input::{KeyEvent, MouseEvent, ResizeEvent};
 use crate::core::misc::notify_bool::FlagForOtherThreads;
 use crate::core::view::layout::geom::Rectangle;
 use crate::core::view::layout::parent_bounds::ParentBounds;
 use crate::core::view::view::{VView, VViewData};
-use crate::core::renderer::render::{VRender, VRenderLayer};
 use crate::core::renderer::engine::RenderEngine;
+use crate::core::renderer::listeners::{RendererListeners, RendererListenerId, RendererListener};
+use crate::core::renderer::render::{VRender, VRenderLayer};
+use crate::core::renderer::running::{RcRunning, Running, WeakRunning};
 
 struct CachedRender<Layer> {
     render: VRender<Layer>,
@@ -30,119 +35,21 @@ struct CachedRender<Layer> {
     parent: NodeId
 }
 
-#[cfg(feature = "time")]
-pub struct Running<Engine: RenderEngine + 'static> {
-    renderer: Weak<Renderer<Engine>>,
-    interval: RefCell<Interval>,
-    is_done: Arc<FlagForOtherThreads>
-}
-
-#[cfg(feature = "time")]
-pub struct RcRunning<Engine: RenderEngine + 'static>(pub Rc<Running<Engine>>);
-
-#[cfg(feature = "time")]
-impl <Engine: RenderEngine + 'static> RcRunning<Engine> where Engine::RenderLayer: VRenderLayer {
-    fn new(renderer: &Rc<Renderer<Engine>>) -> Self {
-        // Render once at start if necessary; polling waits interval before re-rendering
-        if renderer.needs_rerender.get() && renderer.is_visible.get() {
-            renderer.rerender();
-        }
-
-        Self(Rc::new(Running {
-            renderer: Rc::downgrade(renderer),
-            interval: RefCell::new(Self::mk_interval(renderer)),
-            is_done: Arc::new(FlagForOtherThreads::new())
-        }))
-    }
-
-    fn tick(self: &Pin<&mut Self>) -> Poll<()> {
-        let renderer = self.renderer.upgrade();
-        if self.is_done.get() || renderer.is_none() {
-            // Done
-            return Poll::Ready(());
-        }
-        let renderer = renderer.unwrap();
-
-        if renderer.needs_rerender.get() && renderer.is_visible.get() {
-            renderer.rerender();
-        }
-
-        // Not done (gets polled again and calls interval's poll)
-        Poll::Pending
-    }
-}
-
-#[cfg(feature = "time")]
-impl <Engine: RenderEngine + 'static> RcRunning<Engine> {
-    fn mk_interval(renderer: &Rc<Renderer<Engine>>) -> Interval {
-        let mut interval = interval(renderer.interval_between_frames.get());
-        interval.set_missed_tick_behavior(MissedTickBehavior::Skip);
-        interval
-    }
-
-    #[allow(clippy::needless_lifetimes)] // Not needless for some reason
-    pub fn is_done<'a>(&'a self) -> &'a Arc<FlagForOtherThreads> {
-        &self.is_done
-    }
-
-    fn sync_interval(&self) {
-        let renderer = self.renderer.upgrade();
-        if renderer.is_none() {
-            return;
-        }
-        let renderer = renderer.unwrap();
-        *self.interval.borrow_mut() = Self::mk_interval(&renderer);
-    }
-}
-
-impl <Engine: RenderEngine + 'static> Future for RcRunning<Engine> where Engine::RenderLayer: VRenderLayer {
-    type Output = ();
-
-    fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
-        match self.interval.borrow_mut().poll_tick(cx) {
-            Poll::Ready(_) => self.tick(),
-            Poll::Pending => Poll::Pending
-        }
-    }
-}
-
-impl <Engine: RenderEngine + 'static> Clone for RcRunning<Engine> {
-    fn clone(&self) -> Self {
-        Self(self.0.clone())
-    }
-
-    fn clone_from(&mut self, source: &Self) {
-        self.0.clone_from(&source.0);
-    }
-}
-
-impl <Engine: RenderEngine + 'static> Deref for RcRunning<Engine> {
-    type Target = Running<Engine>;
-
-    fn deref(&self) -> &Self::Target {
-        &self.0
-    }
-}
-
-pub trait WeakRunning<Engine: RenderEngine + 'static> {
-    fn upgrade(&self) -> Option<RcRunning<Engine>>;
-}
-
-impl <Engine: RenderEngine + 'static> WeakRunning<Engine> for Weak<Running<Engine>> {
-    fn upgrade(&self) -> Option<RcRunning<Engine>> {
-        self.upgrade().map(RcRunning)
-    }
-}
-
 pub struct Renderer<Engine: RenderEngine + 'static> {
     engine: RefCell<Engine>,
+
     is_visible: Cell<bool>,
+
     #[cfg(feature = "time")]
     interval_between_frames: Cell<Duration>,
     #[cfg(feature = "time")]
     running: RefCell<Option<RcRunning<Engine>>>,
+
+    listeners: RefCell<RendererListeners>,
+
     cached_renders: RefCell<HashMap<NodeId, CachedRender<Engine::RenderLayer>>>,
     needs_rerender: Arc<FlagForOtherThreads>,
+
     root_component: RefCell<Option<Box<VComponent<Engine::ViewData>>>>
 }
 
@@ -167,7 +74,7 @@ impl <Engine: RenderEngine> Renderer<Engine> where Engine::RenderLayer: VRenderL
     ///
     /// let renderer = Renderer::new(TODOEngine);
     /// renderer.root(rsx! { ... });
-    /// renderer.interval_between_frames(Duration::from_millis(25)); // optional
+    /// renderer.set_interval_between_frames(Duration::from_millis(25)); // optional
     /// renderer.show();
     /// renderer.resume_blocking();
     /// ```
@@ -181,7 +88,7 @@ impl <Engine: RenderEngine> Renderer<Engine> where Engine::RenderLayer: VRenderL
     ///
     /// let renderer = Renderer::new(TODOEngine);
     /// renderer.root(rsx! { ... });
-    /// renderer.interval_between_frames(Duration::from_millis(25)); // optional
+    /// renderer.set_interval_between_frames(Duration::from_millis(25)); // optional
     /// renderer.show();
     /// renderer.resume().await;
     /// ```
@@ -199,7 +106,7 @@ impl <Engine: RenderEngine> Renderer<Engine> where Engine::RenderLayer: VRenderL
     /// thread::spawn(move || {
     ///     let renderer = Renderer::new(TODOEngine);
     ///     renderer.root(rsx! { ... });
-    ///     renderer.interval_between_frames(Duration::from_millis(25)); // optional
+    ///     renderer.set_interval_between_frames(Duration::from_millis(25)); // optional
     ///     renderer.show();
     ///     renderer.resume_blocking_with_escape(|e| escape = e);
     /// });
@@ -223,6 +130,7 @@ impl <Engine: RenderEngine> Renderer<Engine> where Engine::RenderLayer: VRenderL
             interval_between_frames: Cell::new(Self::DEFAULT_INTERVAL_BETWEEN_FRAMES),
             #[cfg(feature = "time")]
             running: RefCell::new(None),
+            listeners: RefCell::new(RendererListeners::new()),
             cached_renders: RefCell::new(HashMap::new()),
             needs_rerender: Arc::new(FlagForOtherThreads::new()),
             root_component: RefCell::new(None)
@@ -239,6 +147,10 @@ impl <Engine: RenderEngine> Renderer<Engine> where Engine::RenderLayer: VRenderL
     #[allow(clippy::needless_lifetimes)] // Not needless
     pub fn needs_rerender<'a>(self: &'a Rc<Self>) -> &'a Arc<FlagForOtherThreads> {
         &self.needs_rerender
+    }
+
+    pub fn is_visible(self: &Rc<Self>) -> bool {
+        self.is_visible.get()
     }
 
     pub fn root(self: &Rc<Self>, construct: impl Fn(&mut Box<VComponent<Engine::ViewData>>) -> VNode<Engine::ViewData> + 'static) {
@@ -403,11 +315,127 @@ impl <Engine: RenderEngine> Renderer<Engine> where Engine::RenderLayer: VRenderL
     }
 }
 
-// TODO: pub(crate) register and unregister input and time handlers.
-//   These should be available even if time and input features aren't enabled.
-//   Additionally, the renderer can send mock events via pub methods.
-//   Real events will probable go through these mock methods
+// region listener methods - these are almost all boilerplate
+#[cfg(feature = "time")]
+impl <Engine: RenderEngine> Renderer<Engine> where Engine::RenderLayer: VRenderLayer {
+    pub fn listen_for_time(&self: Rc<Self>, listener: RendererListener<Duration>) -> RenderListenerId<Duration> {
+        let listeners = &mut self.listeners.borrow_mut().time;
+        if listeners.is_empty() {
+            self.start_listening_for_time();
+        }
+        listeners.time.add(listener)
+    }
 
+    pub fn unlisten_for_time(&self: Rc<Self>, listener_id: RenderListenerId<Duration>) {
+        let listeners = &mut self.listeners.borrow_mut().time;
+        listeners.time.remove(listener_id);
+        if listeners.is_empty() {
+            self.stop_listening_for_time();
+        }
+    }
+
+    pub fn send_time_event(&self: Rc<Self>, time: &Duration) {
+        self.listeners.borrow().time.run(time)
+    }
+
+    fn start_listening_for_time(&self: Rc<Self>) {
+        // Do nothing as of now
+    }
+
+    fn stop_listening_for_time(&self: Rc<Self>) {
+        // Do nothing as of now
+    }
+}
+
+#[cfg(feature = "input")]
+impl <Engine: RenderEngine> Renderer<Engine> where Engine::RenderLayer: VRenderLayer {
+    pub fn listen_for_keys(&self: Rc<Self>, listener: RendererListener<KeyEvent>) -> RenderListenerId<KeyEvent> {
+        let listeners = &mut self.listeners.borrow_mut().keys;
+        if listeners.is_empty() {
+            self.start_listening_for_keys();
+        }
+        listeners.keys.add(listener)
+    }
+
+    pub fn unlisten_for_keys(&self: Rc<Self>, listener_id: RenderListenerId<KeyEvent>) {
+        let listeners = &mut self.listeners.borrow_mut().keys;
+        listeners.keys.remove(listener_id);
+        if listeners.is_empty() {
+            self.stop_listening_for_keys();
+        }
+    }
+
+    pub fn send_key_event(&self: Rc<Self>, event: &KeyEvent) {
+        self.listeners.borrow().keys.run(event)
+    }
+
+    fn start_listening_for_keys(&self: Rc<Self>) {
+        self.engine.borrow_mut().start_listening_for_keys();
+    }
+
+    fn stop_listening_for_keys(&self: Rc<Self>) {
+        self.engine.borrow_mut().stop_listening_for_keys();
+    }
+
+    pub fn listen_for_mouse(&self: Rc<Self>, listener: RendererListener<MouseEvent>) -> RenderListenerId<MouseEvent> {
+        let listeners = &mut self.listeners.borrow_mut().mouse;
+        if listeners.is_empty() {
+            self.start_listening_for_mouse();
+        }
+        listeners.mouse.add(listener)
+    }
+
+    pub fn unlisten_for_mouse(&self: Rc<Self>, listener_id: RenderListenerId<MouseEvent>) {
+        let listeners = &mut self.listeners.borrow_mut().mouse;
+        listeners.mouse.remove(listener_id);
+        if listeners.is_empty() {
+            self.stop_listening_for_mouse();
+        }
+    }
+
+    pub fn send_mouse_event(&self: Rc<Self>, event: &MouseEvent) {
+        self.listeners.borrow().mouse.run(event)
+    }
+
+    fn start_listening_for_mouse(&self: Rc<Self>) {
+        self.engine.borrow_mut().start_listening_for_mouse();
+    }
+
+    fn stop_listening_for_mouse(&self: Rc<Self>) {
+        self.engine.borrow_mut().stop_listening_for_mouse();
+    }
+
+    pub fn listen_for_resize(&self: Rc<Self>, listener: RendererListener<ResizeEvent>) -> RenderListenerId<ResizeEvent> {
+        let listeners = &mut self.listeners.borrow_mut().resize;
+        if listeners.is_empty() {
+            self.start_listening_for_resize();
+        }
+        listeners.resize.add(listener)
+    }
+
+    pub fn unlisten_for_resize(&self: Rc<Self>, listener_id: RenderListenerId<ResizeEvent>) {
+        let listeners = &mut self.listeners.borrow_mut().resize;
+        listeners.resize.remove(listener_id);
+        if listeners.is_empty() {
+            self.stop_listening_for_resize();
+        }
+    }
+
+    pub fn send_resize_event(&self: Rc<Self>, event: &ResizeEvent) {
+        self.listeners.borrow().resize.run(event)
+    }
+
+    fn start_listening_for_resize(&self: Rc<Self>) {
+        self.engine.borrow_mut().start_listening_for_resize();
+    }
+
+    fn stop_listening_for_resize(&self: Rc<Self>) {
+        self.engine.borrow_mut().stop_listening_for_resize();
+    }
+}
+// endregion
+
+// region time
 #[cfg(feature = "time")]
 impl <Engine: RenderEngine> Renderer<Engine> where Engine::RenderLayer: VRenderLayer {
     #[must_use]
@@ -438,7 +466,11 @@ impl <Engine: RenderEngine> Renderer<Engine> where Engine::RenderLayer: VRenderL
         self.running.borrow().is_some()
     }
 
-    pub fn set_interval(self: &Rc<Self>, interval_between_frames: Duration) {
+    pub fn interval_between_frames(self: &Rc<Self>) -> Duration {
+        self.interval_between_frames.get()
+    }
+
+    pub fn set_interval_between_frames(self: &Rc<Self>, interval_between_frames: Duration) {
         // Need to pause and resume if running to change the interval
         self.interval_between_frames.set(interval_between_frames);
         if let Some(running) = self.running.borrow().as_ref() {
@@ -463,12 +495,9 @@ impl <Engine: RenderEngine> Renderer<Engine> where Engine::RenderLayer: VRenderL
         self.resume_blocking_with_escape(|_| ());
     }
 }
+// endregion
 
-#[cfg(feature = "input")]
-impl <Engine: RenderEngine> Renderer<Engine> where Engine::RenderLayer: VRenderLayer {
-
-}
-
+// region VComponentRoot impl
 impl <Engine: RenderEngine> VComponentRoot for Renderer<Engine> {
     type ViewData = Engine::ViewData;
 
@@ -489,11 +518,14 @@ impl <Engine: RenderEngine> VComponentRoot for Renderer<Engine> {
         self.needs_rerender.set();
     }
 }
+// endregion
 
+// region Drop impl
 impl <Engine: RenderEngine> Drop for Renderer<Engine> {
     fn drop(&mut self) {
         if self.is_visible.get() {
-            self.engine.borrow_mut().stop_rendering();
+            self.engine.get_mut().stop_rendering();
         }
     }
 }
+// endregion

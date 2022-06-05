@@ -1,5 +1,5 @@
 use bitflags::bitflags;
-use crate::core::view::layout::geom::Pos;
+use crate::core::view::layout::geom::{Pos, Size};
 
 ///! A lot of this is taken straight from crossterm's event data structures:
 ///! https://docs.rs/crossterm/0.23.2/src/crossterm/event.rs.html#297-413
@@ -13,6 +13,8 @@ pub enum Event {
     Key(KeyEvent),
     /// A single mouse event with additional pressed modifiers.
     Mouse(MouseEvent),
+    /// A single window or column resize event.
+    Resize(ResizeEvent)
 }
 
 /// Represents a mouse event.
@@ -183,6 +185,15 @@ impl KeyEvent {
             _ => None
         }
     }
+}
+
+/// Represents a window or column resize event
+#[derive(Debug, PartialOrd, PartialEq, Hash, Clone, Eq)]
+pub enum ResizeEvent {
+    /// The new size, in devolve-ui coordinates
+    Window(Size),
+    /// The new column size in pixels
+    Column(Size)
 }
 
 /// An internal event.
