@@ -10,6 +10,7 @@ use std::io::{Read, Stdin, stdin, Stdout, stdout, Write};
 #[cfg(target_family = "unix")]
 use std::os::unix::io::{AsRawFd, RawFd};
 use std::str::Lines;
+use std::time::Duration;
 use unicode_width::UnicodeWidthChar;
 use crate::core::renderer::engine::RenderEngine;
 use crate::core::renderer::render::VRender;
@@ -26,6 +27,10 @@ use crate::view_data::tui::terminal_image;
 use crate::view_data::tui::terminal_image::{HandleAspectRatio, Source};
 #[cfg(feature = "input")]
 use crate::core::renderer::engine::InputListeners;
+#[cfg(feature = "time")]
+use crate::core::renderer::renderer::RendererViewForEngineInTick;
+#[cfg(all(feature = "time", feature = "input"))]
+use crate::core::misc::input::{Event, KeyCode, KeyEvent, KeyModifiers, MouseButton, MouseEvent, MouseEventKind, ResizeEvent};
 
 #[cfg(target_family = "unix")]
 lazy_static! {
@@ -58,7 +63,8 @@ pub struct TuiConfig<Input: Read, Output: Write> {
 #[derive(Debug)]
 pub struct TuiEngine<Input: Read, Output: Write> {
     config: TuiConfig<Input, Output>,
-    is_listening_for_input: bool
+    is_listening_for_input: bool,
+    inferred_column_size: Size
 }
 
 const DEFAULT_SIZE: Size = Size {
@@ -104,7 +110,8 @@ impl <Input: Read, Output: Write> TuiEngine<Input, Output> {
     pub fn new(config: TuiConfig<Input, Output>) -> Self {
         TuiEngine {
             config,
-            is_listening_for_input: false
+            is_listening_for_input: false,
+            inferred_column_size: DEFAULT_COLUMN_SIZE
         }
     }
 
@@ -343,6 +350,23 @@ impl <Input: Read, Output: Write> TuiEngine<Input, Output> {
     }
 }
 
+#[cfg(all(feature = "time", feature = "input"))]
+impl <Input: Read, Output: Write> TuiEngine<Input, Output> {
+    fn process_event(&mut self, engine: RendererViewForEngineInTick<'_, Self>, event: Event) {
+        match event {
+            Event::Key(key) => engine.send_key_event(&key),
+            Event::Mouse(mouse) => engine.send_mouse_event(&mouse),
+            Event::Resize(resize) => {
+                match &resize {
+                    ResizeEvent::Column(new_size) => self.inferred_column_size = new_size.clone(),
+                    ResizeEvent::Window(_new_size) => {}
+                }
+                engine.send_resize_event(&resize);
+            }
+        }
+    }
+}
+
 impl <Input: Read, Output: Write> RenderEngine for TuiEngine<Input, Output> {
     type ViewData = TuiViewData;
     type RenderLayer = RenderLayer;
@@ -353,7 +377,7 @@ impl <Input: Read, Output: Write> RenderEngine for TuiEngine<Input, Output> {
         } else {
             DEFAULT_SIZE
         };
-        let mut column_size: Size = DEFAULT_COLUMN_SIZE;
+        let mut column_size: Size = self.inferred_column_size;
         #[cfg(target_family = "unix")]
         if let Some(fd) = self.config.termios_fd {
             let mut winsize: winsize = unsafe { std::mem::zeroed() };
@@ -481,6 +505,21 @@ impl <Input: Read, Output: Write> RenderEngine for TuiEngine<Input, Output> {
             }
         }
         Ok(render)
+    }
+
+    #[cfg(feature = "time")]
+    fn tick(&mut self, engine: RendererViewForEngineInTick<'_, Self>) {
+        #[cfg(feature = "input")]
+        if self.is_listening_for_input {
+            match crossterm::event::poll(Duration::from_secs(0)) {
+                Err(error) => eprintln!("error polling for terminal input: {}", error),
+                Ok(false) => {},
+                Ok(true) => match crossterm::event::read() {
+                    Err(error) => eprintln!("error reading terminal input after (successfully) polling: {}", error),
+                    Ok(event) => self.process_event(engine, event.into())
+                }
+            }
+        }
     }
 
     #[cfg(feature = "input")]

@@ -1,5 +1,16 @@
 use bitflags::bitflags;
 use crate::core::view::layout::geom::{Pos, Size};
+#[cfg(feature = "crossterm")]
+use crossterm::event::{
+    Event as CrosstermEvent,
+    KeyCode as CrosstermKeyCode,
+    KeyEvent as CrosstermKeyEvent,
+    KeyModifiers as CrosstermKeyModifiers,
+    MouseButton as CrosstermMouseButton,
+    MouseEvent as CrosstermMouseEvent,
+    MouseEventKind as CrosstermMouseEventKind
+};
+
 
 ///! A lot of this is taken straight from crossterm's event data structures:
 ///! https://docs.rs/crossterm/0.23.2/src/crossterm/event.rs.html#297-413
@@ -77,6 +88,8 @@ pub enum MouseButton {
     Right,
     /// Middle mouse button.
     Middle,
+    /// Other mouse button (e.g. on gaming mouses)
+    Other(u8)
 }
 
 bitflags! {
@@ -92,6 +105,17 @@ bitflags! {
 }
 
 impl KeyModifiers {
+    /// Convenience function: I wish something like this was on `bitflags`.
+    pub(crate) fn iff(&self, predicate: bool) -> Self {
+        if predicate {
+            *self
+        } else {
+            KeyModifiers::NONE
+        }
+    }
+}
+
+impl KeyModifiers {
     /// The META (Command) key on macOS, and control key on other platforms.
     #[cfg(target_os = "macos")]
     pub const MACOS_CTRL: Self = Self::META;
@@ -103,15 +127,9 @@ impl KeyModifiers {
 #[derive(Debug, PartialOrd, PartialEq, Eq, Clone, Copy, Hash)]
 pub struct KeyEvent {
     /// The key itself.
-    code: KeyCode,
+    pub code: KeyCode,
     /// Additional key modifiers.
-    modifiers: KeyModifiers,
-}
-
-impl KeyEvent {
-    pub const fn new(code: KeyCode, modifiers: KeyModifiers) -> KeyEvent {
-        KeyEvent { code, modifiers }
-    }
+    pub modifiers: KeyModifiers,
 }
 
 impl From<KeyCode> for KeyEvent {
@@ -173,6 +191,13 @@ pub enum KeyCode {
     Other(u32)
 }
 
+impl KeyCode {
+    /// Converts the character to lowercase and then represents it in a `KeyCode`.
+    pub fn char(char: char) -> Self {
+        Self::CharAsLowercase(char.to_lowercase().next().unwrap())
+    }
+}
+
 impl KeyEvent {
     /// If the event is a char, returns it with proper case
     pub fn char(&self) -> Option<char> {
@@ -195,3 +220,99 @@ pub enum ResizeEvent {
     /// The new column size in pixels
     Column(Size)
 }
+
+// region crossterm conversions
+// APIs are almost the same but we don't assume this will always be true
+// So there is a lot of boilerplate conversion here
+
+impl From<CrosstermEvent> for Event {
+    fn from(event: CrosstermEvent) -> Self {
+        match event {
+            CrosstermEvent::Key(key) => Event::Key(key.into()),
+            CrosstermEvent::Mouse(mouse) => Event::Mouse(mouse.into()),
+            CrosstermEvent::Resize(width, height) => Event::Resize(ResizeEvent::Window(Size {
+                width: width as f32,
+                height: height as f32
+            }))
+        }
+    }
+}
+
+impl From<CrosstermKeyEvent> for KeyEvent {
+    fn from(event: CrosstermKeyEvent) -> Self {
+        Self {
+            code: event.code.into(),
+            modifiers: event.modifiers.into()
+        }
+    }
+}
+
+impl From<CrosstermKeyCode> for KeyCode {
+    fn from(code: CrosstermKeyCode) -> Self {
+        match code {
+            CrosstermKeyCode::Backspace => Self::Backspace,
+            CrosstermKeyCode::Enter => Self::Enter,
+            CrosstermKeyCode::Left => Self::Left,
+            CrosstermKeyCode::Right => Self::Right,
+            CrosstermKeyCode::Up => Self::Up,
+            CrosstermKeyCode::Down => Self::Down,
+            CrosstermKeyCode::Home => Self::Home,
+            CrosstermKeyCode::End => Self::End,
+            CrosstermKeyCode::PageUp => Self::PageUp,
+            CrosstermKeyCode::PageDown => Self::PageDown,
+            CrosstermKeyCode::Tab => Self::Tab,
+            CrosstermKeyCode::BackTab => Self::BackTab,
+            CrosstermKeyCode::Delete => Self::Delete,
+            CrosstermKeyCode::Insert => Self::Insert,
+            CrosstermKeyCode::F(u8) => Self::F(u8),
+            CrosstermKeyCode::Char(char) => Self::char(char),
+            CrosstermKeyCode::Null => Self::Null,
+            CrosstermKeyCode::Esc => Self::Esc
+        }
+    }
+}
+
+impl From<CrosstermKeyModifiers> for KeyModifiers {
+    fn from(modifiers: CrosstermKeyModifiers) -> Self {
+        Self::SHIFT.iff(modifiers.contains(CrosstermKeyModifiers::SHIFT)) |
+            Self::CONTROL.iff(modifiers.contains(CrosstermKeyModifiers::CONTROL)) |
+            Self::ALT.iff(modifiers.contains(CrosstermKeyModifiers::ALT))
+    }
+}
+
+impl From<CrosstermMouseEvent> for MouseEvent {
+    fn from(event: CrosstermMouseEvent) -> Self {
+        Self {
+            kind: event.kind.into(),
+            pos: Pos {
+                x: event.x as f32,
+                y: event.y as f32
+            },
+            modifiers: event.modifiers.into()
+        }
+    }
+}
+
+impl From<CrosstermMouseEventKind> for MouseEventKind {
+    fn from(kind: CrosstermMouseEventKind) -> Self {
+        match kind {
+            CrosstermMouseEventKind::Down(x) => Self::Down(x.into()),
+            CrosstermMouseEventKind::Up(x) => Self::Up(x.into()),
+            CrosstermMouseEventKind::Drag(x) => Self::Drag(x.into()),
+            CrosstermMouseEventKind::Moved => Self::Moved,
+            CrosstermMouseEventKind::ScrollDown => Self::ScrollDown,
+            CrosstermMouseEventKind::ScrollUp => Self::ScrollUp
+        }
+    }
+}
+
+impl From<CrosstermMouseButton> for MouseButton {
+    fn from(button: CrosstermMouseButton) -> Self {
+        match button {
+            CrosstermMouseButton::Left => MouseButton::Left,
+            CrosstermMouseButton::Middle => MouseButton::Middle,
+            CrosstermMouseButton::Right => MouseButton::Right
+        }
+    }
+}
+// endregion

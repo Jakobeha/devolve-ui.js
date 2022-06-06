@@ -4,6 +4,8 @@ use crate::core::view::layout::geom::{BoundingBox, Size};
 use crate::core::view::layout::parent_bounds::ParentBounds;
 use crate::core::view::view::{VView, VViewData};
 use crate::core::renderer::render::VRender;
+#[cfg(feature = "time")]
+use crate::core::renderer::renderer::RendererViewForEngineInTick;
 use crate::core::view::layout::err::LayoutError;
 
 #[cfg(feature = "input")]
@@ -34,6 +36,9 @@ pub trait RenderEngine {
         view: &Box<VView<Self::ViewData>>,
         rendered_children: VRender<Self::RenderLayer>
     ) -> Result<VRender<Self::RenderLayer>, LayoutError>;
+
+    #[cfg(feature = "time")]
+    fn tick(&mut self, engine: RendererViewForEngineInTick<'_, Self>);
 
     #[cfg(feature = "input")]
     fn update_input_listeners(&mut self, input_listeners: InputListeners);

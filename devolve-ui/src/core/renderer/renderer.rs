@@ -460,7 +460,9 @@ impl <Engine: RenderEngine> Renderer<Engine> where Engine::RenderLayer: VRenderL
         }
     }
 
+    /// If running, this *will* trigger a rerender.
     pub fn send_resize_event(self: &Rc<Self>, event: &ResizeEvent) {
+        self.needs_rerender.set();
         self.listeners.borrow().resize.run(event)
     }
 
@@ -502,6 +504,8 @@ impl <Engine: RenderEngine> Renderer<Engine> {
     }
 
     pub(super) fn tick(self: &Rc<Self>) {
+        self.engine.borrow_mut().tick(RendererViewForEngineInTick(self));
+
         if self.is_listening_for_time.get() {
             let delta_time = self.last_frame_time
                 .get()
@@ -556,6 +560,36 @@ impl <Engine: RenderEngine> Renderer<Engine> where Engine::RenderLayer: VRenderL
         self.resume_blocking_with_escape(|_| ());
     }
 }
+
+/// We cannot provide all of the renderer's methods to the engine because there are situations
+/// the engine could create a `RefCell` runtime error since it's being borrowed.
+/// The functions visible in this struct should never cause an error.
+///
+/// Additionally, we can use this to provide special private functionality to `RenderEngine` during tick,
+/// and restrict functionality to only that which the engine should actually need.
+#[cfg(feature = "time")]
+pub struct RendererViewForEngineInTick<'a, Engine: RenderEngine + 'static>(&'a Rc<Renderer<Engine>>);
+
+#[cfg(feature = "time")]
+impl <'a, Engine: RenderEngine + 'static> RendererViewForEngineInTick<'a, Engine> where Engine::RenderLayer: VRenderLayer {
+    pub fn send_key_event(&self, event: &KeyEvent) {
+        self.0.send_key_event(event)
+    }
+
+    pub fn send_mouse_event(&self, event: &MouseEvent) {
+        self.0.send_mouse_event(event)
+    }
+
+    /// If running, this *will* trigger a rerender.
+    pub fn send_resize_event(&self, event: &ResizeEvent) {
+        self.0.send_resize_event(event)
+    }
+
+    pub fn set_needs_rerender(&self) {
+        self.0.needs_rerender().set()
+    }
+}
+
 // endregion
 
 // region VComponentRoot impl
