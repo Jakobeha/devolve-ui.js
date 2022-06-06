@@ -13,8 +13,9 @@ use crate::core::component::parent::{_VParent, VParent};
 #[cfg(feature = "input")]
 use crate::core::misc::input::{KeyEvent, MouseEvent, ResizeEvent};
 use crate::core::misc::notify_bool::FlagForOtherThreads;
-use crate::core::view::layout::geom::Rectangle;
-use crate::core::view::layout::parent_bounds::ParentBounds;
+use crate::core::misc::option_f32::OptionF32;
+use crate::core::view::layout::geom::{Rectangle, Size};
+use crate::core::view::layout::parent_bounds::{DimsStore, ParentBounds};
 use crate::core::view::view::{VView, VViewData};
 use crate::core::renderer::engine::RenderEngine;
 #[cfg(feature = "input")]
@@ -32,6 +33,7 @@ struct CachedRender<Layer> {
 
 pub struct Renderer<Engine: RenderEngine + 'static> {
     engine: RefCell<Engine>,
+    overrides: RendererOverrides,
 
     is_visible: Cell<bool>,
 
@@ -47,6 +49,14 @@ pub struct Renderer<Engine: RenderEngine + 'static> {
     needs_rerender: Arc<FlagForOtherThreads>,
 
     root_component: RefCell<Option<Box<VComponent<Engine::ViewData>>>>
+}
+
+#[derive(Debug, Default)]
+pub struct RendererOverrides {
+    pub override_size: Option<Size>,
+    pub override_column_size: Option<Size>,
+    pub additional_store: DimsStore,
+    pub ignore_events: bool
 }
 
 struct RenderBorrows<'a, Engine: RenderEngine> {
@@ -119,8 +129,13 @@ impl <Engine: RenderEngine> Renderer<Engine> where Engine::RenderLayer: VRenderL
     /// renderer.show();
     /// ```
     pub fn new(engine: Engine) -> Rc<Self> {
+        Self::new_with_overrides(engine, RendererOverrides::default())
+    }
+
+    pub fn new_with_overrides(engine: Engine, overrides: RendererOverrides) -> Rc<Self> {
         let renderer = Rc::new(Renderer {
             engine: RefCell::new(engine),
+            overrides,
             is_visible: Cell::new(false),
             #[cfg(feature = "time")]
             interval_between_frames: Cell::new(Self::DEFAULT_INTERVAL_BETWEEN_FRAMES),
@@ -206,7 +221,7 @@ impl <Engine: RenderEngine> Renderer<Engine> where Engine::RenderLayer: VRenderL
             engine.start_rendering();
         }
 
-        let root_dimensions = engine.get_root_dimensions();
+        let root_dimensions = self.get_root_dimensions();
         let mut render_borrows = RenderBorrows {
             cached_renders: self.cached_renders.borrow_mut(),
             engine
@@ -305,6 +320,18 @@ impl <Engine: RenderEngine> Renderer<Engine> where Engine::RenderLayer: VRenderL
             eprintln!("Error rendering view {}: {}", view.id(), error);
             VRender::new()
         })
+    }
+
+    fn get_root_dimensions(self: &Rc<Self>, engine: RenderEngine) -> ParentBounds {
+        let mut root_dimensions = engine.get_root_dimensions();
+        if let Some(override_size) = self.overrides.override_size {
+            root_dimensions.bounding_box.width = OptionF32::from(override_size.width);
+            root_dimensions.bounding_box.height = OptionF32::from(override_size.height);
+        }
+        if let Some(override_column_size) = self.overrides.override_column_size {
+            root_dimensions.column_size = override_column_size;
+        }
+        root_dimensions.store.add(self.overrides.additional_store);
     }
 
     fn upcast(self: Rc<Self>) -> Rc<dyn VComponentRoot<ViewData = Engine::ViewData>> {

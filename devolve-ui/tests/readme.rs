@@ -9,7 +9,7 @@ use std::io::Write;
 use std::os::unix::ffi::OsStrExt;
 use std::rc::Rc;
 use devolve_ui::core::component::constr::make_component;
-use devolve_ui::core::renderer::renderer::Renderer;
+use devolve_ui::core::renderer::renderer::{Renderer, RendererOverrides};
 use devolve_ui::core::view::layout::geom::Size;
 use devolve_ui::core::view::layout::macros::{mt, smt};
 use devolve_ui::engines::tui::tui::{TuiConfig, TuiEngine};
@@ -98,13 +98,17 @@ impl Write for TestOutput {
 #[test]
 fn test_wordle_render() {
     let output = TestOutput::new();
-    let renderer = Renderer::new(TuiEngine::new(TuiConfig {
+    let renderer = Renderer::new_with_overrides(TuiEngine::new(TuiConfig {
         input: io::empty(),
         output: output.clone(),
         raw_mode: true,
         #[cfg(target_family = "unix")]
         termios_fd: None,
-    }));
+    }), RendererOverrides {
+        override_size: Some(Size { width: 80f32, height: 40f32 }),
+        ignore_events: true,
+        ..RendererOverrides::default()
+    });
     renderer.root(|c| wordle!(c, "wordle", { text: "Hello world".into() }));
     // renderer.interval_between_frames(Duration::from_millis(25)); // optional
     renderer.show();
