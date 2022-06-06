@@ -7,7 +7,7 @@ use crate::core::view::layout::geom::{Pos, Size};
 ///! although not every environment / platform will support those
 
 /// Represents an event.
-#[derive(Debug, PartialOrd, PartialEq, Eq, Clone, Copy, Hash)]
+#[derive(Debug, PartialEq, Clone, Copy)]
 pub enum Event {
     /// A single key event with additional pressed modifiers.
     Key(KeyEvent),
@@ -32,7 +32,7 @@ pub enum Event {
 /// Some platforms/terminals does not report all key modifiers
 /// combinations for all mouse event types. For example - macOS reports
 /// `Ctrl` + left mouse button click as a right mouse button click.
-#[derive(Debug, PartialOrd, PartialEq, Eq, Clone, Copy, Hash)]
+#[derive(Debug, PartialEq, Clone, Copy)]
 pub struct MouseEvent {
     /// The kind of mouse event that was caused.
     pub kind: MouseEventKind,
@@ -188,22 +188,10 @@ impl KeyEvent {
 }
 
 /// Represents a window or column resize event
-#[derive(Debug, PartialOrd, PartialEq, Hash, Clone, Eq)]
+#[derive(Debug, PartialEq, Clone, Copy)]
 pub enum ResizeEvent {
     /// The new size, in devolve-ui coordinates
     Window(Size),
     /// The new column size in pixels
     Column(Size)
-}
-
-/// An internal event.
-///
-/// Encapsulates publicly available `Event` with additional internal
-/// events that shouldn't be publicly available to the crate users.
-#[derive(Debug, PartialOrd, PartialEq, Hash, Clone, Eq)]
-pub(crate) enum InternalEvent {
-    /// An event.
-    Event(Event),
-    /// A cursor position (`col`, `row`).
-    CursorPosition(Pos),
 }

@@ -24,6 +24,8 @@ use crate::engines::tui::terminal_image::{Image, ImageRender};
 use crate::view_data::attrs::{BorderStyle, DividerDirection, DividerStyle, TextWrapMode};
 use crate::view_data::tui::terminal_image;
 use crate::view_data::tui::terminal_image::{HandleAspectRatio, Source};
+#[cfg(feature = "input")]
+use crate::core::renderer::engine::InputListeners;
 
 #[cfg(target_family = "unix")]
 lazy_static! {
@@ -51,12 +53,12 @@ pub struct TuiConfig<Input: Read, Output: Write> {
     #[cfg(target_family = "unix")]
     pub termios_fd: Option<RawFd>,
     pub raw_mode: bool,
-    pub override_size: Option<Size>
 }
 
 #[derive(Debug)]
 pub struct TuiEngine<Input: Read, Output: Write> {
-    config: TuiConfig<Input, Output>
+    config: TuiConfig<Input, Output>,
+    is_listening_for_input: bool
 }
 
 const DEFAULT_SIZE: Size = Size {
@@ -79,7 +81,6 @@ impl Default for TuiConfig<Stdin, Stdout> {
             output,
             termios_fd: Some(fd),
             raw_mode: true,
-            override_size: None
         }
     }
 }
@@ -102,7 +103,8 @@ fn do_io<R>(action: impl FnOnce() -> io::Result<R>) -> R {
 impl <Input: Read, Output: Write> TuiEngine<Input, Output> {
     pub fn new(config: TuiConfig<Input, Output>) -> Self {
         TuiEngine {
-            config
+            config,
+            is_listening_for_input: false
         }
     }
 
@@ -330,14 +332,23 @@ impl <Input: Read, Output: Write> TuiEngine<Input, Output> {
     }
 }
 
+#[cfg(feature = "input")]
+impl <Input: Read, Output: Write> TuiEngine<Input, Output> {
+    fn start_listening_for_input(&mut self) {
+        self.is_listening_for_input = true;
+    }
+
+    fn stop_listening_for_input(&mut self) {
+        self.is_listening_for_input = false;
+    }
+}
+
 impl <Input: Read, Output: Write> RenderEngine for TuiEngine<Input, Output> {
     type ViewData = TuiViewData;
     type RenderLayer = RenderLayer;
 
     fn get_root_dimensions(&self) -> ParentBounds {
-        let size = if let Some(size) = &self.config.override_size {
-            size.clone()
-        } else if let Ok((width, height)) = terminal::size() {
+        let size = if let Ok((width, height)) = terminal::size() {
             Size { width: width as f32, height: height as f32 }
         } else {
             DEFAULT_SIZE
@@ -470,5 +481,15 @@ impl <Input: Read, Output: Write> RenderEngine for TuiEngine<Input, Output> {
             }
         }
         Ok(render)
+    }
+
+    #[cfg(feature = "input")]
+    fn update_input_listeners(&mut self, listeners: InputListeners) {
+        let is_listening_for_input = listeners != InputListeners::empty();
+        if is_listening_for_input && !self.is_listening_for_input {
+            self.start_listening_for_input()
+        } else if !is_listening_for_input && self.is_listening_for_input {
+            self.stop_listening_for_input()
+        }
     }
 }

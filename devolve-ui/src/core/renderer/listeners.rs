@@ -17,7 +17,7 @@ pub(super) struct RendererListeners {
 
 pub(super) struct RendererListenersFor<Event>(Vec<Option<RendererListener<Event>>>);
 
-pub type RendererListener<Event> = Box<dyn FnMut(&Event)>;
+pub type RendererListener<Event> = Box<dyn Fn(&Event)>;
 
 pub struct RendererListenerId<Event> {
     index: usize,

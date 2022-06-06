@@ -1,17 +1,10 @@
 use std::borrow::Cow;
 use std::cell::{Cell, RefCell, RefMut};
 use std::collections::HashMap;
-use std::future::Future;
-use std::marker::PhantomData;
-use std::ops::Deref;
-use std::pin::Pin;
 use std::rc::{Rc, Weak};
 use std::sync::{Arc, Weak as WeakArc};
-use std::task::{Context, Poll};
 #[cfg(feature = "time")]
 use std::time::Duration;
-#[cfg(feature = "time")]
-use tokio::time::{Interval, interval, MissedTickBehavior};
 #[cfg(feature = "time-blocking")]
 use tokio::runtime;
 use crate::core::component::component::{VComponent, VComponentBody, VComponentRoot};
@@ -24,9 +17,11 @@ use crate::core::view::layout::geom::Rectangle;
 use crate::core::view::layout::parent_bounds::ParentBounds;
 use crate::core::view::view::{VView, VViewData};
 use crate::core::renderer::engine::RenderEngine;
+#[cfg(feature = "input")]
+use crate::core::renderer::engine::InputListeners;
 use crate::core::renderer::listeners::{RendererListeners, RendererListenerId, RendererListener};
 use crate::core::renderer::render::{VRender, VRenderLayer};
-use crate::core::renderer::running::{RcRunning, Running, WeakRunning};
+use crate::core::renderer::running::{RcRunning, Running};
 
 struct CachedRender<Layer> {
     render: VRender<Layer>,
@@ -46,6 +41,7 @@ pub struct Renderer<Engine: RenderEngine + 'static> {
     running: RefCell<Option<RcRunning<Engine>>>,
 
     listeners: RefCell<RendererListeners>,
+    input_listeners: Cell<InputListeners>,
 
     cached_renders: RefCell<HashMap<NodeId, CachedRender<Engine::RenderLayer>>>,
     needs_rerender: Arc<FlagForOtherThreads>,
@@ -131,6 +127,7 @@ impl <Engine: RenderEngine> Renderer<Engine> where Engine::RenderLayer: VRenderL
             #[cfg(feature = "time")]
             running: RefCell::new(None),
             listeners: RefCell::new(RendererListeners::new()),
+            input_listeners: Cell::new(InputListeners::empty()),
             cached_renders: RefCell::new(HashMap::new()),
             needs_rerender: Arc::new(FlagForOtherThreads::new()),
             root_component: RefCell::new(None)
@@ -318,124 +315,149 @@ impl <Engine: RenderEngine> Renderer<Engine> where Engine::RenderLayer: VRenderL
 // region listener methods - these are almost all boilerplate
 #[cfg(feature = "time")]
 impl <Engine: RenderEngine> Renderer<Engine> where Engine::RenderLayer: VRenderLayer {
-    pub fn listen_for_time(&self: Rc<Self>, listener: RendererListener<Duration>) -> RenderListenerId<Duration> {
+    pub fn listen_for_time(self: &Rc<Self>, listener: RendererListener<Duration>) -> RendererListenerId<Duration> {
         let listeners = &mut self.listeners.borrow_mut().time;
         if listeners.is_empty() {
             self.start_listening_for_time();
         }
-        listeners.time.add(listener)
+        listeners.add(listener)
     }
 
-    pub fn unlisten_for_time(&self: Rc<Self>, listener_id: RenderListenerId<Duration>) {
+    pub fn unlisten_for_time(self: &Rc<Self>, listener_id: RendererListenerId<Duration>) {
         let listeners = &mut self.listeners.borrow_mut().time;
-        listeners.time.remove(listener_id);
+        listeners.remove(listener_id);
         if listeners.is_empty() {
             self.stop_listening_for_time();
         }
     }
 
-    pub fn send_time_event(&self: Rc<Self>, time: &Duration) {
+    pub fn send_time_event(self: &Rc<Self>, time: &Duration) {
         self.listeners.borrow().time.run(time)
     }
 
-    fn start_listening_for_time(&self: Rc<Self>) {
+    fn start_listening_for_time(self: &Rc<Self>) {
         // Do nothing as of now
     }
 
-    fn stop_listening_for_time(&self: Rc<Self>) {
+    fn stop_listening_for_time(self: &Rc<Self>) {
         // Do nothing as of now
     }
 }
 
 #[cfg(feature = "input")]
 impl <Engine: RenderEngine> Renderer<Engine> where Engine::RenderLayer: VRenderLayer {
-    pub fn listen_for_keys(&self: Rc<Self>, listener: RendererListener<KeyEvent>) -> RenderListenerId<KeyEvent> {
+    pub fn listen_for_keys(self: &Rc<Self>, listener: RendererListener<KeyEvent>) -> RendererListenerId<KeyEvent> {
         let listeners = &mut self.listeners.borrow_mut().keys;
         if listeners.is_empty() {
             self.start_listening_for_keys();
         }
-        listeners.keys.add(listener)
+        listeners.add(listener)
     }
 
-    pub fn unlisten_for_keys(&self: Rc<Self>, listener_id: RenderListenerId<KeyEvent>) {
+    pub fn unlisten_for_keys(self: &Rc<Self>, listener_id: RendererListenerId<KeyEvent>) {
         let listeners = &mut self.listeners.borrow_mut().keys;
-        listeners.keys.remove(listener_id);
+        listeners.remove(listener_id);
         if listeners.is_empty() {
             self.stop_listening_for_keys();
         }
     }
 
-    pub fn send_key_event(&self: Rc<Self>, event: &KeyEvent) {
+    pub fn send_key_event(self: &Rc<Self>, event: &KeyEvent) {
         self.listeners.borrow().keys.run(event)
     }
 
-    fn start_listening_for_keys(&self: Rc<Self>) {
-        self.engine.borrow_mut().start_listening_for_keys();
+    fn start_listening_for_keys(self: &Rc<Self>) {
+        self.input_listeners.set(self.input_listeners.get() | InputListeners::KEYS);
+        self.engine.borrow_mut().update_input_listeners(self.input_listeners.get());
     }
 
-    fn stop_listening_for_keys(&self: Rc<Self>) {
-        self.engine.borrow_mut().stop_listening_for_keys();
+    fn stop_listening_for_keys(self: &Rc<Self>) {
+        self.input_listeners.set(self.input_listeners.get() | InputListeners::KEYS);
+        self.engine.borrow_mut().update_input_listeners(self.input_listeners.get());
     }
 
-    pub fn listen_for_mouse(&self: Rc<Self>, listener: RendererListener<MouseEvent>) -> RenderListenerId<MouseEvent> {
+    pub fn listen_for_mouse(self: &Rc<Self>, listener: RendererListener<MouseEvent>) -> RendererListenerId<MouseEvent> {
         let listeners = &mut self.listeners.borrow_mut().mouse;
         if listeners.is_empty() {
             self.start_listening_for_mouse();
         }
-        listeners.mouse.add(listener)
+        listeners.add(listener)
     }
 
-    pub fn unlisten_for_mouse(&self: Rc<Self>, listener_id: RenderListenerId<MouseEvent>) {
+    pub fn unlisten_for_mouse(self: &Rc<Self>, listener_id: RendererListenerId<MouseEvent>) {
         let listeners = &mut self.listeners.borrow_mut().mouse;
-        listeners.mouse.remove(listener_id);
+        listeners.remove(listener_id);
         if listeners.is_empty() {
             self.stop_listening_for_mouse();
         }
     }
 
-    pub fn send_mouse_event(&self: Rc<Self>, event: &MouseEvent) {
+    pub fn send_mouse_event(self: &Rc<Self>, event: &MouseEvent) {
         self.listeners.borrow().mouse.run(event)
     }
 
-    fn start_listening_for_mouse(&self: Rc<Self>) {
-        self.engine.borrow_mut().start_listening_for_mouse();
+    fn start_listening_for_mouse(self: &Rc<Self>) {
+        self.input_listeners.set(self.input_listeners.get() | InputListeners::MOUSE);
+        self.engine.borrow_mut().update_input_listeners(self.input_listeners.get());
     }
 
-    fn stop_listening_for_mouse(&self: Rc<Self>) {
-        self.engine.borrow_mut().stop_listening_for_mouse();
+    fn stop_listening_for_mouse(self: &Rc<Self>) {
+        self.input_listeners.set(self.input_listeners.get() - InputListeners::MOUSE);
+        self.engine.borrow_mut().update_input_listeners(self.input_listeners.get());
     }
 
-    pub fn listen_for_resize(&self: Rc<Self>, listener: RendererListener<ResizeEvent>) -> RenderListenerId<ResizeEvent> {
+    pub fn listen_for_resize(self: &Rc<Self>, listener: RendererListener<ResizeEvent>) -> RendererListenerId<ResizeEvent> {
         let listeners = &mut self.listeners.borrow_mut().resize;
         if listeners.is_empty() {
             self.start_listening_for_resize();
         }
-        listeners.resize.add(listener)
+        listeners.add(listener)
     }
 
-    pub fn unlisten_for_resize(&self: Rc<Self>, listener_id: RenderListenerId<ResizeEvent>) {
+    pub fn unlisten_for_resize(self: &Rc<Self>, listener_id: RendererListenerId<ResizeEvent>) {
         let listeners = &mut self.listeners.borrow_mut().resize;
-        listeners.resize.remove(listener_id);
+        listeners.remove(listener_id);
         if listeners.is_empty() {
             self.stop_listening_for_resize();
         }
     }
 
-    pub fn send_resize_event(&self: Rc<Self>, event: &ResizeEvent) {
+    pub fn send_resize_event(self: &Rc<Self>, event: &ResizeEvent) {
         self.listeners.borrow().resize.run(event)
     }
 
-    fn start_listening_for_resize(&self: Rc<Self>) {
-        self.engine.borrow_mut().start_listening_for_resize();
+    fn start_listening_for_resize(self: &Rc<Self>) {
+        self.input_listeners.set(self.input_listeners.get() | InputListeners::RESIZE);
+        self.engine.borrow_mut().update_input_listeners(self.input_listeners.get());
     }
 
-    fn stop_listening_for_resize(&self: Rc<Self>) {
-        self.engine.borrow_mut().stop_listening_for_resize();
+    fn stop_listening_for_resize(self: &Rc<Self>) {
+        self.input_listeners.set(self.input_listeners.get() - InputListeners::RESIZE);
+        self.engine.borrow_mut().update_input_listeners(self.input_listeners.get());
     }
 }
 // endregion
 
 // region time
+#[cfg(feature = "time")]
+impl <Engine: RenderEngine> Renderer<Engine> {
+    pub fn is_running(self: &Rc<Self>) -> bool {
+        self.running.borrow().is_some()
+    }
+
+    pub fn interval_between_frames(self: &Rc<Self>) -> Duration {
+        self.interval_between_frames.get()
+    }
+
+    pub fn set_interval_between_frames(self: &Rc<Self>, interval_between_frames: Duration) {
+        // Need to pause and resume if running to change the interval
+        self.interval_between_frames.set(interval_between_frames);
+        if let Some(running) = self.running.borrow().as_ref() {
+            running.sync_interval();
+        }
+    }
+}
+
 #[cfg(feature = "time")]
 impl <Engine: RenderEngine> Renderer<Engine> where Engine::RenderLayer: VRenderLayer {
     #[must_use]
@@ -459,22 +481,6 @@ impl <Engine: RenderEngine> Renderer<Engine> where Engine::RenderLayer: VRenderL
         match self.running.borrow().as_ref() {
             None => Weak::new(),
             Some(running) => Rc::downgrade(&running.0),
-        }
-    }
-
-    pub fn is_running(self: &Rc<Self>) -> bool {
-        self.running.borrow().is_some()
-    }
-
-    pub fn interval_between_frames(self: &Rc<Self>) -> Duration {
-        self.interval_between_frames.get()
-    }
-
-    pub fn set_interval_between_frames(self: &Rc<Self>, interval_between_frames: Duration) {
-        // Need to pause and resume if running to change the interval
-        self.interval_between_frames.set(interval_between_frames);
-        if let Some(running) = self.running.borrow().as_ref() {
-            running.sync_interval();
         }
     }
 }

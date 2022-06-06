@@ -1,10 +1,19 @@
 #[cfg(feature = "input")]
-use crate::core::misc::input::{MouseEvent, KeyEvent};
+use bitflags::bitflags;
 use crate::core::view::layout::geom::{BoundingBox, Size};
 use crate::core::view::layout::parent_bounds::ParentBounds;
 use crate::core::view::view::{VView, VViewData};
 use crate::core::renderer::render::VRender;
 use crate::core::view::layout::err::LayoutError;
+
+#[cfg(feature = "input")]
+bitflags! {
+    pub struct InputListeners: u8 {
+        const KEYS = 0b0000_0001;
+        const MOUSE = 0b0000_0010;
+        const RESIZE = 0b0000_0100;
+    }
+}
 
 pub trait RenderEngine {
     type ViewData: VViewData;
@@ -27,15 +36,5 @@ pub trait RenderEngine {
     ) -> Result<VRender<Self::RenderLayer>, LayoutError>;
 
     #[cfg(feature = "input")]
-    fn start_listening_for_key_events(&mut self);
-    #[cfg(feature = "input")]
-    fn stop_listening_for_key_events(&mut self);
-    #[cfg(feature = "input")]
-    fn start_listening_for_mouse_events(&mut self);
-    #[cfg(feature = "input")]
-    fn stop_listening_for_mouse_events(&mut self);
-    #[cfg(feature = "input")]
-    fn start_listening_for_resize_events(&mut self);
-    #[cfg(feature = "input")]
-    fn stop_listening_for_resize_events(&mut self);
+    fn update_input_listeners(&mut self, input_listeners: InputListeners);
 }

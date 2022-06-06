@@ -13,13 +13,13 @@ pub struct BoundingBox {
     pub anchor_y: f32,
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Pos {
     pub x: f32,
     pub y: f32,
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Size {
     pub width: f32,
     pub height: f32,

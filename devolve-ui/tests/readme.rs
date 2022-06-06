@@ -28,8 +28,8 @@ make_component!(
     <TuiViewData>|c, name| {
         let mut counter = use_state(c, || 0);
         use_interval(c, 1000, |c| {
-            counter.get_mut(c)++;
-        })
+            counter.get_mut(c) += 1;
+        });
 
         zbox!({ width: smt!(100%) }, {}, vec![
             zbox!({ x: mt!(1), y: mt!(1), width: smt!(32) }, {}, vec![
@@ -104,7 +104,6 @@ fn test_wordle_render() {
         raw_mode: true,
         #[cfg(target_family = "unix")]
         termios_fd: None,
-        override_size: Some(Size { width: 80f32, height: 40f32 })
     }));
     renderer.root(|c| wordle!(c, "wordle", { text: "Hello world".into() }));
     // renderer.interval_between_frames(Duration::from_millis(25)); // optional
