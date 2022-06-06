@@ -44,6 +44,23 @@ impl Default for LayoutDirection {
 
 pub type DimsStore = DimMap<HashMap<&'static str, f32>>;
 
+impl DimsStore {
+    pub fn append(&mut self, other: &mut DimsStore) {
+        for (k, v) in other.x.drain() {
+            self.x.insert(k, v);
+        }
+        for (k, v) in other.y.drain() {
+            self.y.insert(k, v);
+        }
+        for (k, v) in other.width.drain() {
+            self.width.insert(k, v);
+        }
+        for (k, v) in other.height.drain() {
+            self.height.insert(k, v);
+        }
+    }
+}
+
 #[derive(Clone, PartialEq)]
 pub struct ParentBounds {
     pub bounding_box: BoundingBox,

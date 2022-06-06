@@ -54,6 +54,7 @@ impl <Engine: RenderEngine + 'static> RcRunning<Engine> where Engine::RenderLaye
         }
         let renderer = renderer.unwrap();
 
+        renderer.tick();
         if renderer.needs_rerender().get() && renderer.is_visible() {
             renderer.rerender();
         }

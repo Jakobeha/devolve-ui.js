@@ -4,7 +4,7 @@ use std::collections::HashMap;
 use std::rc::{Rc, Weak};
 use std::sync::{Arc, Weak as WeakArc};
 #[cfg(feature = "time")]
-use std::time::Duration;
+use std::time::{Duration, Instant};
 #[cfg(feature = "time-blocking")]
 use tokio::runtime;
 use crate::core::component::component::{VComponent, VComponentBody, VComponentRoot};
@@ -41,6 +41,10 @@ pub struct Renderer<Engine: RenderEngine + 'static> {
     interval_between_frames: Cell<Duration>,
     #[cfg(feature = "time")]
     running: RefCell<Option<RcRunning<Engine>>>,
+    #[cfg(feature = "time")]
+    is_listening_for_time: Cell<bool>,
+    #[cfg(feature = "time")]
+    last_frame_time: Cell<Option<Instant>>,
 
     listeners: RefCell<RendererListeners>,
     input_listeners: Cell<InputListeners>,
@@ -141,6 +145,10 @@ impl <Engine: RenderEngine> Renderer<Engine> where Engine::RenderLayer: VRenderL
             interval_between_frames: Cell::new(Self::DEFAULT_INTERVAL_BETWEEN_FRAMES),
             #[cfg(feature = "time")]
             running: RefCell::new(None),
+            #[cfg(feature = "time")]
+            is_listening_for_time: Cell::new(false),
+            #[cfg(feature = "time")]
+            last_frame_time: Cell::new(None),
             listeners: RefCell::new(RendererListeners::new()),
             input_listeners: Cell::new(InputListeners::empty()),
             cached_renders: RefCell::new(HashMap::new()),
@@ -221,7 +229,7 @@ impl <Engine: RenderEngine> Renderer<Engine> where Engine::RenderLayer: VRenderL
             engine.start_rendering();
         }
 
-        let root_dimensions = self.get_root_dimensions();
+        let root_dimensions = self.get_root_dimensions(&engine);
         let mut render_borrows = RenderBorrows {
             cached_renders: self.cached_renders.borrow_mut(),
             engine
@@ -322,16 +330,17 @@ impl <Engine: RenderEngine> Renderer<Engine> where Engine::RenderLayer: VRenderL
         })
     }
 
-    fn get_root_dimensions(self: &Rc<Self>, engine: RenderEngine) -> ParentBounds {
+    fn get_root_dimensions(self: &Rc<Self>, engine: &Engine) -> ParentBounds {
         let mut root_dimensions = engine.get_root_dimensions();
         if let Some(override_size) = self.overrides.override_size {
             root_dimensions.bounding_box.width = OptionF32::from(override_size.width);
             root_dimensions.bounding_box.height = OptionF32::from(override_size.height);
         }
         if let Some(override_column_size) = self.overrides.override_column_size {
-            root_dimensions.column_size = override_column_size;
+            root_dimensions.column_size = Cow::Owned(override_column_size.clone());
         }
-        root_dimensions.store.add(self.overrides.additional_store);
+        root_dimensions.store.append(&mut self.overrides.additional_store.clone());
+        root_dimensions
     }
 
     fn upcast(self: Rc<Self>) -> Rc<dyn VComponentRoot<ViewData = Engine::ViewData>> {
@@ -363,11 +372,13 @@ impl <Engine: RenderEngine> Renderer<Engine> where Engine::RenderLayer: VRenderL
     }
 
     fn start_listening_for_time(self: &Rc<Self>) {
-        // Do nothing as of now
+        self.last_frame_time.set(Some(Instant::now()));
+        self.is_listening_for_time.set(true);
     }
 
     fn stop_listening_for_time(self: &Rc<Self>) {
-        // Do nothing as of now
+        self.last_frame_time.set(None);
+        self.is_listening_for_time.set(false);
     }
 }
 
@@ -395,12 +406,12 @@ impl <Engine: RenderEngine> Renderer<Engine> where Engine::RenderLayer: VRenderL
 
     fn start_listening_for_keys(self: &Rc<Self>) {
         self.input_listeners.set(self.input_listeners.get() | InputListeners::KEYS);
-        self.engine.borrow_mut().update_input_listeners(self.input_listeners.get());
+        self.update_input_listeners();
     }
 
     fn stop_listening_for_keys(self: &Rc<Self>) {
         self.input_listeners.set(self.input_listeners.get() | InputListeners::KEYS);
-        self.engine.borrow_mut().update_input_listeners(self.input_listeners.get());
+        self.update_input_listeners();
     }
 
     pub fn listen_for_mouse(self: &Rc<Self>, listener: RendererListener<MouseEvent>) -> RendererListenerId<MouseEvent> {
@@ -425,12 +436,12 @@ impl <Engine: RenderEngine> Renderer<Engine> where Engine::RenderLayer: VRenderL
 
     fn start_listening_for_mouse(self: &Rc<Self>) {
         self.input_listeners.set(self.input_listeners.get() | InputListeners::MOUSE);
-        self.engine.borrow_mut().update_input_listeners(self.input_listeners.get());
+        self.update_input_listeners();
     }
 
     fn stop_listening_for_mouse(self: &Rc<Self>) {
         self.input_listeners.set(self.input_listeners.get() - InputListeners::MOUSE);
-        self.engine.borrow_mut().update_input_listeners(self.input_listeners.get());
+        self.update_input_listeners();
     }
 
     pub fn listen_for_resize(self: &Rc<Self>, listener: RendererListener<ResizeEvent>) -> RendererListenerId<ResizeEvent> {
@@ -455,12 +466,18 @@ impl <Engine: RenderEngine> Renderer<Engine> where Engine::RenderLayer: VRenderL
 
     fn start_listening_for_resize(self: &Rc<Self>) {
         self.input_listeners.set(self.input_listeners.get() | InputListeners::RESIZE);
-        self.engine.borrow_mut().update_input_listeners(self.input_listeners.get());
+        self.update_input_listeners();
     }
 
     fn stop_listening_for_resize(self: &Rc<Self>) {
         self.input_listeners.set(self.input_listeners.get() - InputListeners::RESIZE);
-        self.engine.borrow_mut().update_input_listeners(self.input_listeners.get());
+        self.update_input_listeners();
+    }
+
+    fn update_input_listeners(self: &Rc<Self>) {
+        if !self.overrides.ignore_events {
+            self.engine.borrow_mut().update_input_listeners(self.input_listeners.get());
+        }
     }
 }
 // endregion
@@ -481,6 +498,17 @@ impl <Engine: RenderEngine> Renderer<Engine> {
         self.interval_between_frames.set(interval_between_frames);
         if let Some(running) = self.running.borrow().as_ref() {
             running.sync_interval();
+        }
+    }
+
+    pub(super) fn tick(self: &Rc<Self>) {
+        if self.is_listening_for_time.get() {
+            let delta_time = self.last_frame_time
+                .get()
+                .expect("invalid state: renderer is_listening_for_time but no last_frame_time")
+                .elapsed();
+            self.last_frame_time.set(Some(Instant::now()));
+            self.listeners.borrow().time.run(&delta_time);
         }
     }
 }
