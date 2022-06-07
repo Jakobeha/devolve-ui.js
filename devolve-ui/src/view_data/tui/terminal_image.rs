@@ -38,6 +38,12 @@ pub enum HandleAspectRatio {
     Stretch
 }
 
+impl Default for HandleAspectRatio {
+    fn default() -> Self {
+        HandleAspectRatio::Complain
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub struct InferredFileExtension(pub Option<String>);
 

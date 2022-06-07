@@ -10,12 +10,15 @@ use std::os::unix::ffi::OsStrExt;
 use std::rc::Rc;
 use devolve_ui::core::component::constr::make_component;
 use devolve_ui::core::renderer::renderer::{Renderer, RendererOverrides};
+use devolve_ui::core::hooks::state::use_state;
+use devolve_ui::core::view::color::Color;
 use devolve_ui::core::view::layout::geom::Size;
 use devolve_ui::core::view::layout::macros::{mt, smt};
 use devolve_ui::engines::tui::tui::{TuiConfig, TuiEngine};
 use devolve_ui::view_data::tui::tui::TuiViewData;
 use devolve_ui::view_data::attrs::BorderStyle;
 use devolve_ui::view_data::tui::constr::{border, source, vbox, text, zbox};
+use devolve_ui::core::hooks::event::use_interval;
 
 make_component!(
     header,
@@ -28,7 +31,7 @@ make_component!(
     <TuiViewData>|c, name| {
         let mut counter = use_state(c, || 0);
         use_interval(c, 1000, |c| {
-            counter.get_mut(c) += 1;
+            *counter.get_mut(c) += 1;
         });
 
         zbox!({ width: smt!(100%) }, {}, vec![
@@ -36,7 +39,7 @@ make_component!(
                 text!({}, { color: Color::yellow() }, format!("Hello {}", name)),
                 text!({ x: mt!(100%), anchor_x: 1f32 }, { color: Color::yellow() }, format!("{} seconds", counter.get()))
             ]),
-            border!({ width: smt!(34), height: smt!(prev + 2) }, { style: BorderStyle::Rounded, color: Color::yellow() })
+            border!({ width: smt!(34), height: smt!(prev + 2) }, { color: Color::yellow() }, BorderStyle::Rounded)
         ])
     }
 );
@@ -53,9 +56,9 @@ make_component!(
         zbox!({ width: smt!(100%) }, {}, vec![
             vbox!({ x: mt!(2), y: mt!(1), width: smt!(100% - 4) }, { gap: 1 }, vec![
                 header!(c, "header", { name: name }),
-                source!({ width: mt!(34), height: mt!(16) }, { path: "assets/dog.png" })
+                source!({ width: mt!(34), height: mt!(16) }, Source::Path(PathBuf::from("assets/dog.png")))
             ]),
-            border!({ width: smt!(100%), height: smt!(prev + 2) }, { style: BorderStyle::Rounded, color: Color::blue() })
+            border!({ width: smt!(100%), height: smt!(prev + 2) }, { color: Color::blue() }, BorderStyle::Rounded)
         ])
     }
 );
@@ -96,7 +99,7 @@ impl Write for TestOutput {
 }
 
 #[test]
-fn test_wordle_render() {
+fn test_render() {
     let output = TestOutput::new();
     let renderer = Renderer::new_with_overrides(TuiEngine::new(TuiConfig {
         input: io::empty(),
@@ -109,13 +112,13 @@ fn test_wordle_render() {
         ignore_events: true,
         ..RendererOverrides::default()
     });
-    renderer.root(|c| wordle!(c, "wordle", { text: "Hello world".into() }));
+    renderer.root(|c| readme!(c, "readme", { name: "devolve-ui".into() }));
     // renderer.interval_between_frames(Duration::from_millis(25)); // optional
     renderer.show();
     // renderer.resume();
     // TODO: Windows support
     assert_eq!(
         OsStr::from_bytes(&output.snapshot_buf()),
-        OsStr::new("\u{1b}[?1049h\u{1b}[2J\u{1b}[25l\u{1b}[1;1HHello world!\u{1b}[0m")
+        OsStr::new("\u{1b}[?1049h\u{1b}[2J\u{1b}[25l\u{1b}[1;1HHello devolve-ui!\u{1b}[0m")
     )
 }

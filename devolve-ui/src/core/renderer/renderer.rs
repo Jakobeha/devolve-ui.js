@@ -52,7 +52,7 @@ pub struct Renderer<Engine: RenderEngine + 'static> {
     cached_renders: RefCell<HashMap<NodeId, CachedRender<Engine::RenderLayer>>>,
     needs_rerender: Arc<FlagForOtherThreads>,
 
-    root_component: RefCell<Option<Box<VComponent<Engine::ViewData>>>>
+    root_component: RefCell<Option<Box<VComponent<Engine::ViewData>>>>,
 }
 
 #[derive(Debug, Default)]

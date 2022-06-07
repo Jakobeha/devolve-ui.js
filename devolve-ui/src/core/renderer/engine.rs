@@ -38,7 +38,7 @@ pub trait RenderEngine {
     ) -> Result<VRender<Self::RenderLayer>, LayoutError>;
 
     #[cfg(feature = "time")]
-    fn tick(&mut self, engine: RendererViewForEngineInTick<'_, Self>);
+    fn tick(&mut self, engine: RendererViewForEngineInTick<'_, Self>) where Self: Sized;
 
     #[cfg(feature = "input")]
     fn update_input_listeners(&mut self, input_listeners: InputListeners);

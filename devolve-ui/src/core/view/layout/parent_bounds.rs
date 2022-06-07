@@ -17,7 +17,7 @@ pub struct SubLayout {
     pub gap: Measurement
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, Default, PartialEq)]
 pub struct DimMap<T> {
     pub x: T,
     pub y: T,

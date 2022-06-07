@@ -285,8 +285,8 @@ impl From<CrosstermMouseEvent> for MouseEvent {
         Self {
             kind: event.kind.into(),
             pos: Pos {
-                x: event.x as f32,
-                y: event.y as f32
+                x: event.column as f32,
+                y: event.row as f32
             },
             modifiers: event.modifiers.into()
         }
