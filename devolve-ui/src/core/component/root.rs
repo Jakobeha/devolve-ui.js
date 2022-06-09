@@ -13,7 +13,7 @@ pub(in crate::core) trait VComponentRoot {
 
     fn invalidate(self: Rc<Self>, view: &Box<VView<Self::ViewData>>);
 
-    fn with_component<'a>(self: Rc<Self>, path: &VNodePath, fun: Box<dyn FnOnce(Option<&mut Box<VComponent<Self::ViewData>>>) + 'a>);
+    fn _with_component(self: Rc<Self>, path: &VNodePath) -> Option<*mut Box<VComponent<Self::ViewData>>>;
 
     #[cfg(feature = "time")]
     fn listen_for_time(self: Rc<Self>, listener: RendererListener<Duration>) -> RendererListenerId<Duration>;
@@ -31,4 +31,11 @@ pub(in crate::core) trait VComponentRoot {
     fn listen_for_resize(self: Rc<Self>, listener: RendererListener<ResizeEvent>) -> RendererListenerId<ResizeEvent>;
     #[cfg(feature = "input")]
     fn unlisten_for_resize(self: Rc<Self>, listener_id: RendererListenerId<ResizeEvent>);
+}
+
+impl <ViewData: VViewData> dyn VComponentRoot<ViewData = ViewData> {
+    pub fn with_component(self: Rc<Self>, path: &VNodePath, fun: impl FnOnce(Option<&mut Box<VComponent<ViewData>>>)) {
+        let component = self._with_component(path);
+        fun(component.map(|component| unsafe { component.as_mut().unwrap() }))
+    }
 }

@@ -616,10 +616,11 @@ impl <Engine: RenderEngine> VComponentRoot for Renderer<Engine> {
         self.needs_rerender.set();
     }
 
-    fn with_component<'a>(self: Rc<Self>, path: &VNodePath, fun: Box<dyn FnOnce(Option<&mut Box<VComponent<Self::ViewData>>>) + 'a>) {
-        fun(self.root_component.borrow_mut().as_mut()
+    fn _with_component(self: Rc<Self>, path: &VNodePath) -> Option<*mut Box<VComponent<<Engine as RenderEngine>::ViewData>>> {
+        self.root_component.borrow_mut().as_mut()
             .and_then(|root_component| root_component.down_path_mut(path))
-            .and_then(|node_mut| node_mut.into_component()))
+            .and_then(|node_mut| node_mut.into_component())
+            .map(|component| component as *mut _)
     }
 
     #[cfg(feature = "time")]

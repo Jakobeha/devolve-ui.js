@@ -225,6 +225,7 @@ pub enum ResizeEvent {
 // APIs are almost the same but we don't assume this will always be true
 // So there is a lot of boilerplate conversion here
 
+#[cfg(feature = "crossterm")]
 impl From<CrosstermEvent> for Event {
     fn from(event: CrosstermEvent) -> Self {
         match event {
@@ -238,6 +239,7 @@ impl From<CrosstermEvent> for Event {
     }
 }
 
+#[cfg(feature = "crossterm")]
 impl From<CrosstermKeyEvent> for KeyEvent {
     fn from(event: CrosstermKeyEvent) -> Self {
         Self {
@@ -247,6 +249,7 @@ impl From<CrosstermKeyEvent> for KeyEvent {
     }
 }
 
+#[cfg(feature = "crossterm")]
 impl From<CrosstermKeyCode> for KeyCode {
     fn from(code: CrosstermKeyCode) -> Self {
         match code {
@@ -272,6 +275,7 @@ impl From<CrosstermKeyCode> for KeyCode {
     }
 }
 
+#[cfg(feature = "crossterm")]
 impl From<CrosstermKeyModifiers> for KeyModifiers {
     fn from(modifiers: CrosstermKeyModifiers) -> Self {
         Self::SHIFT.iff(modifiers.contains(CrosstermKeyModifiers::SHIFT)) |
@@ -280,6 +284,7 @@ impl From<CrosstermKeyModifiers> for KeyModifiers {
     }
 }
 
+#[cfg(feature = "crossterm")]
 impl From<CrosstermMouseEvent> for MouseEvent {
     fn from(event: CrosstermMouseEvent) -> Self {
         Self {
@@ -293,6 +298,7 @@ impl From<CrosstermMouseEvent> for MouseEvent {
     }
 }
 
+#[cfg(feature = "crossterm")]
 impl From<CrosstermMouseEventKind> for MouseEventKind {
     fn from(kind: CrosstermMouseEventKind) -> Self {
         match kind {
@@ -306,6 +312,7 @@ impl From<CrosstermMouseEventKind> for MouseEventKind {
     }
 }
 
+#[cfg(feature = "crossterm")]
 impl From<CrosstermMouseButton> for MouseButton {
     fn from(button: CrosstermMouseButton) -> Self {
         match button {
