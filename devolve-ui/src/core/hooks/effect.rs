@@ -1,4 +1,5 @@
 use std::mem;
+use std::convert::Infallible;
 use std::slice::Iter;
 use crate::core::component::component::VComponent;
 use crate::core::view::view::VViewData;
@@ -25,6 +26,22 @@ impl <T: PartialEq> CollectionOfPartialEqs for Vec<T> {
 
     fn iter(&self) -> Iter<'_, Self::Item> {
         (self as &[T]).iter()
+    }
+}
+
+impl CollectionOfPartialEqs for Infallible {
+    type Item = Infallible;
+
+    fn empty() -> Self {
+        panic!("CollectionOfPartialEqs::empty() called on NoDependencies")
+    }
+
+    fn len(&self) -> usize {
+        panic!("CollectionOfPartialEqs::len() called on NoDependencies")
+    }
+
+    fn iter(&self) -> Iter<'_, Self::Item> {
+        panic!("CollectionOfPartialEqs::iter() called on NoDependencies")
     }
 }
 
@@ -58,10 +75,22 @@ pub enum UseEffectRerun<Dependencies : CollectionOfPartialEqs> {
     }
 }
 
+pub type NoDependencies = Infallible;
+
 /// Runs a closure according to `rerun`. The closure should contain an effect,
 /// while the component's body should otherwise be a "pure" function based on its
 /// props and state hooks like `use_state`.
-pub fn use_effect<Dependencies: CollectionOfPartialEqs + 'static, Destructor: FnOnce(&mut Box<VComponent<ViewData>>) -> () + 'static, ViewData: VViewData + 'static>(c: &mut Box<VComponent<ViewData>>, rerun: UseEffectRerun<Dependencies>, effect: impl Fn(&mut Box<VComponent<ViewData>>) -> Destructor + 'static) {
+pub fn use_effect<Destructor: FnOnce(&mut Box<VComponent<ViewData>>) -> () + 'static, ViewData: VViewData + 'static>(c: &mut Box<VComponent<ViewData>>, rerun: UseEffectRerun<NoDependencies>, effect: impl Fn(&mut Box<VComponent<ViewData>>) -> Destructor + 'static) {
+    use_effect_with_deps(c, rerun, effect);
+}
+
+/// Runs a closure according to `rerun`. The closure should contain an effect,
+/// while the component's body should otherwise be a "pure" function based on its
+/// props and state hooks like `use_state`.
+///
+/// This function is actually the exact same as `use_effect`, but exposes the dependencies as a type parameter.
+/// Without the 2 versions, you would always have to specify dependencies on `use_effect` even if the enum variant didn't have them.
+pub fn use_effect_with_deps<Dependencies: CollectionOfPartialEqs + 'static, Destructor: FnOnce(&mut Box<VComponent<ViewData>>) -> () + 'static, ViewData: VViewData + 'static>(c: &mut Box<VComponent<ViewData>>, rerun: UseEffectRerun<Dependencies>, effect: impl Fn(&mut Box<VComponent<ViewData>>) -> Destructor + 'static) {
     match rerun {
         UseEffectRerun::OnCreate => {
             if c.is_being_created() {

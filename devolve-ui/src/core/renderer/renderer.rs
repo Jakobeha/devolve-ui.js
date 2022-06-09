@@ -7,9 +7,11 @@ use std::sync::{Arc, Weak as WeakArc};
 use std::time::{Duration, Instant};
 #[cfg(feature = "time-blocking")]
 use tokio::runtime;
-use crate::core::component::component::{VComponent, VComponentBody, VComponentRoot};
+use crate::core::component::component::{VComponent, VComponentBody};
 use crate::core::component::node::{NodeId, VNode};
 use crate::core::component::parent::{_VParent, VParent};
+use crate::core::component::path::VNodePath;
+use crate::core::component::root::VComponentRoot;
 #[cfg(feature = "input")]
 use crate::core::misc::input::{KeyEvent, MouseEvent, ResizeEvent};
 use crate::core::misc::notify_bool::FlagForOtherThreads;
@@ -20,7 +22,7 @@ use crate::core::view::view::{VView, VViewData};
 use crate::core::renderer::engine::RenderEngine;
 #[cfg(feature = "input")]
 use crate::core::renderer::engine::InputListeners;
-use crate::core::renderer::listeners::{RendererListeners, RendererListenerId, RendererListener};
+use crate::core::renderer::listeners::{RendererListener, RendererListenerId, RendererListeners};
 use crate::core::renderer::render::{VRender, VRenderLayer};
 use crate::core::renderer::running::{RcRunning, Running};
 
@@ -174,7 +176,7 @@ impl <Engine: RenderEngine> Renderer<Engine> where Engine::RenderLayer: VRenderL
     }
 
     pub fn root(self: &Rc<Self>, construct: impl Fn(&mut Box<VComponent<Engine::ViewData>>) -> VNode<Engine::ViewData> + 'static) {
-        self._root(|parent| VComponent::new(parent, &"root".into(), (), move |c, ()| VComponentBody::new(construct(c))))
+        self._root(|parent| VComponent::new(parent, ().into(), (), move |c, ()| VComponentBody::new(construct(c))))
     }
 
     fn _root(self: &Rc<Self>, construct: impl FnOnce(VParent<'_, Engine::ViewData>) -> Box<VComponent<Engine::ViewData>>) {
@@ -350,8 +352,8 @@ impl <Engine: RenderEngine> Renderer<Engine> where Engine::RenderLayer: VRenderL
 
 // region listener methods - these are almost all boilerplate
 #[cfg(feature = "time")]
-impl <Engine: RenderEngine> Renderer<Engine> where Engine::RenderLayer: VRenderLayer {
-    pub fn listen_for_time(self: &Rc<Self>, listener: RendererListener<Duration>) -> RendererListenerId<Duration> {
+impl <Engine: RenderEngine> Renderer<Engine> {
+    fn _listen_for_time(self: &Rc<Self>, listener: RendererListener<Duration>) -> RendererListenerId<Duration> {
         let listeners = &mut self.listeners.borrow_mut().time;
         if listeners.is_empty() {
             self.start_listening_for_time();
@@ -359,7 +361,7 @@ impl <Engine: RenderEngine> Renderer<Engine> where Engine::RenderLayer: VRenderL
         listeners.add(listener)
     }
 
-    pub fn unlisten_for_time(self: &Rc<Self>, listener_id: RendererListenerId<Duration>) {
+    fn _unlisten_for_time(self: &Rc<Self>, listener_id: RendererListenerId<Duration>) {
         let listeners = &mut self.listeners.borrow_mut().time;
         listeners.remove(listener_id);
         if listeners.is_empty() {
@@ -383,8 +385,8 @@ impl <Engine: RenderEngine> Renderer<Engine> where Engine::RenderLayer: VRenderL
 }
 
 #[cfg(feature = "input")]
-impl <Engine: RenderEngine> Renderer<Engine> where Engine::RenderLayer: VRenderLayer {
-    pub fn listen_for_keys(self: &Rc<Self>, listener: RendererListener<KeyEvent>) -> RendererListenerId<KeyEvent> {
+impl <Engine: RenderEngine> Renderer<Engine> {
+    fn _listen_for_keys(self: &Rc<Self>, listener: RendererListener<KeyEvent>) -> RendererListenerId<KeyEvent> {
         let listeners = &mut self.listeners.borrow_mut().keys;
         if listeners.is_empty() {
             self.start_listening_for_keys();
@@ -392,13 +394,46 @@ impl <Engine: RenderEngine> Renderer<Engine> where Engine::RenderLayer: VRenderL
         listeners.add(listener)
     }
 
-    pub fn unlisten_for_keys(self: &Rc<Self>, listener_id: RendererListenerId<KeyEvent>) {
+    fn _unlisten_for_keys(self: &Rc<Self>, listener_id: RendererListenerId<KeyEvent>) {
         let listeners = &mut self.listeners.borrow_mut().keys;
         listeners.remove(listener_id);
         if listeners.is_empty() {
             self.stop_listening_for_keys();
         }
     }
+
+    fn _listen_for_mouse(self: &Rc<Self>, listener: RendererListener<MouseEvent>) -> RendererListenerId<MouseEvent> {
+        let listeners = &mut self.listeners.borrow_mut().mouse;
+        if listeners.is_empty() {
+            self.start_listening_for_mouse();
+        }
+        listeners.add(listener)
+    }
+
+    fn _unlisten_for_mouse(self: &Rc<Self>, listener_id: RendererListenerId<MouseEvent>) {
+        let listeners = &mut self.listeners.borrow_mut().mouse;
+        listeners.remove(listener_id);
+        if listeners.is_empty() {
+            self.stop_listening_for_mouse();
+        }
+    }
+
+    fn _listen_for_resize(self: &Rc<Self>, listener: RendererListener<ResizeEvent>) -> RendererListenerId<ResizeEvent> {
+        let listeners = &mut self.listeners.borrow_mut().resize;
+        if listeners.is_empty() {
+            self.start_listening_for_resize();
+        }
+        listeners.add(listener)
+    }
+
+    fn _unlisten_for_resize(self: &Rc<Self>, listener_id: RendererListenerId<ResizeEvent>) {
+        let listeners = &mut self.listeners.borrow_mut().resize;
+        listeners.remove(listener_id);
+        if listeners.is_empty() {
+            self.stop_listening_for_resize();
+        }
+    }
+
 
     pub fn send_key_event(self: &Rc<Self>, event: &KeyEvent) {
         self.listeners.borrow().keys.run(event)
@@ -414,22 +449,6 @@ impl <Engine: RenderEngine> Renderer<Engine> where Engine::RenderLayer: VRenderL
         self.update_input_listeners();
     }
 
-    pub fn listen_for_mouse(self: &Rc<Self>, listener: RendererListener<MouseEvent>) -> RendererListenerId<MouseEvent> {
-        let listeners = &mut self.listeners.borrow_mut().mouse;
-        if listeners.is_empty() {
-            self.start_listening_for_mouse();
-        }
-        listeners.add(listener)
-    }
-
-    pub fn unlisten_for_mouse(self: &Rc<Self>, listener_id: RendererListenerId<MouseEvent>) {
-        let listeners = &mut self.listeners.borrow_mut().mouse;
-        listeners.remove(listener_id);
-        if listeners.is_empty() {
-            self.stop_listening_for_mouse();
-        }
-    }
-
     pub fn send_mouse_event(self: &Rc<Self>, event: &MouseEvent) {
         self.listeners.borrow().mouse.run(event)
     }
@@ -442,22 +461,6 @@ impl <Engine: RenderEngine> Renderer<Engine> where Engine::RenderLayer: VRenderL
     fn stop_listening_for_mouse(self: &Rc<Self>) {
         self.input_listeners.set(self.input_listeners.get() - InputListeners::MOUSE);
         self.update_input_listeners();
-    }
-
-    pub fn listen_for_resize(self: &Rc<Self>, listener: RendererListener<ResizeEvent>) -> RendererListenerId<ResizeEvent> {
-        let listeners = &mut self.listeners.borrow_mut().resize;
-        if listeners.is_empty() {
-            self.start_listening_for_resize();
-        }
-        listeners.add(listener)
-    }
-
-    pub fn unlisten_for_resize(self: &Rc<Self>, listener_id: RendererListenerId<ResizeEvent>) {
-        let listeners = &mut self.listeners.borrow_mut().resize;
-        listeners.remove(listener_id);
-        if listeners.is_empty() {
-            self.stop_listening_for_resize();
-        }
     }
 
     /// If running, this *will* trigger a rerender.
@@ -611,6 +614,52 @@ impl <Engine: RenderEngine> VComponentRoot for Renderer<Engine> {
         }
 
         self.needs_rerender.set();
+    }
+
+    fn with_component<'a>(self: Rc<Self>, path: &VNodePath, fun: Box<dyn FnOnce(Option<&mut Box<VComponent<Self::ViewData>>>) + 'a>) {
+        fun(self.root_component.borrow_mut().as_mut()
+            .and_then(|root_component| root_component.down_path_mut(path))
+            .and_then(|node_mut| node_mut.into_component()))
+    }
+
+    #[cfg(feature = "time")]
+    fn listen_for_time(self: Rc<Self>, listener: RendererListener<Duration>) -> RendererListenerId<Duration> {
+        self._listen_for_time(listener)
+    }
+
+    #[cfg(feature = "time")]
+    fn unlisten_for_time(self: Rc<Self>, listener_id: RendererListenerId<Duration>) {
+        self._unlisten_for_time(listener_id)
+    }
+
+    #[cfg(feature = "input")]
+    fn listen_for_keys(self: Rc<Self>, listener: RendererListener<KeyEvent>) -> RendererListenerId<KeyEvent> {
+        self._listen_for_keys(listener)
+    }
+
+    #[cfg(feature = "input")]
+    fn unlisten_for_keys(self: Rc<Self>, listener_id: RendererListenerId<KeyEvent>) {
+        self._unlisten_for_keys(listener_id)
+    }
+
+    #[cfg(feature = "input")]
+    fn listen_for_mouse(self: Rc<Self>, listener: RendererListener<MouseEvent>) -> RendererListenerId<MouseEvent> {
+        self._listen_for_mouse(listener)
+    }
+
+    #[cfg(feature = "input")]
+    fn unlisten_for_mouse(self: Rc<Self>, listener_id: RendererListenerId<MouseEvent>) {
+        self._unlisten_for_mouse(listener_id)
+    }
+
+    #[cfg(feature = "input")]
+    fn listen_for_resize(self: Rc<Self>, listener: RendererListener<ResizeEvent>) -> RendererListenerId<ResizeEvent> {
+        self._listen_for_resize(listener)
+    }
+
+    #[cfg(feature = "input")]
+    fn unlisten_for_resize(self: Rc<Self>, listener_id: RendererListenerId<ResizeEvent>) {
+        self._unlisten_for_resize(listener_id)
     }
 }
 // endregion

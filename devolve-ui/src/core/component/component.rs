@@ -1,11 +1,13 @@
 use crate::core::component::parent::{_VParent, VParent};
 use crate::core::component::mode::VMode;
-use crate::core::component::node::{NodeId, VNode};
+use crate::core::component::node::{NodeId, VNode, VNodeMut, VNodeRef};
 use std::any::Any;
 use std::borrow::Cow;
 use std::collections::HashMap;
 use std::marker::PhantomData;
 use std::rc::{Rc, Weak};
+use crate::core::component::path::{VNodeKey, VNodePath};
+use crate::core::component::root::VComponentRoot;
 use crate::core::view::view::{VView, VViewData};
 
 /// Wrapper for `VNode` so that it's more type-safe,
@@ -16,12 +18,6 @@ impl <ViewData: VViewData> VComponentBody<ViewData> {
     pub fn new(node: VNode<ViewData>) -> Self {
         Self(node)
     }
-}
-
-pub(in crate::core) trait VComponentRoot {
-    type ViewData: VViewData;
-
-    fn invalidate(self: Rc<Self>, view: &Box<VView<Self::ViewData>>);
 }
 
 pub trait VComponentConstruct {
@@ -36,11 +32,10 @@ struct VComponentConstructImpl<ViewData: VViewData, Props: 'static, F: Fn(&mut B
     view_data_type: PhantomData<ViewData>
 }
 
-pub type VComponentKey = Cow<'static, str>;
-
 pub struct VComponent<ViewData: VViewData> {
     /*readonly*/ id: NodeId,
-    /*readonly*/ key: VComponentKey,
+    /*readonly*/ key: VNodeKey,
+    /*readonly*/ path: VNodePath,
 
     construct: Box<dyn VComponentConstruct<ViewData = ViewData>>,
     node: Option<VComponentBody<ViewData>>,
@@ -52,7 +47,7 @@ pub struct VComponent<ViewData: VViewData> {
     pub(in crate::core) next_update_destructors: Vec<Box<dyn FnOnce(&mut Box<VComponent<ViewData>>) -> ()>>,
     pub(in crate::core) permanent_destructors: Vec<Box<dyn FnOnce(&mut Box<VComponent<ViewData>>) -> ()>>,
 
-    /*readonly*/ children: HashMap<VComponentKey, Box<VComponent<ViewData>>>,
+    /*readonly*/ children: HashMap<VNodeKey, Box<VComponent<ViewData>>>,
     /*readonly*/ renderer: Weak<dyn VComponentRoot<ViewData = ViewData>>,
 
     is_being_updated: bool,
@@ -63,7 +58,7 @@ pub struct VComponent<ViewData: VViewData> {
 }
 
 impl <ViewData: VViewData + 'static> VComponent<ViewData> {
-    pub fn new<Props: 'static, F: Fn(&mut Box<VComponent<ViewData>>, &Props) -> VComponentBody<ViewData> + 'static>(parent: VParent<'_, ViewData>, key: &VComponentKey, props: Props, construct: F) -> Box<Self> {
+    pub fn new<Props: 'static, F: Fn(&mut Box<VComponent<ViewData>>, &Props) -> VComponentBody<ViewData> + 'static>(parent: VParent<'_, ViewData>, key: VNodeKey, props: Props, construct: F) -> Box<Self> {
         enum Action<'a, ViewData_: VViewData, Props_, F_> {
             Reuse(Box<VComponent<ViewData_>>),
             Create(VParent<'a, ViewData_>, Props_, F_)
@@ -73,7 +68,7 @@ impl <ViewData: VViewData + 'static> VComponent<ViewData> {
             if let VParent(_VParent::Component(parent)) = parent {
                 // parent is being created = if there are any existing children, they're not being reused, they're a conflict
                 if parent.node.is_some() {
-                    let found_child = parent.children.remove(key);
+                    let found_child = parent.children.remove(&key);
                     if let Some(mut found_child) = found_child {
                         if found_child.is_fresh {
                             // If the component was already reused this update, it's a conflict. We add back and fall through to VComponent.create which will panic
@@ -106,10 +101,11 @@ impl <ViewData: VViewData + 'static> VComponent<ViewData> {
         }
     }
 
-    fn create<Props: 'static, F: Fn(&mut Box<VComponent<ViewData>>, &Props) -> VComponentBody<ViewData> + 'static>(parent: VParent<'_, ViewData>, key: &VComponentKey, props: Props, construct: F)  -> Box<Self>{
+    fn create<Props: 'static, F: Fn(&mut Box<VComponent<ViewData>>, &Props) -> VComponentBody<ViewData> + 'static>(parent: VParent<'_, ViewData>, key: VNodeKey, props: Props, construct: F) -> Box<Self>{
         Box::new(VComponent {
             id: VNode::<ViewData>::next_id(),
-            key: key.clone(),
+            key,
+            path: parent.path(),
 
             construct: Box::new(VComponentConstructImpl {
                 props,
@@ -228,7 +224,7 @@ impl <ViewData: VViewData> VComponent<ViewData> {
     }
 
     fn clear_fresh_and_remove_stale_children(self: &mut Box<Self>) {
-        let child_keys: Vec<VComponentKey> = self.children.keys().cloned().collect();
+        let child_keys: Vec<VNodeKey> = self.children.keys().cloned().collect();
         for child_key in child_keys {
             let child = self.children.get_mut(&child_key).unwrap();
             if child.is_fresh {
@@ -269,20 +265,44 @@ impl <ViewData: VViewData> VComponent<ViewData> {
         }
     }
 
+    pub fn down_path<'a>(self: &'a Box<Self>, path: &'a VNodePath) -> Option<VNodeRef<ViewData>> {
+        VNodeRef::Component(self).down_path(path)
+    }
+
+    pub fn down_path_mut<'a>(self: &'a mut Box<Self>, path: &'a VNodePath) -> Option<VNodeMut<ViewData>> {
+        VNodeMut::Component(self).down_path_mut(path)
+    }
+
     pub fn id(&self) -> NodeId {
         self.id
     }
 
-    pub fn key(&self) -> VComponentKey {
+    pub fn key(&self) -> VNodeKey {
         self.key.clone()
+    }
+
+    pub fn path(&self) -> VNodePath {
+        self.path.clone()
     }
 
     pub fn is_being_created(&self) -> bool {
         self.node.is_none()
     }
 
+    pub(super) fn node_ref(&self) -> Option<VNodeRef<'_, ViewData>> {
+        self.node.as_ref().map(|body| body.0.as_ref())
+    }
+
+    pub(super) fn node_mut(&mut self) -> Option<VNodeMut<'_, ViewData>> {
+        self.node.as_mut().map(|body| body.0.as_mut())
+    }
+
     pub fn view(&self) -> &Box<VView<ViewData>> {
         self.node.as_ref().expect("tried to get view of uninitialized component").0.view()
+    }
+
+    pub(in crate::core) fn renderer(self: &Box<Self>) -> Weak<dyn VComponentRoot<ViewData = ViewData>> {
+        self.renderer.clone()
     }
 }
 

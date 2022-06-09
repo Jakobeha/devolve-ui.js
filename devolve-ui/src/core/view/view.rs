@@ -1,16 +1,16 @@
-use std::borrow::Cow;
 use std::fmt;
 use std::fmt::{Display, Formatter};
 use crate::core::component::node::{NodeId, VNode};
+use crate::core::component::path::VNodeKey;
 use crate::core::view::layout::bounds::Bounds;
 use crate::core::view::layout::parent_bounds::SubLayout;
 
 #[derive(Debug)]
 pub struct VView<ViewData: VViewData> {
     id: NodeId,
+    key: VNodeKey,
     pub bounds: Bounds,
     pub is_visible: bool,
-    pub key: Option<Cow<'static, str>>,
     pub d: ViewData
 }
 
@@ -39,17 +39,21 @@ pub trait VViewData: Sized {
 }
 
 impl <ViewData: VViewData> VView<ViewData> {
-    pub fn new(bounds: Bounds, is_visible: bool, key: Option<Cow<'static, str>>, d: ViewData) -> VView<ViewData> {
+    pub fn new(bounds: Bounds, is_visible: bool, key: VNodeKey, d: ViewData) -> VView<ViewData> {
         VView {
             id: VNode::<ViewData>::next_id(),
+            key,
             bounds,
             is_visible,
-            key,
             d
         }
     }
 
     pub fn id(&self) -> NodeId {
         self.id
+    }
+
+    pub fn key(&self) -> VNodeKey {
+        self.key.clone()
     }
 }

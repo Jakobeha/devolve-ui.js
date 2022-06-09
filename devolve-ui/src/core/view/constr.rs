@@ -1,5 +1,5 @@
-use std::borrow::Cow;
 use crate::core::component::node::VNode;
+use crate::core::component::path::VNodeKey;
 use crate::core::view::layout::bounds::{Bounds, LayoutPosition, Measurement};
 use crate::core::view::view::{VView, VViewData};
 
@@ -15,7 +15,7 @@ pub struct VViewConstrArgs {
     pub anchor_x: f32,
     pub anchor_y: f32,
     pub is_visible: bool,
-    pub key: Option<Cow<'static, str>>,
+    pub key: VNodeKey,
 }
 
 impl Default for VViewConstrArgs {
@@ -30,7 +30,7 @@ impl Default for VViewConstrArgs {
             anchor_x: Bounds::default().anchor_x,
             anchor_y: Bounds::default().anchor_y,
             is_visible: true,
-            key: None
+            key: VNodeKey::default()
         }
     }
 }

@@ -1,10 +1,11 @@
-use crate::core::component::component::{VComponent, VComponentBody, VComponentKey};
+use crate::core::component::component::{VComponent, VComponentBody};
 use crate::core::component::node::VNode;
+use crate::core::component::path::VNodeKey;
 use crate::core::view::view::VViewData;
 
 pub fn make_component<
     ViewData: VViewData + 'static,
-    Str: Into<VComponentKey>,
+    Str: Into<VNodeKey>,
     Props: 'static,
     F: Fn(&mut Box<VComponent<ViewData>>, &Props) -> VComponentBody<ViewData> + 'static
 >(
@@ -13,7 +14,7 @@ pub fn make_component<
     props: Props,
     construct: F
 ) -> VNode<ViewData> {
-    VNode::Component(VComponent::new(c.into(), &key.into(), props, construct))
+    VNode::Component(VComponent::new(c.into(), key.into(), props, construct))
 }
 
 /// Usage: `make_component2!(pub app, app_fn, AppProps, { } + default)`
@@ -23,7 +24,7 @@ macro _make_component2(
     $fun:path,
     $Props:ident
 ) {
-    /// Usage: `$name!(c, "key", { settings: my_settings } [...] )`
+    /// Usage: `$name!(c, key, { settings: my_settings } vec![...] )`
     $vis macro $name(
         $d c:expr,
         $d key:expr,
