@@ -51,10 +51,8 @@ fn _use_tick_listener<ViewData: VViewData + 'static>(
         let listener = listener.clone();
         renderer.clone().listen_for_time(Box::new(move |delta_time| {
             let listener = listener.clone();
-            c_ref.with(move |c| {
-                if let Some(c) = c {
-                    listener(c, &delta_time);
-                }
+            c_ref.try_with(move |c| {
+                listener(c, &delta_time);
             });
         }))
     }, |_c, renderer, listener_id| {
@@ -96,10 +94,8 @@ fn _use_key_listener<ViewData: VViewData + 'static>(
         let listener = listener.clone();
         renderer.listen_for_keys(Box::new(move |event| {
             let listener = listener.clone();
-            c_ref.with(move |c| {
-                if let Some(c) = c {
-                    listener(c, &event);
-                }
+            c_ref.try_with(move |c| {
+                listener(c, &event);
             });
         }))
     }, |_c, renderer, listener_id| {
@@ -139,10 +135,8 @@ fn _use_mouse_listener<ViewData: VViewData + 'static>(
         let listener = listener.clone();
         renderer.listen_for_mouse(Box::new(move |event| {
             let listener = listener.clone();
-            c_ref.with(move |c| {
-                if let Some(c) = c {
-                    listener(c, &event);
-                }
+            c_ref.try_with(move |c| {
+                listener(c, &event);
             });
         }))
     }, |_c, renderer, listener_id| {
@@ -182,10 +176,8 @@ fn _use_resize_listener<ViewData: VViewData + 'static>(
         let listener = listener.clone();
         renderer.listen_for_resize(Box::new(move |event| {
             let listener = listener.clone();
-            c_ref.with(move |c| {
-                if let Some(c) = c {
-                    listener(c, &event);
-                }
+            c_ref.try_with(move |c| {
+                listener(c, &event);
             });
         }))
     }, |_c, renderer, listener_id| {

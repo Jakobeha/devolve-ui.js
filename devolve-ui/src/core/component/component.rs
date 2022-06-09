@@ -349,6 +349,12 @@ impl <ViewData: VViewData> VComponentRef<ViewData> {
             }
         }
     }
+
+    pub fn try_with<R>(&self, fun: impl FnOnce(&mut Box<VComponent<ViewData>>) -> R) -> Option<R> {
+        self.with(|component| {
+            component.map(fun)
+        })
+    }
 }
 
 impl <ViewData: VViewData + Debug> Debug for VComponent<ViewData> {
