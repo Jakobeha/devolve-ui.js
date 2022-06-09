@@ -61,7 +61,7 @@ impl DimsStore {
     }
 }
 
-#[derive(Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct ParentBounds {
     pub bounding_box: BoundingBox,
     pub sub_layout: SubLayout,

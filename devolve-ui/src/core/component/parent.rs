@@ -21,7 +21,7 @@ impl <'a, ViewData: VViewData> VParent<'a, ViewData> {
     pub(in crate::core) fn path(&self) -> VNodePath {
         match &self.0 {
             _VParent::Root(_root) => VNodePath::new(),
-            _VParent::Component(component) => component.path() + component.key()
+            _VParent::Component(component) => component.path()
         }
     }
 }

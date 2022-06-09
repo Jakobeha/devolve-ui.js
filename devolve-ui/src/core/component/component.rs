@@ -5,13 +5,16 @@ use std::any::Any;
 use std::borrow::Cow;
 use std::collections::HashMap;
 use std::marker::PhantomData;
+use std::mem::MaybeUninit;
 use std::rc::{Rc, Weak};
+use std::fmt::{Debug, Formatter};
 use crate::core::component::path::{VNodeKey, VNodePath};
 use crate::core::component::root::VComponentRoot;
 use crate::core::view::view::{VView, VViewData};
 
 /// Wrapper for `VNode` so that it's more type-safe,
 /// and you don't accidentally use VComponent functions when you meant to use a component itself
+#[derive(Debug)]
 pub struct VComponentBody<ViewData: VViewData>(VNode<ViewData>);
 
 impl <ViewData: VViewData> VComponentBody<ViewData> {
@@ -32,10 +35,16 @@ struct VComponentConstructImpl<ViewData: VViewData, Props: 'static, F: Fn(&mut B
     view_data_type: PhantomData<ViewData>
 }
 
+#[derive(Clone)]
+pub struct VComponentRef<ViewData: VViewData> {
+    renderer: Weak<dyn VComponentRoot<ViewData = ViewData>>,
+    path: VNodePath
+}
+
 pub struct VComponent<ViewData: VViewData> {
     /*readonly*/ id: NodeId,
     /*readonly*/ key: VNodeKey,
-    /*readonly*/ path: VNodePath,
+    /*readonly*/ parent_path: VNodePath,
 
     construct: Box<dyn VComponentConstruct<ViewData = ViewData>>,
     node: Option<VComponentBody<ViewData>>,
@@ -105,7 +114,7 @@ impl <ViewData: VViewData + 'static> VComponent<ViewData> {
         Box::new(VComponent {
             id: VNode::<ViewData>::next_id(),
             key,
-            path: parent.path(),
+            parent_path: parent.path(),
 
             construct: Box::new(VComponentConstructImpl {
                 props,
@@ -281,8 +290,19 @@ impl <ViewData: VViewData> VComponent<ViewData> {
         self.key.clone()
     }
 
-    pub fn path(&self) -> VNodePath {
-        self.path.clone()
+    pub(super) fn path(&self) -> VNodePath {
+        self.parent_path.clone() + self.key.clone()
+    }
+
+    /// Reference to this `VComponent` which can be cloned and lifetime extended.
+    /// When you want to get the `VComponent` back you can call `with`.
+    ///
+    /// **Warning:** Calling `with` on multiple components at the same time (e.g. nested) will cause a runtime exception.
+    pub fn vref(&self) -> VComponentRef<ViewData> {
+        VComponentRef {
+            renderer: self.renderer.clone(),
+            path: self.path()
+        }
     }
 
     pub fn is_being_created(&self) -> bool {
@@ -312,5 +332,57 @@ impl <ViewData: VViewData, Props: 'static, F: Fn(&mut Box<VComponent<ViewData>>,
     fn construct(&self, component: &mut Box<VComponent<Self::ViewData>>) -> VComponentBody<Self::ViewData> {
         let construct = &self.construct;
         construct(component, &self.props)
+    }
+}
+
+impl <ViewData: VViewData> VComponentRef<ViewData> {
+    pub fn with<R>(&self, fun: impl FnOnce(Option<&mut Box<VComponent<ViewData>>>) -> R) -> R {
+        match self.renderer.upgrade() {
+            None => fun(None),
+            Some(renderer) => {
+                // We can't return values in renderer's `with` because it's a trait object
+                let mut return_value: MaybeUninit<R> = MaybeUninit::uninit();
+                renderer.with_component(&self.path, |component| {
+                    return_value.write(fun(component));
+                });
+                unsafe { return_value.assume_init() }
+            }
+        }
+    }
+}
+
+impl <ViewData: VViewData + Debug> Debug for VComponent<ViewData> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("VComponent")
+            .field("id", &self.id)
+            .field("key", &self.key)
+            .field("parent_path", &self.parent_path)
+            .field("is_fresh", &self.is_fresh)
+            .field("is_being_created", &self.is_being_created())
+            .field("is_being_updated", &self.is_being_updated)
+            .field("has_pending_updates", &self.has_pending_updates)
+            .field("#effects", &self.effects.len())
+            .field("#update_destructors", &self.update_destructors.len())
+            .field("#permanent_destructors", &self.permanent_destructors.len())
+            .field("#next_update_destructors", &self.next_update_destructors.len())
+            .field("recursive_update_stack_trace", &self.recursive_update_stack_trace)
+            .field("node", &self.node)
+            .finish()
+    }
+}
+
+impl <ViewData: VViewData> Debug for VComponentRef<ViewData> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        f.debug_tuple("VComponentRef").field(&self.path).finish()
+    }
+}
+
+impl <ViewData: VViewData> PartialEq for VComponentRef<ViewData> {
+    fn eq(&self, other: &Self) -> bool {
+        self.path == other.path
+    }
+
+    fn ne(&self, other: &Self) -> bool {
+        self.path != other.path
     }
 }

@@ -1,6 +1,7 @@
 use std::borrow::Cow;
 use std::cell::{Cell, RefCell, RefMut};
 use std::collections::HashMap;
+use std::fmt::{Debug, Formatter};
 use std::rc::{Rc, Weak};
 use std::sync::{Arc, Weak as WeakArc};
 #[cfg(feature = "time")]
@@ -26,6 +27,7 @@ use crate::core::renderer::listeners::{RendererListener, RendererListenerId, Ren
 use crate::core::renderer::render::{VRender, VRenderLayer};
 use crate::core::renderer::running::{RcRunning, Running};
 
+#[derive(Debug)]
 struct CachedRender<Layer> {
     render: VRender<Layer>,
     parent_bounds: ParentBounds,
@@ -674,3 +676,16 @@ impl <Engine: RenderEngine> Drop for Renderer<Engine> {
     }
 }
 // endregion
+
+// region Debug impl
+impl <Engine: RenderEngine + Debug> Debug for Renderer<Engine> where Engine::ViewData: Debug, Engine::RenderLayer: Debug {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Renderer")
+            .field("root_component", &self.root_component.borrow())
+            .field("cached_renders", &self.cached_renders.borrow())
+            .field("is_visible", &self.is_visible.get())
+            .field("needs_rerender", &self.needs_rerender.get())
+            .field("engine", &self.engine.borrow())
+            .finish()
+    }
+}

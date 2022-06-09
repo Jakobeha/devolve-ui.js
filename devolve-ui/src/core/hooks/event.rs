@@ -47,11 +47,11 @@ fn _use_tick_listener<ViewData: VViewData + 'static>(
 ) {
     let listener = Rc::new(listener);
     _use_event_listener(c, rerun, move |c, renderer| {
-        let c_path = c.path();
+        let c_ref = c.vref();
         let listener = listener.clone();
         renderer.clone().listen_for_time(Box::new(move |delta_time| {
             let listener = listener.clone();
-            renderer.clone().with_component(&c_path, move |c| {
+            c_ref.with(move |c| {
                 if let Some(c) = c {
                     listener(c, &delta_time);
                 }
@@ -92,14 +92,11 @@ fn _use_key_listener<ViewData: VViewData + 'static>(
 ) {
     let listener = Rc::new(listener);
     _use_event_listener(c, rerun, move |c, renderer| {
-        let c_path = c.path();
-        let renderer2 = renderer.clone();
+        let c_ref = c.vref();
         let listener = listener.clone();
         renderer.listen_for_keys(Box::new(move |event| {
             let listener = listener.clone();
-            // We have to clone because the type is Rc<Self>, not &Rc<Self>, since the latter isn't object-safe.
-            // Why isn't the latter object-safe? :(
-            renderer2.clone().with_component(&c_path, move |c| {
+            c_ref.with(move |c| {
                 if let Some(c) = c {
                     listener(c, &event);
                 }
@@ -138,14 +135,11 @@ fn _use_mouse_listener<ViewData: VViewData + 'static>(
 ) {
     let listener = Rc::new(listener);
     _use_event_listener(c, rerun,move |c, renderer| {
-        let c_path = c.path();
-        let renderer2 = renderer.clone();
+        let c_ref = c.vref();
         let listener = listener.clone();
         renderer.listen_for_mouse(Box::new(move |event| {
             let listener = listener.clone();
-            // We have to clone because the type is Rc<Self>, not &Rc<Self>, since the latter isn't object-safe.
-            // Why isn't the latter object-safe? :(
-            renderer2.clone().with_component(&c_path, move |c| {
+            c_ref.with(move |c| {
                 if let Some(c) = c {
                     listener(c, &event);
                 }
@@ -184,14 +178,11 @@ fn _use_resize_listener<ViewData: VViewData + 'static>(
 ) {
     let listener = Rc::new(listener);
     _use_event_listener(c, rerun, move |c, renderer| {
-        let c_path = c.path();
-        let renderer2 = renderer.clone();
+        let c_ref = c.vref();
         let listener = listener.clone();
         renderer.listen_for_resize(Box::new(move |event| {
             let listener = listener.clone();
-            // We have to clone because the type is Rc<Self>, not &Rc<Self>, since the latter isn't object-safe.
-            // Why isn't the latter object-safe? :(
-            renderer2.clone().with_component(&c_path, move |c| {
+            c_ref.with(move |c| {
                 if let Some(c) = c {
                     listener(c, &event);
                 }
