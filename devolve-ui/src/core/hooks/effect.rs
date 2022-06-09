@@ -1,5 +1,6 @@
-use std::mem;
+use std::cell::RefCell;
 use std::convert::Infallible;
+use std::mem;
 use std::slice::Iter;
 use crate::core::component::component::VComponent;
 use crate::core::view::view::VViewData;
@@ -80,8 +81,22 @@ pub type NoDependencies = Infallible;
 /// Runs a closure according to `rerun`. The closure should contain an effect,
 /// while the component's body should otherwise be a "pure" function based on its
 /// props and state hooks like `use_state`.
-pub fn use_effect<Destructor: FnOnce(&mut Box<VComponent<ViewData>>) -> () + 'static, ViewData: VViewData + 'static>(c: &mut Box<VComponent<ViewData>>, rerun: UseEffectRerun<NoDependencies>, effect: impl Fn(&mut Box<VComponent<ViewData>>) -> Destructor + 'static) {
+pub fn use_effect<Destructor: FnOnce(&mut Box<VComponent<ViewData>>) + 'static, ViewData: VViewData + 'static>(c: &mut Box<VComponent<ViewData>>, rerun: UseEffectRerun<NoDependencies>, effect: impl Fn(&mut Box<VComponent<ViewData>>) -> Destructor + 'static) {
     use_effect_with_deps(c, rerun, effect);
+}
+
+/// Runs a closure once on create. The closure should contain an effect,
+/// while the component's body should otherwise be a "pure" function based on its
+/// props and state hooks like `use_state`.
+///
+/// The behavior is exactly like `use_effect` and `use_effect_with_deps` when given `UseEffectRerun::OnCreate`.
+/// However, this function allows you to pass an `FnOnce` to `effect` since we statically know it will only be called once.
+pub fn use_effect_on_create<Destructor: FnOnce(&mut Box<VComponent<ViewData>>) + 'static, ViewData: VViewData + 'static>(c: &mut Box<VComponent<ViewData>>, effect: impl FnOnce(&mut Box<VComponent<ViewData>>) -> Destructor + 'static) {
+    let effect = RefCell::new(Some(effect));
+    use_effect(c, UseEffectRerun::OnCreate, move |c| {
+        let effect = effect.borrow_mut().take().expect("unexpected: use_effect_on_create's effect requested multiple times");
+        effect(c)
+    })
 }
 
 /// Runs a closure according to `rerun`. The closure should contain an effect,
@@ -90,7 +105,7 @@ pub fn use_effect<Destructor: FnOnce(&mut Box<VComponent<ViewData>>) -> () + 'st
 ///
 /// This function is actually the exact same as `use_effect`, but exposes the dependencies as a type parameter.
 /// Without the 2 versions, you would always have to specify dependencies on `use_effect` even if the enum variant didn't have them.
-pub fn use_effect_with_deps<Dependencies: CollectionOfPartialEqs + 'static, Destructor: FnOnce(&mut Box<VComponent<ViewData>>) -> () + 'static, ViewData: VViewData + 'static>(c: &mut Box<VComponent<ViewData>>, rerun: UseEffectRerun<Dependencies>, effect: impl Fn(&mut Box<VComponent<ViewData>>) -> Destructor + 'static) {
+pub fn use_effect_with_deps<Dependencies: CollectionOfPartialEqs + 'static, Destructor: FnOnce(&mut Box<VComponent<ViewData>>) + 'static, ViewData: VViewData + 'static>(c: &mut Box<VComponent<ViewData>>, rerun: UseEffectRerun<Dependencies>, effect: impl Fn(&mut Box<VComponent<ViewData>>) -> Destructor + 'static) {
     match rerun {
         UseEffectRerun::OnCreate => {
             if c.is_being_created() {
