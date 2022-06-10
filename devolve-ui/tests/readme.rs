@@ -1,3 +1,5 @@
+//! Tests a more-complex example which is (will be) used in the README.
+
 #![feature(decl_macro)]
 #![feature(macro_metavar_expr)]
 #![cfg(feature = "tui")]
@@ -8,7 +10,8 @@ use std::io;
 use std::io::Write;
 use std::os::unix::ffi::OsStrExt;
 use std::rc::Rc;
-use devolve_ui::core::component::constr::make_component;
+#[allow(unused_imports)] // Needed for IntelliJ macro expansion
+use devolve_ui::core::component::constr::{_make_component, _make_component2, make_component};
 use devolve_ui::core::renderer::renderer::{Renderer, RendererOverrides};
 use devolve_ui::core::hooks::state::use_state;
 use devolve_ui::core::view::color::Color;

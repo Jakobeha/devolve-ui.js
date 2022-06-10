@@ -1,11 +1,14 @@
+//! Utilities to create terse constructors for your custom components,
+//! since creating `VComponent`s manually is very verbose.
+
 use crate::core::component::component::{VComponent, VComponentBody};
 use crate::core::component::node::VNode;
-use crate::core::component::path::VNodeKey;
+use crate::core::component::path::VComponentKey;
 use crate::core::view::view::VViewData;
 
 pub fn make_component<
     ViewData: VViewData + 'static,
-    Str: Into<VNodeKey>,
+    Str: Into<VComponentKey>,
     Props: 'static,
     F: Fn(&mut Box<VComponent<ViewData>>, &Props) -> VComponentBody<ViewData> + 'static
 >(
@@ -17,8 +20,8 @@ pub fn make_component<
     VNode::Component(VComponent::new(c.into(), key.into(), props, construct))
 }
 
-/// Usage: `make_component2!(pub app, app_fn, AppProps, { } + default)`
-macro _make_component2(
+/// See `make_component2`, this one is required for macro expansion.
+pub macro _make_component2(
     ($d:tt) @
     $vis:vis $name:ident,
     $fun:path,
@@ -44,7 +47,12 @@ macro _make_component2(
     }
 }
 
-/// Usage: `make_component2!(pub app, app_fn, AppProps, { } + default)`
+/// Usage: `make_component2!(pub app, app_fn, AppProps)`
+///
+/// Like `make_component` except you must define the props and function yourself.
+/// This one defines the macro.
+///
+/// Pro tip: To get IntelliJ to understand this macro you must also import `_make_component2`
 pub macro make_component2(
     $vis:vis $name:ident,
     $fun:path,
@@ -58,23 +66,54 @@ pub macro make_component2(
     );
 }
 
+/// Create a custom component. Creates a function and macro which you can call with the component's name.
+///
+/// Pro tip: To get IntelliJ to understand this macro you must also import `_make_component` and `_make_component2`
+///
 /// Usage:
 ///
 /// ```
-/// use devolve_ui::core::component::constr::make_component;
+/// use devolve_ui::core::component::constr::{_make_component, _make_component2, make_component};
+/// use devolve_ui::view_data::tui::constr::{vbox, text};
+/// use devolve_ui::view_data::tui::tui::TuiViewData;
 ///
-/// make_component!(pub app, { ...app props }, { ...app prop defaults }, |c, ...prop names| {
-///     ...app body
-/// })
+/// make_component!(pub basic, BasicProps {
+///     text: String
+/// }, {
+///     text: Default::default()
+/// }, <TuiViewData>|_c, text| {
+///     vbox!({}, {}, vec![
+///         text!({}, {}, "Hello world!")
+///     ])
+/// });
+///
+/// basic!(c, "basic", { text: "Hello world".into() })
 /// ```
 pub macro make_component(
     $vis:vis $name:ident,
-    $Props:ident { $( $ty_field:ident : $ty_field_type:ty ),* },
+    $Props:ident { $( $ty_field:ident : $ty_field_ty:ty ),* },
+    { $( $default_field:ident : $default_field_default:expr ),* },
+    <$ViewData:ty>|$c:ident $( , $field:ident)*| $body:expr
+) {
+    _make_component!(
+        ($) @
+        $vis $name,
+        $Props { $( $ty_field : $ty_field_ty ),* },
+        { $( $default_field : $default_field_default ),* },
+        <$ViewData>|$c $( , $field)*| $body
+    );
+}
+
+/// See `make_component`, this one is required for macro expansion.
+pub macro _make_component(
+    ($d:tt) @
+    $vis:vis $name:ident,
+    $Props:ident { $( $ty_field:ident : $ty_field_ty:ty ),* },
     { $( $default_field:ident : $default_field_default:expr ),* },
     <$ViewData:ty>|$c:ident $( , $field:ident)*| $body:expr
 ) {
     $vis struct $Props {
-        $( pub $ty_field : $ty_field_type ),*
+        $( pub $ty_field : $ty_field_ty ),*
     }
 
     impl Default for $Props {
@@ -91,7 +130,7 @@ pub macro make_component(
     }
 
     _make_component2!(
-        ($) @
+        ($d) @
         $vis $name,
         $name,
         $Props

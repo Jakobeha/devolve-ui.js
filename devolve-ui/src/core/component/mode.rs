@@ -1,3 +1,6 @@
+//! Settings you can set for all components, even among different registers.
+//! These are really general config: currently debug mode, and the maximum recursive updates before we detect a loop and panic.
+
 use std::cell::RefCell;
 
 pub struct VMode {

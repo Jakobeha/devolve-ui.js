@@ -4,9 +4,9 @@ use std::sync::atomic::AtomicBool;
 /// Usually this is set by other threads to be checked by a `!Send + !Sync` target,
 /// although it can be set from the target's thread as well.
 #[derive(Debug)]
-pub struct FlagForOtherThreads(AtomicBool);
+pub struct NotifyFlag(AtomicBool);
 
-impl FlagForOtherThreads {
+impl NotifyFlag {
     pub fn new() -> Self {
         Self(AtomicBool::new(false))
     }

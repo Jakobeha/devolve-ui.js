@@ -20,7 +20,7 @@
 
 use crate::core::component::parent::{_VParent, VParent};
 use crate::core::component::mode::VMode;
-use crate::core::component::node::{NodeId, VNode, VNodeMut, VNodeRef};
+use crate::core::component::node::{NodeId, VNode};
 use std::any::Any;
 use std::borrow::Cow;
 use std::collections::HashMap;
@@ -29,9 +29,9 @@ use std::mem::MaybeUninit;
 use std::rc::{Rc, Weak};
 use std::sync::{Weak as WeakArc};
 use std::fmt::{Debug, Formatter};
-use crate::core::component::path::{VNodeKey, VNodePath};
+use crate::core::component::path::{VComponentKey, VComponentPath};
 use crate::core::component::root::VComponentRoot;
-use crate::core::misc::notify_bool::FlagForOtherThreads;
+use crate::core::misc::notify_flag::NotifyFlag;
 use crate::core::view::view::{VView, VViewData};
 
 /// Wrapper for `VNode` so that it's more type-safe,
@@ -60,13 +60,13 @@ struct VComponentConstructImpl<ViewData: VViewData, Props: 'static, F: Fn(&mut B
 #[derive(Clone)]
 pub struct VComponentRef<ViewData: VViewData> {
     renderer: Weak<dyn VComponentRoot<ViewData = ViewData>>,
-    path: VNodePath
+    path: VComponentPath
 }
 
 pub struct VComponent<ViewData: VViewData> {
     /*readonly*/ id: NodeId,
-    /*readonly*/ key: VNodeKey,
-    /*readonly*/ parent_path: VNodePath,
+    /*readonly*/ key: VComponentKey,
+    /*readonly*/ parent_path: VComponentPath,
 
     construct: Box<dyn VComponentConstruct<ViewData = ViewData>>,
     node: Option<VComponentBody<ViewData>>,
@@ -78,7 +78,7 @@ pub struct VComponent<ViewData: VViewData> {
     pub(in crate::core) next_update_destructors: Vec<Box<dyn FnOnce(&mut Box<VComponent<ViewData>>) -> ()>>,
     pub(in crate::core) permanent_destructors: Vec<Box<dyn FnOnce(&mut Box<VComponent<ViewData>>) -> ()>>,
 
-    /*readonly*/ children: HashMap<VNodeKey, Box<VComponent<ViewData>>>,
+    /*readonly*/ children: HashMap<VComponentKey, Box<VComponent<ViewData>>>,
     /*readonly*/ renderer: Weak<dyn VComponentRoot<ViewData = ViewData>>,
 
     is_being_updated: bool,
@@ -89,7 +89,7 @@ pub struct VComponent<ViewData: VViewData> {
 }
 
 impl <ViewData: VViewData + 'static> VComponent<ViewData> {
-    pub fn new<Props: 'static, F: Fn(&mut Box<VComponent<ViewData>>, &Props) -> VComponentBody<ViewData> + 'static>(parent: VParent<'_, ViewData>, key: VNodeKey, props: Props, construct: F) -> Box<Self> {
+    pub fn new<Props: 'static, F: Fn(&mut Box<VComponent<ViewData>>, &Props) -> VComponentBody<ViewData> + 'static>(parent: VParent<'_, ViewData>, key: VComponentKey, props: Props, construct: F) -> Box<Self> {
         enum Action<'a, ViewData_: VViewData, Props_, F_> {
             Reuse(Box<VComponent<ViewData_>>),
             Create(VParent<'a, ViewData_>, Props_, F_)
@@ -132,7 +132,7 @@ impl <ViewData: VViewData + 'static> VComponent<ViewData> {
         }
     }
 
-    fn create<Props: 'static, F: Fn(&mut Box<VComponent<ViewData>>, &Props) -> VComponentBody<ViewData> + 'static>(parent: VParent<'_, ViewData>, key: VNodeKey, props: Props, construct: F) -> Box<Self>{
+    fn create<Props: 'static, F: Fn(&mut Box<VComponent<ViewData>>, &Props) -> VComponentBody<ViewData> + 'static>(parent: VParent<'_, ViewData>, key: VComponentKey, props: Props, construct: F) -> Box<Self>{
         Box::new(VComponent {
             id: VNode::<ViewData>::next_id(),
             key,
@@ -255,7 +255,7 @@ impl <ViewData: VViewData> VComponent<ViewData> {
     }
 
     fn clear_fresh_and_remove_stale_children(self: &mut Box<Self>) {
-        let child_keys: Vec<VNodeKey> = self.children.keys().cloned().collect();
+        let child_keys: Vec<VComponentKey> = self.children.keys().cloned().collect();
         for child_key in child_keys {
             let child = self.children.get_mut(&child_key).unwrap();
             if child.is_fresh {
@@ -296,37 +296,45 @@ impl <ViewData: VViewData> VComponent<ViewData> {
         }
     }
 
-    pub(in crate::core) fn invalidate_flag(self: &Box<Self>) -> WeakArc<FlagForOtherThreads> {
+    pub(in crate::core) fn invalidate_flag(self: &Box<Self>) -> WeakArc<NotifyFlag> {
         match self.renderer.upgrade() {
             None => WeakArc::new(),
             Some(renderer) => renderer.invalidate_flag_for(self.view())
         }
     }
 
-    pub fn down_path<'a>(self: &'a Box<Self>, path: &'a VNodePath) -> Option<VNodeRef<ViewData>> {
-        VNodeRef::Component(self).down_path(path)
+    pub fn down_path<'a>(self: &'a Box<Self>, path: &'a VComponentPath) -> Option<&Box<VComponent<ViewData>>> {
+        let mut current = self;
+        for segment in path.iter() {
+            current = current.children.get(segment)?;
+        }
+        Some(current)
     }
 
-    pub fn down_path_mut<'a>(self: &'a mut Box<Self>, path: &'a VNodePath) -> Option<VNodeMut<ViewData>> {
-        VNodeMut::Component(self).down_path_mut(path)
+    pub fn down_path_mut<'a>(self: &'a mut Box<Self>, path: &'a VComponentPath) -> Option<&mut Box<VComponent<ViewData>>> {
+        let mut current = self;
+        for segment in path.iter() {
+            current = current.children.get_mut(segment)?;
+        }
+        Some(current)
     }
 
     pub fn id(&self) -> NodeId {
         self.id
     }
 
-    pub fn key(&self) -> VNodeKey {
+    pub fn key(&self) -> VComponentKey {
         self.key.clone()
     }
 
-    pub(super) fn path(&self) -> VNodePath {
+    pub(super) fn path(&self) -> VComponentPath {
         self.parent_path.clone() + self.key.clone()
     }
 
     /// Reference to this `VComponent` which can be cloned and lifetime extended.
     /// When you want to get the `VComponent` back you can call `with`.
     ///
-    /// **Warning:** Calling `with` on multiple components at the same time (e.g. nested) will cause a runtime exception.
+    /// **Warning:** Calling `with` on multiple components at the same time (e.g. nested) will cause a runtime error.
     pub fn vref(&self) -> VComponentRef<ViewData> {
         VComponentRef {
             renderer: self.renderer.clone(),
@@ -336,14 +344,6 @@ impl <ViewData: VViewData> VComponent<ViewData> {
 
     pub fn is_being_created(&self) -> bool {
         self.node.is_none()
-    }
-
-    pub(super) fn node_ref(&self) -> Option<VNodeRef<'_, ViewData>> {
-        self.node.as_ref().map(|body| body.0.as_ref())
-    }
-
-    pub(super) fn node_mut(&mut self) -> Option<VNodeMut<'_, ViewData>> {
-        self.node.as_mut().map(|body| body.0.as_mut())
     }
 
     pub fn view(&self) -> &Box<VView<ViewData>> {

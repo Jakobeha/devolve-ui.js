@@ -1,12 +1,15 @@
+//! Component root which manages the components. In practice this is always a `Renderer`.
+//! This isn't publicly exposed because it's only used internally.
+
 use std::rc::Rc;
 use std::sync::{Weak as WeakArc};
 #[cfg(feature = "time")]
 use std::time::Duration;
 use crate::core::component::component::VComponent;
-use crate::core::component::path::VNodePath;
+use crate::core::component::path::VComponentPath;
 #[cfg(feature = "input")]
 use crate::core::misc::input::{KeyEvent, MouseEvent, ResizeEvent};
-use crate::core::misc::notify_bool::FlagForOtherThreads;
+use crate::core::misc::notify_flag::NotifyFlag;
 use crate::core::renderer::listeners::{RendererListener, RendererListenerId};
 use crate::core::view::view::{VView, VViewData};
 
@@ -14,9 +17,9 @@ pub(in crate::core) trait VComponentRoot {
     type ViewData: VViewData;
 
     fn invalidate(self: Rc<Self>, view: &Box<VView<Self::ViewData>>);
-    fn invalidate_flag_for(self: Rc<Self>, view: &Box<VView<Self::ViewData>>) -> WeakArc<FlagForOtherThreads>;
+    fn invalidate_flag_for(self: Rc<Self>, view: &Box<VView<Self::ViewData>>) -> WeakArc<NotifyFlag>;
 
-    fn _with_component(self: Rc<Self>, path: &VNodePath) -> Option<*mut Box<VComponent<Self::ViewData>>>;
+    fn _with_component(self: Rc<Self>, path: &VComponentPath) -> Option<*mut Box<VComponent<Self::ViewData>>>;
 
     #[cfg(feature = "time")]
     fn listen_for_time(self: Rc<Self>, listener: RendererListener<Duration>) -> RendererListenerId<Duration>;
@@ -37,7 +40,7 @@ pub(in crate::core) trait VComponentRoot {
 }
 
 impl <ViewData: VViewData> dyn VComponentRoot<ViewData = ViewData> {
-    pub fn with_component(self: Rc<Self>, path: &VNodePath, fun: impl FnOnce(Option<&mut Box<VComponent<ViewData>>>)) {
+    pub fn with_component(self: Rc<Self>, path: &VComponentPath, fun: impl FnOnce(Option<&mut Box<VComponent<ViewData>>>)) {
         let component = self._with_component(path);
         fun(component.map(|component| unsafe { component.as_mut().unwrap() }))
     }

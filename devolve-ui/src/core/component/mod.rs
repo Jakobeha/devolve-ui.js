@@ -4,4 +4,4 @@ pub mod mode;
 pub mod node;
 pub mod parent;
 pub mod path;
-pub mod root;
+pub(in crate::core) mod root;

@@ -1,7 +1,7 @@
 use std::borrow::Cow;
 use std::fmt;
 use std::fmt::{Display, Formatter};
-use crate::core::component::path::VNodeKey;
+use crate::core::component::path::VComponentKey;
 use crate::core::view::view::VViewType;
 
 #[derive(Debug, Clone)]
@@ -34,7 +34,7 @@ impl LayoutError {
         }
     }
 
-    pub fn add_component(&self, parent_key: &VNodeKey, parent_id: usize) -> LayoutError {
+    pub fn add_component(&self, parent_key: &VComponentKey, parent_id: usize) -> LayoutError {
         LayoutError {
             message: self.message.clone(),
             path: format!("{}#{}.{}", parent_key.to_string(), parent_id, self.path),

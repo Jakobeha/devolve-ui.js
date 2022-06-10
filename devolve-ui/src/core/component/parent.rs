@@ -1,6 +1,6 @@
 use std::rc::Rc;
 use crate::core::component::component::VComponent;
-use crate::core::component::path::VNodePath;
+use crate::core::component::path::VComponentPath;
 use crate::core::component::root::VComponentRoot;
 use crate::core::view::view::VViewData;
 
@@ -18,9 +18,9 @@ impl <'a, ViewData: VViewData> From<&'a mut Box<VComponent<ViewData>>> for VPare
 }
 
 impl <'a, ViewData: VViewData> VParent<'a, ViewData> {
-    pub(in crate::core) fn path(&self) -> VNodePath {
+    pub(in crate::core) fn path(&self) -> VComponentPath {
         match &self.0 {
-            _VParent::Root(_root) => VNodePath::new(),
+            _VParent::Root(_root) => VComponentPath::new(),
             _VParent::Component(component) => component.path()
         }
     }

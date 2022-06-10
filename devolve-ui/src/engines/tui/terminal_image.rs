@@ -1,3 +1,29 @@
+//! Draw an image to the terminal.
+//! The image can be given custom dimensions, auto (renders at its actual size as best as possible),
+//! or a combination of the 2, and you can also choose if / how to preserve the aspect ratio.
+//!
+//! The image will be rendered using an ANSI escape code if the environment is set for one of the
+//! hardcoded terminals. Otherwise it will render as colored blocks using the fallback rendererer.
+//!
+//! Supported terminals and the ANSI escape codes used:
+//! - iterm: [proprietary](https://iterm2.com/documentation-images.html)
+//! - kitty: [proprietary](https://sw.kovidgoyal.net/kitty/graphics-protocol/#transferring-pixel-data)
+//! - xterm: [sixel](https://invisible-island.net/xterm/ctlseqs/ctlseqs.html#h3-The-DECRQSSEL-Request-for-Selective-Erase-of-Line) (Ctrl-f "Sixel Graphics")
+//! - contour: sixel
+//! - mlterm: sixel
+//! - mintty: sixel
+//! - msys2: sixel
+//! - dxterm: sixel
+//! - kermit: sixel
+//! - zste: sixel
+//! - wrq: sixel
+//! - rlogin: sixel
+//! - yaft: sixel
+//! - recterm: sixel
+//! - seq2gif: sixel
+//! - cancer: sixel
+//! - all others: fallback
+
 use std::{env, ptr};
 use std::fmt;
 use std::fmt::{Display, Formatter};
@@ -22,7 +48,8 @@ enum ImageSupport {
     Sixel
 }
 
-const SIXEL_TERMINALS: [&'static str; 13] = [
+const SIXEL_TERMINALS: [&'static str; 14] = [
+    "xterm",
     "contour",
     "mlterm",
     "mintty",

@@ -1,3 +1,9 @@
+//! The `Renderer` manages component data, events / listeners, and rendering.
+//! It delegates the rendering to its `RenderEngine` (e.g. `TuiRenderEngine` to render to TUIs).
+//!
+//! If the `time` feature is enabled, you can call `resume` or one of its variants to make the renderer
+//! send time events. Otherwise it will only re-render when one of its components updates. TODO fix
+
 use std::borrow::Cow;
 use std::cell::{Cell, RefCell, RefMut};
 use std::collections::HashMap;
@@ -11,11 +17,11 @@ use tokio::runtime;
 use crate::core::component::component::{VComponent, VComponentBody};
 use crate::core::component::node::{NodeId, VNode};
 use crate::core::component::parent::{_VParent, VParent};
-use crate::core::component::path::VNodePath;
+use crate::core::component::path::VComponentPath;
 use crate::core::component::root::VComponentRoot;
 #[cfg(feature = "input")]
 use crate::core::misc::input::{KeyEvent, MouseEvent, ResizeEvent};
-use crate::core::misc::notify_bool::FlagForOtherThreads;
+use crate::core::misc::notify_flag::NotifyFlag;
 use crate::core::misc::option_f32::OptionF32;
 use crate::core::view::layout::geom::{Rectangle, Size};
 use crate::core::view::layout::parent_bounds::{DimsStore, ParentBounds};
@@ -54,7 +60,7 @@ pub struct Renderer<Engine: RenderEngine + 'static> {
     input_listeners: Cell<InputListeners>,
 
     cached_renders: RefCell<HashMap<NodeId, CachedRender<Engine::RenderLayer>>>,
-    needs_rerender: Arc<FlagForOtherThreads>,
+    needs_rerender: Arc<NotifyFlag>,
 
     root_component: RefCell<Option<Box<VComponent<Engine::ViewData>>>>,
 }
@@ -156,7 +162,7 @@ impl <Engine: RenderEngine> Renderer<Engine> where Engine::RenderLayer: VRenderL
             listeners: RefCell::new(RendererListeners::new()),
             input_listeners: Cell::new(InputListeners::empty()),
             cached_renders: RefCell::new(HashMap::new()),
-            needs_rerender: Arc::new(FlagForOtherThreads::new()),
+            needs_rerender: Arc::new(NotifyFlag::new()),
             root_component: RefCell::new(None)
         });
         let needs_rerender_async = Arc::downgrade(renderer.needs_rerender());
@@ -169,7 +175,7 @@ impl <Engine: RenderEngine> Renderer<Engine> where Engine::RenderLayer: VRenderL
     }
 
     #[allow(clippy::needless_lifetimes)] // Not needless
-    pub fn needs_rerender<'a>(self: &'a Rc<Self>) -> &'a Arc<FlagForOtherThreads> {
+    pub fn needs_rerender<'a>(self: &'a Rc<Self>) -> &'a Arc<NotifyFlag> {
         &self.needs_rerender
     }
 
@@ -551,7 +557,7 @@ impl <Engine: RenderEngine> Renderer<Engine> where Engine::RenderLayer: VRenderL
 
 #[cfg(feature = "time-blocking")]
 impl <Engine: RenderEngine> Renderer<Engine> where Engine::RenderLayer: VRenderLayer {
-    pub fn resume_blocking_with_escape(self: &Rc<Self>, set_escape: impl FnOnce(WeakArc<FlagForOtherThreads>)) {
+    pub fn resume_blocking_with_escape(self: &Rc<Self>, set_escape: impl FnOnce(WeakArc<NotifyFlag>)) {
         let async_runtime = runtime::Builder::new_current_thread()
             .enable_time()
             .build()
@@ -618,15 +624,14 @@ impl <Engine: RenderEngine> VComponentRoot for Renderer<Engine> {
         self.needs_rerender.set();
     }
 
-    fn invalidate_flag_for(self: Rc<Self>, _view: &Box<VView<Self::ViewData>>) -> WeakArc<FlagForOtherThreads> {
+    fn invalidate_flag_for(self: Rc<Self>, _view: &Box<VView<Self::ViewData>>) -> WeakArc<NotifyFlag> {
         // TODO: Remove from cached renders somehow
         Arc::downgrade(&self.needs_rerender)
     }
 
-    fn _with_component(self: Rc<Self>, path: &VNodePath) -> Option<*mut Box<VComponent<<Engine as RenderEngine>::ViewData>>> {
+    fn _with_component(self: Rc<Self>, path: &VComponentPath) -> Option<*mut Box<VComponent<<Engine as RenderEngine>::ViewData>>> {
         self.root_component.borrow_mut().as_mut()
             .and_then(|root_component| root_component.down_path_mut(path))
-            .and_then(|node_mut| node_mut.into_component())
             .map(|component| component as *mut _)
     }
 

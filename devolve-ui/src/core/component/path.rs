@@ -10,15 +10,7 @@ use std::ops::AddAssign;
 /// Identifies a `VComponent` among its siblings.
 /// Needed because the siblings may change and we need to remember the component and check if it was deleted.
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Hash)]
-pub struct VNodeKey(&'static str, usize, Option<String>);
-
-/// A path segment in `VNodePath` (see `VNodePath`)
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Hash)]
-pub enum VNodePathSegment {
-    ComponentChild,
-    ViewChildWithKey(VNodeKey),
-    ViewChildWithIndex(usize),
-}
+pub struct VComponentKey(&'static str, usize, Option<String>);
 
 /// The location of a `VNode` in the node tree.
 /// Primarily used to let components listen to events emitted by the root:
@@ -26,35 +18,35 @@ pub enum VNodePathSegment {
 /// However, we do have a reference to the renderer at any time, which allows us to get the mutable component reference
 /// from its path.
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Hash)]
-pub struct VNodePath(Vec<VNodePathSegment>);
+pub struct VComponentPath(Vec<VComponentKey>);
 
 // region boilerplate
-impl VNodePath {
+impl VComponentPath {
     pub fn new() -> Self {
         Self(Vec::new())
     }
 
-    pub fn iter(&self) -> impl Iterator<Item = &VNodePathSegment> {
+    pub fn iter(&self) -> impl Iterator<Item = &VComponentKey> {
         self.0.iter()
     }
 
-    pub fn iter_mut(&mut self) -> impl Iterator<Item = &mut VNodePathSegment> {
+    pub fn iter_mut(&mut self) -> impl Iterator<Item = &mut VComponentKey> {
         self.0.iter_mut()
     }
 }
 
-impl IntoIterator for VNodePath {
-    type Item = VNodePathSegment;
-    type IntoIter = std::vec::IntoIter<VNodePathSegment>;
+impl IntoIterator for VComponentPath {
+    type Item = VComponentKey;
+    type IntoIter = std::vec::IntoIter<VComponentKey>;
 
-    fn into_iter(self) -> std::vec::IntoIter<VNodePathSegment> {
+    fn into_iter(self) -> std::vec::IntoIter<VComponentKey> {
         self.0.into_iter()
     }
 }
 
-impl Display for VNodeKey {
+impl Display for VComponentKey {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        let VNodeKey(static_, index, arbitrary) = self;
+        let VComponentKey(static_, index, arbitrary) = self;
         // if !static_.is_empty()
         write!(f, "{}", static_)?;
         if *index > 0 {
@@ -67,17 +59,7 @@ impl Display for VNodeKey {
     }
 }
 
-impl Display for VNodePathSegment {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        match self {
-            VNodePathSegment::ComponentChild => write!(f, "0"),
-            VNodePathSegment::ViewChildWithKey(key) => write!(f, "{}", key),
-            VNodePathSegment::ViewChildWithIndex(index) => write!(f, "{}", index)
-        }
-    }
-}
-
-impl Display for VNodePath {
+impl Display for VComponentPath {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         let mut iter = self.0.iter();
         match iter.next() {
@@ -93,81 +75,60 @@ impl Display for VNodePath {
     }
 }
 
-impl Add<VNodePathSegment> for VNodePath {
-    type Output = VNodePath;
+impl Add<VComponentKey> for VComponentPath {
+    type Output = VComponentPath;
 
-    fn add(mut self, rhs: VNodePathSegment) -> Self::Output {
+    fn add(mut self, rhs: VComponentKey) -> Self::Output {
         self.0.push(rhs);
         self
     }
 }
 
-impl Add<VNodeKey> for VNodePath {
-    type Output = VNodePath;
-
-    fn add(mut self, rhs: VNodeKey) -> Self::Output {
-        self.0.push(VNodePathSegment::ViewChildWithKey(rhs));
-        self
+impl AddAssign<VComponentKey> for VComponentPath {
+    fn add_assign(&mut self, rhs: VComponentKey) {
+        self.0.push(rhs)
     }
 }
 
-impl AddAssign<VNodePathSegment> for VNodePath {
-    fn add_assign(&mut self, rhs: VNodePathSegment) {
-        self.0.push(rhs);
-    }
-}
-
-impl AddAssign<VNodeKey> for VNodePath {
-    fn add_assign(&mut self, rhs: VNodeKey) {
-        self.0.push(VNodePathSegment::ViewChildWithKey(rhs))
-    }
-}
-
-impl From<VNodeKey> for VNodePathSegment {
-    fn from(key: VNodeKey) -> Self {
-        VNodePathSegment::ViewChildWithKey(key)
-    }
-}
-
-impl VNodeKey {
+impl VComponentKey {
     pub fn new(static_: &'static str, index: usize, arbitrary: Option<String>) -> Self {
-        VNodeKey(static_, index, arbitrary)
+        VComponentKey(static_, index, arbitrary)
     }
 }
 
-impl Default for VNodeKey {
+impl Default for VComponentKey {
     fn default() -> Self {
-        VNodeKey("", 0, None)
+        VComponentKey("", 0, None)
     }
 }
 
-impl From<()> for VNodeKey {
+impl From<()> for VComponentKey {
     fn from((): ()) -> Self {
-        VNodeKey("", 0, None)
+        VComponentKey("", 0, None)
     }
 }
 
-impl From<&'static str> for VNodeKey {
+impl From<&'static str> for VComponentKey {
     fn from(str: &'static str) -> Self {
-        VNodeKey(str, 0, None)
+        VComponentKey(str, 0, None)
     }
 }
 
-impl From<usize> for VNodeKey {
+impl From<usize> for VComponentKey {
     fn from(index: usize) -> Self {
-        VNodeKey("", index + 1, None)
+        VComponentKey("", index + 1, None)
     }
 }
 
-impl From<(&'static str, usize)> for VNodeKey {
+impl From<(&'static str, usize)> for VComponentKey {
     fn from((str, index): (&'static str, usize)) -> Self {
-        VNodeKey(str, index, None)
+        VComponentKey(str, index, None)
     }
 }
 
-impl From<String> for VNodeKey {
+impl From<String> for VComponentKey {
     fn from(string: String) -> Self {
-        VNodeKey("", 0, Some(string))
+        VComponentKey("", 0, Some(string))
     }
 }
 // endregion

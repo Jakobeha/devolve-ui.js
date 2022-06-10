@@ -6,7 +6,7 @@ use std::ops::Deref;
 use std::future::Future;
 use std::pin::Pin;
 use std::task::{Context, Poll};
-use crate::core::misc::notify_bool::FlagForOtherThreads;
+use crate::core::misc::notify_flag::NotifyFlag;
 use crate::core::renderer::engine::RenderEngine;
 use crate::core::renderer::render::VRenderLayer;
 use crate::core::renderer::renderer::Renderer;
@@ -15,7 +15,7 @@ use crate::core::renderer::renderer::Renderer;
 pub struct Running<Engine: RenderEngine + 'static> {
     renderer: Weak<Renderer<Engine>>,
     interval: RefCell<Interval>,
-    pub(super) is_done: Arc<FlagForOtherThreads>
+    pub(super) is_done: Arc<NotifyFlag>
 }
 
 #[cfg(feature = "time")]
@@ -42,7 +42,7 @@ impl <Engine: RenderEngine + 'static> RcRunning<Engine> where Engine::RenderLaye
         Self(Rc::new(Running {
             renderer: Rc::downgrade(renderer),
             interval: RefCell::new(Self::mk_interval(renderer)),
-            is_done: Arc::new(FlagForOtherThreads::new())
+            is_done: Arc::new(NotifyFlag::new())
         }))
     }
 
@@ -73,7 +73,7 @@ impl <Engine: RenderEngine + 'static> RcRunning<Engine> {
     }
 
     #[allow(clippy::needless_lifetimes)] // Not needless for some reason
-    pub fn is_done<'a>(&'a self) -> &'a Arc<FlagForOtherThreads> {
+    pub fn is_done<'a>(&'a self) -> &'a Arc<NotifyFlag> {
         &self.is_done
     }
 
