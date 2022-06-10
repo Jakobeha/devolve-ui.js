@@ -1,9 +1,13 @@
+//! A component's state which doesn't trigger a re-render when set.
+//! This means that it can't be used in the component's render.
+//! Instead it's used internally by other hooks.
+
 use std::any::Any;
 use std::marker::PhantomData;
 use crate::core::component::component::VComponent;
 use crate::core::view::view::VViewData;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Copy)]
 pub struct NonUpdatingState<T: Any, ViewData: VViewData> {
     pub index: usize,
     pub phantom_view_data: PhantomData<(T, ViewData)>

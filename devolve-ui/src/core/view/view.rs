@@ -1,3 +1,11 @@
+//! Views are graphical elements drawn to the screen, including text, images, and more.
+//! Views are also used to layout other views: views can also contain multiple children,
+//! and influence how and where (and even when) the children are drawn.
+//!
+//! The specific type of views available depends on `ViewData`.
+
+// TODO: Handle views in `VPath`
+
 use std::fmt;
 use std::fmt::{Display, Formatter};
 use crate::core::component::node::{NodeId, VNode};

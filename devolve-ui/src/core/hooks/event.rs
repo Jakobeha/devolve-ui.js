@@ -1,3 +1,13 @@
+//! Perform side-effects and modify state when you get events, AKA external input.
+//! Events are:
+//!
+//! - Tick (passage of time. Only supported if you enable the `time` feature and call `Renderer::resume`)
+//! - Key events
+//! - Mouse events
+//! - Resize events (resize window or change column size)
+//!
+//! Note that not all events are supported on all platforms. Supported events depend on the `RenderEngine` used by the renderer.
+
 use std::cell::RefCell;
 use std::rc::Rc;
 use crate::core::component::component::VComponent;

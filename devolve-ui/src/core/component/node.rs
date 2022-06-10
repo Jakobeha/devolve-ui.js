@@ -1,3 +1,6 @@
+///! A `VNode` is either a component of a view. Either way, the node contains content which is rendered,
+/// and may contain child nodes.
+
 use std::borrow::Cow;
 use std::fmt;
 use std::fmt::{Display, Formatter};

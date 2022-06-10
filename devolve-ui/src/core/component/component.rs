@@ -1,3 +1,23 @@
+//! Components are the UI elements in devolve-ui.
+//!
+//! Each component is defined by a function, which takes the component's "props" (input)
+//! and returns a node which is the "render" of the component. This render is derived from the input props
+//! and the component's state. Additionally, it may contain `hooks` like `use_state` to define state,
+//! `use_effect` to run side-effects at certain points in the component's lifecycle, and other `use_`
+//! hooks for events like time passing and keyboard / mouse input.
+//! The function will be called every time the component re-renders.
+//! See ["components and props" in the React docs](https://reactjs.org/docs/components-and-props.html)
+//! for more info.
+//!
+//! Components are defined via the `make_component` macro.
+//! Components can then be created by calling the function (verbose but "real Rust")
+//! or macro (shorthand) defined by the `make_component` macro's expansion.
+//!
+//! Each component must have a `key` to distinguish it between updates,
+//! but this key can be `""` or `()` if it's the only child. The key is provided upon creation.
+//!
+//!
+
 use crate::core::component::parent::{_VParent, VParent};
 use crate::core::component::mode::VMode;
 use crate::core::component::node::{NodeId, VNode, VNodeMut, VNodeRef};

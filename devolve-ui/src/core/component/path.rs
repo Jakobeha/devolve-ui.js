@@ -1,3 +1,8 @@
+//! Identifies where a component is in the UI.
+//! Specifically, given a `VComponentRoot` and a `VNodePath`, you can get the corresponding
+//! component with `Renderer::with_component`. The component may not exist in which case
+//! `with_component` returns `None`.
+
 use std::fmt::{Display, Formatter};
 use std::ops::Add;
 use std::ops::AddAssign;

@@ -1,3 +1,18 @@
+//! Persistent state which a component retains from when it's created to when its destroyed
+//! (a component is destroyed when its parent re-renders and the component is no longer in the parent's render.
+//! Afterwards if it appears again it will be a new component with a reset state)
+//!
+//! You access a reference to the state with `State::get`, and a mutable reference with `State::get_mut`.
+//! The latter will trigger a re-render when dropped, so only use when you intend to actually modify the state
+//! or else you will get into an infinite loop.
+//!
+//! This type implements `Copy` so it can by pass between effect closures.
+//! The references can't be passed, but this is actually ideal as they are stale.
+//! The underlying type is actually just an index into the component, which stores the real state,
+//! so it's cheap to pass around and will not de-sync with the component like JS React.
+//! Be aware that if the underlying type is `Copy`, then you can *can* pass `State::get` and `State::get_mut`
+//! values between closures, but they will be stale.
+
 #[cfg(feature = "backtrace")]
 use backtrace::Backtrace;
 use std::any::Any;
@@ -7,7 +22,7 @@ use crate::core::component::component::VComponent;
 use crate::core::view::view::VViewData;
 use crate::core::hooks::state_internal::{NonUpdatingState, use_non_updating_state};
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Copy)]
 pub struct State<T: Any, ViewData: VViewData>(NonUpdatingState<T, ViewData>);
 
 /// Smart pointer which allows access to the state, and calls `update` when it gets dropped.

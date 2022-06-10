@@ -1,4 +1,13 @@
-///! A state which can be shared across threads and outlive the current scope.
+//! A state which can be shared across threads and outlive the current scope.
+//! Unlike `State`, this actually contains a reference to the state itself and not just an index
+//! into the component, which is `Send`. Like `State`, getting a mutable reference
+//! via `AtomicRefState::get_mut` (or `AtomicRefState::try_get_mut`) will cause the state to update
+//! the next time it's rendered. Internally this uses a mutex, so `get_mut` can block and returns a `LockResult`.
+//!
+//! This type is particularly useful when you want the component to trigger an effect on another thread or async context
+//! (e.g. file read), then get back to the main context with the result.
+//!
+//! Unfortunately this state doesn't implement `Copy` because it uses reference counting.
 
 use std::any::Any;
 use std::marker::PhantomData;

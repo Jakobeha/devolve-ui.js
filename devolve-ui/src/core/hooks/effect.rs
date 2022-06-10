@@ -1,3 +1,9 @@
+//! Run side-effects in components, and in particular, don't run them during every update.
+//! The code inside the component's function body itself should be fast,
+//! because it will be called every time the component updates.
+//! According to good design, it should also be "pure" and side effects should be distinctly marked
+//! by being in `use_effect` closures.
+
 use std::cell::RefCell;
 use std::convert::Infallible;
 use std::mem;
