@@ -1,10 +1,12 @@
 use std::rc::Rc;
+use std::sync::{Weak as WeakArc};
 #[cfg(feature = "time")]
 use std::time::Duration;
 use crate::core::component::component::VComponent;
 use crate::core::component::path::VNodePath;
 #[cfg(feature = "input")]
 use crate::core::misc::input::{KeyEvent, MouseEvent, ResizeEvent};
+use crate::core::misc::notify_bool::FlagForOtherThreads;
 use crate::core::renderer::listeners::{RendererListener, RendererListenerId};
 use crate::core::view::view::{VView, VViewData};
 
@@ -12,6 +14,7 @@ pub(in crate::core) trait VComponentRoot {
     type ViewData: VViewData;
 
     fn invalidate(self: Rc<Self>, view: &Box<VView<Self::ViewData>>);
+    fn invalidate_flag_for(self: Rc<Self>, view: &Box<VView<Self::ViewData>>) -> WeakArc<FlagForOtherThreads>;
 
     fn _with_component(self: Rc<Self>, path: &VNodePath) -> Option<*mut Box<VComponent<Self::ViewData>>>;
 

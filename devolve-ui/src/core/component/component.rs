@@ -7,9 +7,11 @@ use std::collections::HashMap;
 use std::marker::PhantomData;
 use std::mem::MaybeUninit;
 use std::rc::{Rc, Weak};
+use std::sync::{Weak as WeakArc};
 use std::fmt::{Debug, Formatter};
 use crate::core::component::path::{VNodeKey, VNodePath};
 use crate::core::component::root::VComponentRoot;
+use crate::core::misc::notify_bool::FlagForOtherThreads;
 use crate::core::view::view::{VView, VViewData};
 
 /// Wrapper for `VNode` so that it's more type-safe,
@@ -271,6 +273,13 @@ impl <ViewData: VViewData> VComponent<ViewData> {
     fn invalidate(self: &Box<Self>) {
         if let Some(renderer) = self.renderer.upgrade() {
             renderer.invalidate(self.view());
+        }
+    }
+
+    pub(in crate::core) fn invalidate_flag(self: &Box<Self>) -> WeakArc<FlagForOtherThreads> {
+        match self.renderer.upgrade() {
+            None => WeakArc::new(),
+            Some(renderer) => renderer.invalidate_flag_for(self.view())
         }
     }
 

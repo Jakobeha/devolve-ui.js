@@ -11,7 +11,7 @@ use crate::core::hooks::state_internal::{NonUpdatingState, use_non_updating_stat
 pub struct State<T: Any, ViewData: VViewData>(NonUpdatingState<T, ViewData>);
 
 /// Smart pointer which allows access to the state, and calls `update` when it gets dropped.
-pub struct StateDeref<'a, T : Any, ViewData: VViewData> {
+pub struct StateDeref<'a, T: Any, ViewData: VViewData> {
     // See comment in StateDeref::drop
     c: *mut Box<VComponent<ViewData>>,
     update_message: String,

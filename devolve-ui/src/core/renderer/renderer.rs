@@ -618,6 +618,11 @@ impl <Engine: RenderEngine> VComponentRoot for Renderer<Engine> {
         self.needs_rerender.set();
     }
 
+    fn invalidate_flag_for(self: Rc<Self>, _view: &Box<VView<Self::ViewData>>) -> WeakArc<FlagForOtherThreads> {
+        // TODO: Remove from cached renders somehow
+        Arc::downgrade(&self.needs_rerender)
+    }
+
     fn _with_component(self: Rc<Self>, path: &VNodePath) -> Option<*mut Box<VComponent<<Engine as RenderEngine>::ViewData>>> {
         self.root_component.borrow_mut().as_mut()
             .and_then(|root_component| root_component.down_path_mut(path))
