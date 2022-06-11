@@ -25,7 +25,7 @@ make_component!(pub basic, BasicProps {
     text: Default::default()
 }, <TuiViewData>|_c, text| {
     vbox!({}, {}, vec![
-        text!({}, {}, "Hello world!")
+        text!({}, {}, "Hello world!".to_string())
     ])
 });
 

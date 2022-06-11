@@ -10,6 +10,9 @@ use crate::core::component::node::{NodeId, VNode};
 use crate::core::view::layout::bounds::Bounds;
 use crate::core::view::layout::parent_bounds::SubLayout;
 
+// TODO: Pass around `c` so that we can create views which contain components and also store or
+//   reference those components in `children`.
+
 #[derive(Debug)]
 pub struct VView<ViewData: VViewData> {
     id: NodeId,

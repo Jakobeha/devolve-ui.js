@@ -106,6 +106,7 @@ bitflags! {
 
 impl KeyModifiers {
     /// Convenience function: I wish something like this was on `bitflags`.
+    #[cfg(feature = "crossterm")]
     pub(crate) fn iff(&self, predicate: bool) -> Self {
         if predicate {
             *self
