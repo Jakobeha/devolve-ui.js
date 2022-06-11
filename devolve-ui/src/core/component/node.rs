@@ -29,12 +29,19 @@ pub enum VNodeResolved<'c, 'v, ViewData: VViewData> {
     View(&'v Box<VView<ViewData>>)
 }
 
+// Lifetimes must be different for `VNode::update`
 #[derive(Debug)]
 pub enum VNodeResolvedMut<'c, 'v, ViewData: VViewData> {
     Component(&'c mut Box<VComponent<ViewData>>),
     View(&'v mut Box<VView<ViewData>>)
 }
 
+// Lifetimes don't need to be different here. Might want to rename this type
+// (maybe to VViewRenderable or VView and then rename VView to VViewRaw or something).
+// Basically we need the view's component when rendering it and using it in many other scenarios,
+// because we need this component in order to resolve the view's children,
+// since they may be child components and child components are stored in the component
+// so they can be resolved even when a component has the same key but switches views.
 pub type VComponentAndView<'a, ViewData> = (&'a Box<VComponent<ViewData>>, &'a Box<VView<ViewData>>);
 
 static mut NEXT_ID: usize = 0;
@@ -71,6 +78,8 @@ impl <ViewData: VViewData> VNode<ViewData> {
         }
     }
 
+    // Lifetimes must be different here because we borrow parent in resolve_mut and in the VNodeResolvedMut::View case.
+    // This is OK because the lifetime in VNodeResolvedMut::View's view is different than that in parent
     pub fn update(&mut self, parent: &mut Box<VComponent<ViewData>>, details: Cow<'static, str>) {
         match self.resolve_mut(parent) {
             VNodeResolvedMut::Component(component) => {
