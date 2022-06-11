@@ -15,7 +15,7 @@ use std::time::{Duration, Instant};
 #[cfg(feature = "time-blocking")]
 use tokio::runtime;
 use crate::core::component::component::{VComponent, VComponentBody};
-use crate::core::component::node::{NodeId, VNode};
+use crate::core::component::node::{NodeId, VComponentAndView, VNode};
 use crate::core::component::parent::{_VParent, VParent};
 use crate::core::component::path::VComponentPath;
 use crate::core::component::root::VComponentRoot;
@@ -246,7 +246,7 @@ impl <Engine: RenderEngine> Renderer<Engine> where Engine::RenderLayer: VRenderL
         };
 
         let final_render = self.render_view(
-            root_component.view(),
+            root_component.component_and_view(),
             &root_dimensions,
             None,
             0,
@@ -271,7 +271,7 @@ impl <Engine: RenderEngine> Renderer<Engine> where Engine::RenderLayer: VRenderL
 
     fn render_view(
         self: &Rc<Self>,
-        view: &Box<VView<Engine::ViewData>>,
+        (c, view): VComponentAndView<'_, Engine::ViewData>,
         parent_bounds: &ParentBounds,
         prev_sibling: Option<&Rectangle>,
         parent_depth: usize,
@@ -308,7 +308,7 @@ impl <Engine: RenderEngine> Renderer<Engine> where Engine::RenderLayer: VRenderL
             let mut prev_sibling = None;
             for (sibling_index, child) in children.enumerate() {
                 let child_render = self.render_view(
-                    child.view(),
+                    child.component_and_view(c),
                     &parent_bounds,
                     prev_sibling.as_ref(),
                     parent_depth + 1,

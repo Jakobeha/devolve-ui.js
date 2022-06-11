@@ -20,7 +20,7 @@
 
 use crate::core::component::parent::{_VParent, VParent};
 use crate::core::component::mode::VMode;
-use crate::core::component::node::{NodeId, VNode};
+use crate::core::component::node::{NodeId, VNode, VComponentAndView};
 use std::any::Any;
 use std::borrow::Cow;
 use std::collections::HashMap;
@@ -89,7 +89,7 @@ pub struct VComponent<ViewData: VViewData> {
 }
 
 impl <ViewData: VViewData + 'static> VComponent<ViewData> {
-    pub fn new<Props: 'static, F: Fn(&mut Box<VComponent<ViewData>>, &Props) -> VComponentBody<ViewData> + 'static>(parent: VParent<'_, ViewData>, key: VComponentKey, props: Props, construct: F) -> Box<Self> {
+    pub(in crate::core) fn new<Props: 'static, F: Fn(&mut Box<VComponent<ViewData>>, &Props) -> VComponentBody<ViewData> + 'static>(parent: VParent<'_, ViewData>, key: VComponentKey, props: Props, construct: F) -> Box<VComponent<ViewData>> {
         enum Action<'a, ViewData_: VViewData, Props_, F_> {
             Reuse(Box<VComponent<ViewData_>>),
             Create(VParent<'a, ViewData_>, Props_, F_)
@@ -189,7 +189,7 @@ impl <ViewData: VViewData> VComponent<ViewData> {
                 // should have a hook in view trait we can call through node.view().hook(...)
 
                 // Update children (if box or another component)
-                node.0.update(child_details);
+                node.0.update(self_, child_details);
 
                 self_.node = Some(node)
             })
@@ -210,7 +210,7 @@ impl <ViewData: VViewData> VComponent<ViewData> {
                 // should have a hook in view trait we can call through node.view().hook(...)
 
                 // Update children (if box or another component)
-                node.0.update(child_details);
+                node.0.update(self_, child_details);
 
                 self_.invalidate();
                 self_.node = Some(node)
@@ -331,6 +331,21 @@ impl <ViewData: VViewData> VComponent<ViewData> {
         self.parent_path.clone() + self.key.clone()
     }
 
+    pub(super) fn child(&self, key: &VComponentKey) -> Option<&Box<VComponent<ViewData>>> {
+        self.children.get(key)
+    }
+
+    pub(super) fn child_mut(&mut self, key: &VComponentKey) -> Option<&mut Box<VComponent<ViewData>>> {
+        self.children.get_mut(key)
+    }
+
+    pub(super) fn add_child(&mut self, child: Box<VComponent<ViewData>>) -> &Box<VComponent<ViewData>> {
+        let key = child.key.clone();
+        let old_value = self.children.insert(key.clone(), child);
+        assert!(old_value.is_none(), "child with key {} added twice", key);
+        self.children.get(&key).unwrap()
+    }
+
     /// Reference to this `VComponent` which can be cloned and lifetime extended.
     /// When you want to get the `VComponent` back you can call `with`.
     ///
@@ -346,8 +361,14 @@ impl <ViewData: VViewData> VComponent<ViewData> {
         self.node.is_none()
     }
 
-    pub fn view(&self) -> &Box<VView<ViewData>> {
-        self.node.as_ref().expect("tried to get view of uninitialized component").0.view()
+    #[allow(clippy::needless_lifetimes)]
+    pub fn component_and_view<'a>(self: &'a Box<Self>) -> VComponentAndView<'a, ViewData> {
+        self.node.as_ref().expect("tried to get view of uninitialized component").0.component_and_view(self)
+    }
+
+    #[allow(clippy::needless_lifetimes)]
+    pub fn view<'a>(self: &'a Box<Self>) -> &'a Box<VView<ViewData>> {
+        self.node.as_ref().expect("tried to get view of uninitialized component").0.view(self)
     }
 
     pub(in crate::core) fn renderer(self: &Box<Self>) -> Weak<dyn VComponentRoot<ViewData = ViewData>> {

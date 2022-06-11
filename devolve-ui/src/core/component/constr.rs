@@ -6,6 +6,11 @@ use crate::core::component::node::VNode;
 use crate::core::component::path::VComponentKey;
 use crate::core::view::view::VViewData;
 
+/// Crates the component and adds it to `c`.
+/// The component can't be returned because it is in `c`.
+/// A reference could be returned, but currently is not because there isn't any clear need for it;
+/// submit an issue if you have a use case.
+/// Instead a node is returned refernencing the component via `key`.
 pub fn make_component<
     ViewData: VViewData + 'static,
     Str: Into<VComponentKey>,
@@ -17,7 +22,12 @@ pub fn make_component<
     props: Props,
     construct: F
 ) -> VNode<ViewData> {
-    VNode::Component(VComponent::new(c.into(), key.into(), props, construct))
+    let component = VComponent::new(c.into(), key.into(), props, construct);
+    let component = c.add_child(component);
+    VNode::Component {
+        id: component.id(),
+        key: component.key()
+    }
 }
 
 /// See `make_component2`, this one is required for macro expansion.
