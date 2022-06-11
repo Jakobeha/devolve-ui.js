@@ -7,7 +7,7 @@ use std::marker::PhantomData;
 use crate::core::component::component::VComponent;
 use crate::core::view::view::VViewData;
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug)]
 pub struct NonUpdatingState<T: Any, ViewData: VViewData> {
     pub index: usize,
     pub phantom_view_data: PhantomData<(T, ViewData)>
@@ -46,3 +46,14 @@ impl <T: Any, ViewData: VViewData> NonUpdatingState<T, ViewData> {
             .downcast_mut::<T>().expect("unaligned hooks: state type mismatch")
     }
 }
+
+impl <T: Any, ViewData: VViewData> Clone for NonUpdatingState<T, ViewData> {
+    fn clone(&self) -> Self {
+        Self {
+            index: self.index,
+            phantom_view_data: self.phantom_view_data
+        }
+    }
+}
+
+impl <T: Any, ViewData: VViewData> Copy for NonUpdatingState<T, ViewData> {}

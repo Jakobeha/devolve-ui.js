@@ -313,13 +313,13 @@ impl Index<(usize, usize)> for RenderLayer {
     type Output = RenderCell;
 
     fn index(&self, (x, y): (usize, usize)) -> &Self::Output {
-        &self.0[x][y]
+        &self.0[y][x]
     }
 }
 
 impl IndexMut<(usize, usize)> for RenderLayer {
     fn index_mut(&mut self, (x, y): (usize, usize)) -> &mut Self::Output {
-        &mut self.0[x][y]
+        &mut self.0[y][x]
     }
 }
 

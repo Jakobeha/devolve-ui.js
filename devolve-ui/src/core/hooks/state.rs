@@ -22,7 +22,7 @@ use crate::core::component::component::VComponent;
 use crate::core::view::view::VViewData;
 use crate::core::hooks::state_internal::{NonUpdatingState, use_non_updating_state};
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug)]
 pub struct State<T: Any, ViewData: VViewData>(NonUpdatingState<T, ViewData>);
 
 /// Smart pointer which allows access to the state, and calls `update` when it gets dropped.
@@ -45,7 +45,7 @@ impl <T: Any, ViewData: VViewData> State<T, ViewData> {
         self.0.get(c)
     }
 
-    pub fn get_mut<'a>(&'a mut self, c: &'a mut Box<VComponent<ViewData>>) -> StateDeref<'a, T, ViewData> {
+    pub fn get_mut<'a>(&'a self, c: &'a mut Box<VComponent<ViewData>>) -> StateDeref<'a, T, ViewData> {
         #[cfg(feature = "backtrace")]
             let backtrace = Backtrace::new();
         #[cfg(not(feature = "backtrace"))]
@@ -84,3 +84,11 @@ impl <'a, T: Any, ViewData: VViewData> Drop for StateDeref<'a, T, ViewData> {
         c.update(Cow::Owned(self.update_message.clone()));
     }
 }
+
+impl <T: Any, ViewData: VViewData> Clone for State<T, ViewData> {
+    fn clone(&self) -> Self {
+        Self(self.0.clone())
+    }
+}
+
+impl <T: Any, ViewData: VViewData> Copy for State<T, ViewData> {}

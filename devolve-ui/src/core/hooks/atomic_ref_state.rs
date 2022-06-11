@@ -19,7 +19,7 @@ use crate::core::misc::map_lock_result::MappableLockResult;
 use crate::core::misc::notify_flag::NotifyFlag;
 use crate::core::view::view::VViewData;
 
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct AtomicRefState<T: Any, ViewData: VViewData>(Arc<Mutex<T>>, Weak<NotifyFlag>, PhantomData<ViewData>);
 
 #[derive(Debug)]
@@ -48,11 +48,11 @@ impl <T: Any, ViewData: VViewData> AtomicRefState<T, ViewData> {
         self.0.try_lock().map2(AtomicAccess::new)
     }
 
-    pub fn get_mut(&mut self) -> LockResult<AtomicAccessMut<'_, T, ViewData>> {
+    pub fn get_mut(&self) -> LockResult<AtomicAccessMut<'_, T, ViewData>> {
         self.0.lock().map2(|v| AtomicAccessMut::new(v, self.1.clone()))
     }
 
-    pub fn try_get_mut(&mut self) -> TryLockResult<AtomicAccessMut<'_, T, ViewData>> {
+    pub fn try_get_mut(&self) -> TryLockResult<AtomicAccessMut<'_, T, ViewData>> {
         self.0.try_lock().map2(|v| AtomicAccessMut::new(v, self.1.clone()))
     }
 }
@@ -97,5 +97,11 @@ impl <'a, T: Any, ViewData: VViewData> Drop for AtomicAccessMut<'a, T, ViewData>
         if let Some(notify_flag) = self.1.upgrade() {
             notify_flag.set();
         }
+    }
+}
+
+impl <T: Any, ViewData: VViewData> Clone for AtomicRefState<T, ViewData> {
+    fn clone(&self) -> Self {
+        Self(self.0.clone(), self.1.clone(), self.2)
     }
 }

@@ -16,11 +16,11 @@ pub struct PackedColor(Packed<channels::Rgba>);
 impl From<Color> for PackedColor {
     fn from(self_: Color) -> PackedColor {
         PackedColor(match self_ {
-            Color::Transparent => Srgba::new(0, 0, 0, 0).into(),
-            Color::Srgba(srgba) => srgba.into_format::<u8, u8>().into(),
+            Color::Transparent => Packed::from(Srgba::new(0, 0, 0, 0)),
+            Color::Srgba(srgba) => Packed::from(srgba.into_format::<u8, u8>()),
             Color::Lcha(lcha) => {
                 let srgba: Srgba = lcha.into_color();
-                srgba.into_format::<u8, u8>().into()
+                Packed::from(srgba.into_format::<u8, u8>())
             }
         })
     }
@@ -28,7 +28,7 @@ impl From<Color> for PackedColor {
 
 impl PackedColor {
     pub fn transparent() -> PackedColor {
-        PackedColor(Srgba::new(0, 0, 0, 0).into())
+        PackedColor(Packed::from(Srgba::new(0, 0, 0, 0)))
     }
 
     pub fn is_transparent(&self) -> bool {
@@ -45,6 +45,37 @@ impl PackedColor {
         let alpha = (top_alpha * bottom_alpha) / 255;
         let color = (top.0.color & 0xFFFFFF00) | alpha;
         PackedColor(Packed::from(color))
+    }
+}
+
+/// Specific kinds of colors
+impl Color {
+    pub fn red() -> Color {
+        Color::Srgba(Srgba::new(1f32, 0f32, 0f32, 1f32))
+    }
+
+    pub fn green() -> Color {
+        Color::Srgba(Srgba::new(0f32, 1f32, 0f32, 1f32))
+    }
+
+    pub fn blue() -> Color {
+        Color::Srgba(Srgba::new(0f32, 0f32, 1f32, 1f32))
+    }
+
+    pub fn yellow() -> Color {
+        Color::Srgba(Srgba::new(1f32, 1f32, 0f32, 1f32))
+    }
+
+    pub fn black() -> Color {
+        Color::Srgba(Srgba::new(0f32, 0f32, 0f32, 1f32))
+    }
+
+    pub fn white() -> Color {
+        Color::Srgba(Srgba::new(1f32, 1f32, 1f32, 1f32))
+    }
+
+    pub fn orange() -> Color {
+        Color::Srgba(Srgba::new(1f32, 0.5f32, 0f32, 1f32))
     }
 }
 
