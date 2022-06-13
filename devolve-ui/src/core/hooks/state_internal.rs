@@ -13,13 +13,13 @@ pub struct NonUpdatingState<T: Any, ViewData: VViewData> {
     pub phantom_view_data: PhantomData<(T, ViewData)>
 }
 
-pub fn use_non_updating_state<'a, T: Any, ViewData: VViewData>(c: &mut impl VComponentContext<'a, ViewData=ViewData>, initial_state: impl FnOnce() -> T) -> NonUpdatingState<T, ViewData> {
+pub fn use_non_updating_state<'a, T: Any, ViewData: VViewData + 'a>(c: &'a mut impl VComponentContext<'a, ViewData=ViewData>, initial_state: impl FnOnce() -> T) -> NonUpdatingState<T, ViewData> {
     let c = c.component();
     let index = c.h.next_state_index;
     c.h.next_state_index += 1;
     if c.is_being_created() {
         if c.h.state.len() != index {
-            panic!("unaligned hooks: state length ({}) != state index ({})", c.state.len(), index);
+            panic!("unaligned hooks: state length ({}) != state index ({})", c.h.state.len(), index);
         }
         c.h.state.push(Box::new(initial_state()));
     }
@@ -31,13 +31,13 @@ pub fn use_non_updating_state<'a, T: Any, ViewData: VViewData>(c: &mut impl VCom
 }
 
 impl <T: Any, ViewData: VViewData> NonUpdatingState<T, ViewData> {
-    pub fn get<'a>(&'a self, c: &mut impl VContext<'a, ViewData=ViewData>) -> &'a T {
+    pub fn get<'a>(&'a self, c: &'a mut impl VContext<'a, ViewData=ViewData>) -> &'a T {
         c.component().h.state
             .get(self.index).expect("unaligned hooks: state index out of bounds")
             .downcast_ref::<T>().expect("unaligned hooks: state type mismatch")
     }
 
-    pub fn get_mut<'a>(&'a self, c: &mut impl VContext<'a, ViewData=ViewData>) -> &'a mut T {
+    pub fn get_mut<'a>(&'a self, c: &'a mut impl VContext<'a, ViewData=ViewData>) -> &'a mut T {
         self._get_mut(&mut c.component().h.state)
     }
 

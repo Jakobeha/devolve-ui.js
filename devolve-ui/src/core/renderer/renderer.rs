@@ -15,6 +15,7 @@ use std::time::{Duration, Instant};
 #[cfg(feature = "time-blocking")]
 use tokio::runtime;
 use crate::core::component::component::{VComponent, VComponentBody};
+use crate::core::component::context::VComponentContextImpl;
 use crate::core::component::node::{NodeId, VComponentAndView, VNode};
 use crate::core::component::parent::VParent;
 use crate::core::component::path::VComponentPath;
@@ -183,8 +184,8 @@ impl <Engine: RenderEngine> Renderer<Engine> where Engine::RenderLayer: VRenderL
         self.is_visible.get()
     }
 
-    pub fn root(self: &Rc<Self>, construct: impl Fn(&mut Box<VComponent<Engine::ViewData>>) -> VNode<Engine::ViewData> + 'static) {
-        self._root(|parent| VComponent::new(parent, ().into(), (), move |c, ()| VComponentBody::new(construct(c))))
+    pub fn root(self: &Rc<Self>, construct: impl Fn(&mut VComponentContextImpl<(), Engine::ViewData>) -> VNode<Engine::ViewData> + 'static) {
+        self._root(|parent| VComponent::new(parent, ().into(), (), move |c| VComponentBody::new(construct(c))))
     }
 
     fn _root(self: &Rc<Self>, construct: impl FnOnce(VParent<'_, Engine::ViewData>) -> Box<VComponent<Engine::ViewData>>) {

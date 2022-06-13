@@ -3,7 +3,7 @@
 
 use std::fmt;
 use std::fmt::{Display, Formatter};
-use crate::core::component::component::VComponent;
+use crate::core::component::component::{VComponent, VComponentHead};
 use crate::core::component::path::VComponentKey;
 use crate::core::view::view::{VView, VViewData};
 
@@ -23,14 +23,20 @@ pub enum VNode<ViewData: VViewData> {
 }
 
 #[derive(Debug)]
-pub enum VNodeResolved<'c, 'v, ViewData: VViewData> {
+enum VNodeResolved<'c, 'v, ViewData: VViewData> {
     Component(&'c Box<VComponent<ViewData>>),
+    View(&'v Box<VView<ViewData>>)
+}
+
+#[derive(Debug)]
+enum VNodeResolvedHead<'c, 'v, ViewData: VViewData> {
+    Component(&'c VComponentHead<ViewData>),
     View(&'v Box<VView<ViewData>>)
 }
 
 // Lifetimes must be different for `VNode::update`
 #[derive(Debug)]
-pub enum VNodeResolvedMut<'c, 'v, ViewData: VViewData> {
+enum VNodeResolvedMut<'c, 'v, ViewData: VViewData> {
     Component(&'c mut Box<VComponent<ViewData>>),
     View(&'v mut Box<VView<ViewData>>)
 }
@@ -41,7 +47,7 @@ pub enum VNodeResolvedMut<'c, 'v, ViewData: VViewData> {
 // because we need this component in order to resolve the view's children,
 // since they may be child components and child components are stored in the component
 // so they can be resolved even when a component has the same key but switches views.
-pub type VComponentAndView<'a, ViewData> = (&'a Box<VComponent<ViewData>>, &'a Box<VView<ViewData>>);
+pub type VComponentAndView<'a, ViewData> = (&'a VComponentHead<ViewData>, &'a Box<VView<ViewData>>);
 
 static mut NEXT_ID: usize = 0;
 
@@ -63,10 +69,10 @@ impl <ViewData: VViewData> VNode<ViewData> {
         }
     }
 
-    pub fn resolve<'c, 'v>(&'v self, parent: &'c Box<VComponent<ViewData>>) -> VNodeResolved<'c, 'v, ViewData> {
+    pub fn resolve<'c, 'v>(&'v self, parent: &'c VComponentHead<ViewData>) -> VNodeResolvedHead<'c, 'v, ViewData> {
         match self {
-            VNode::Component { id: _id, key } => VNodeResolved::Component(parent.child(key).expect("VNode::resolve failed: component not in parent")),
-            VNode::View(view) => VNodeResolved::View(view)
+            VNode::Component { id: _id, key } => VNodeResolvedHead::Component(parent.child(key).expect("VNode::resolve failed: component not in parent")),
+            VNode::View(view) => VNodeResolvedHead::View(view)
         }
     }
 
@@ -94,17 +100,17 @@ impl <ViewData: VViewData> VNode<ViewData> {
         }
     }
 
-    pub fn component_and_view<'a>(&'a self, parent: &'a Box<VComponent<ViewData>>) -> VComponentAndView<'a, ViewData> {
+    pub fn component_and_view<'a>(&'a self, parent: &'a VComponentHead<ViewData>) -> VComponentAndView<'a, ViewData> {
         match self.resolve(parent) {
-            VNodeResolved::Component(component) => component.head.component_and_view(),
-            VNodeResolved::View(view) => (parent, view)
+            VNodeResolvedHead::Component(component) => component.component_and_view(),
+            VNodeResolvedHead::View(view) => (parent, view)
         }
     }
 
-    pub fn view<'a>(&'a self, parent: &'a Box<VComponent<ViewData>>) -> &'a Box<VView<ViewData>> {
+    pub fn view<'a>(&'a self, parent: &'a VComponentHead<ViewData>) -> &'a Box<VView<ViewData>> {
         match self.resolve(parent) {
-            VNodeResolved::Component(component) => component.head.view(),
-            VNodeResolved::View(view) => view
+            VNodeResolvedHead::Component(component) => component.view(),
+            VNodeResolvedHead::View(view) => view
         }
     }
 }

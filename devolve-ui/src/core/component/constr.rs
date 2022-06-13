@@ -2,7 +2,9 @@
 //! since creating `VComponent`s manually is very verbose.
 
 use crate::core::component::component::{VComponent, VComponentBody};
+use crate::core::component::context::{VComponentContext, VComponentContextImpl};
 use crate::core::component::node::VNode;
+use crate::core::component::parent::VParent;
 use crate::core::component::path::VComponentKey;
 use crate::core::view::view::VViewData;
 
@@ -12,21 +14,23 @@ use crate::core::view::view::VViewData;
 /// submit an issue if you have a use case.
 /// Instead a node is returned refernencing the component via `key`.
 pub fn make_component<
+    'a,
     ViewData: VViewData + 'static,
     Str: Into<VComponentKey>,
     Props: 'static,
-    F: Fn(&mut Box<VComponent<ViewData>>, &Props) -> VComponentBody<ViewData> + 'static
+    F: Fn(&mut VComponentContextImpl<'_, Props, ViewData>) -> VComponentBody<ViewData> + 'static
 >(
-    c: &mut Box<VComponent<ViewData>>,
+    c: &'a mut impl VComponentContext<'a, ViewData=ViewData>,
     key: Str,
     props: Props,
     construct: F
 ) -> VNode<ViewData> {
-    let component = VComponent::new(c.into(), key.into(), props, construct);
-    let component = c.add_child(component);
+    let parent = c.component();
+    let component = VComponent::new(VParent::Component(parent), key.into(), props, construct);
+    let component = parent.add_child(component);
     VNode::Component {
-        id: component.id(),
-        key: component.key()
+        id: component.head.id(),
+        key: component.head.key()
     }
 }
 

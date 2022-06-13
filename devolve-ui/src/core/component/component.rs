@@ -29,7 +29,7 @@ use std::mem::MaybeUninit;
 use std::rc::{Rc, Weak};
 use std::sync::{Weak as WeakArc};
 use std::fmt::{Debug, Display, Formatter};
-use crate::core::component::context::{VComponentContext, VComponentContextImpl, VContext, VEffectContextImpl};
+use crate::core::component::context::{VComponentContextImpl, VDestructorContextImpl, VEffectContextImpl};
 use crate::core::component::path::{VComponentKey, VComponentPath};
 use crate::core::component::root::VComponentRoot;
 use crate::core::misc::notify_flag::NotifyFlag;
@@ -46,35 +46,45 @@ impl <ViewData: VViewData> VComponentBody<ViewData> {
     }
 }
 
-trait VComponentConstruct {
+trait VComponentConstruct: Debug {
     type ViewData: VViewData;
 
-    fn props(&self) -> &dyn Any;
-    fn construct(&self, component: &mut VComponentHead<Self::ViewData>) -> VComponentBody<Self::ViewData>;
+    fn construct(&mut self, component: &mut VComponentHead<Self::ViewData>) -> VComponentBody<Self::ViewData>;
 
     fn run_effects(&mut self, component: &mut VComponentHead<Self::ViewData>);
     fn run_update_destructors(&mut self, component: &mut VComponentHead<Self::ViewData>);
     fn run_permanent_destructors(&mut self, component: &mut VComponentHead<Self::ViewData>);
 }
 
-struct VComponentConstructImpl<ViewData: VViewData, Props: Any, F: Fn(&mut VComponentContextImpl<'_, Props, ViewData>) -> VComponentBody<ViewData> + 'static> {
+struct VComponentConstructImpl<Props: Any, ViewData: VViewData, F: Fn(&mut VComponentContextImpl<'_, Props, ViewData>) -> VComponentBody<ViewData> + 'static> {
     props: Props,
     construct: F,
-    effects: VComponentEffects<ViewData, Props>,
+    effects: VComponentEffects<Props, ViewData>,
+    destructors: VComponentDestructors<Props, ViewData>,
     view_data_type: PhantomData<ViewData>
 }
 
-pub(in crate::core) struct VComponentEffects<ViewData: VViewData, Props: Any> {
+pub(in crate::core) struct VComponentEffects<Props: Any, ViewData: VViewData> {
     pub effects: Vec<Box<dyn Fn(&mut VEffectContextImpl<'_, Props, ViewData>) -> ()>>,
-    pub update_destructors: Vec<Box<dyn FnOnce(&mut VEffectContextImpl<'_, Props, ViewData>) -> ()>>,
-    pub next_update_destructors: Vec<Box<dyn FnOnce(&mut VEffectContextImpl<'_, Props, ViewData>) -> ()>>,
-    pub permanent_destructors: Vec<Box<dyn FnOnce(&mut VEffectContextImpl<'_, Props, ViewData>) -> ()>>
 }
 
-impl <ViewData: VViewData, Props: Any> VComponentEffects<ViewData, Props> {
+pub(in crate::core) struct VComponentDestructors<Props: Any, ViewData: VViewData> {
+    pub update_destructors: Vec<Box<dyn FnOnce(&mut VDestructorContextImpl<'_, Props, ViewData>) -> ()>>,
+    pub next_update_destructors: Vec<Box<dyn FnOnce(&mut VDestructorContextImpl<'_, Props, ViewData>) -> ()>>,
+    pub permanent_destructors: Vec<Box<dyn FnOnce(&mut VDestructorContextImpl<'_, Props, ViewData>) -> ()>>
+}
+
+impl <Props: Any, ViewData: VViewData> VComponentEffects<Props, ViewData> {
     pub fn new() -> Self {
         Self {
-            effects: Vec::new(),
+            effects: Vec::new()
+        }
+    }
+}
+
+impl <Props: Any, ViewData: VViewData> VComponentDestructors<Props, ViewData> {
+    pub fn new() -> Self {
+        Self {
             update_destructors: Vec::new(),
             next_update_destructors: Vec::new(),
             permanent_destructors: Vec::new()
@@ -82,12 +92,8 @@ impl <ViewData: VViewData, Props: Any> VComponentEffects<ViewData, Props> {
     }
 }
 
-impl <ViewData: VViewData, Props: Any, F: Fn(&mut VComponentContextImpl<'_, Props, ViewData>) -> VComponentBody<ViewData> + 'static> VComponentConstruct for VComponentConstructImpl<ViewData, Props, F> {
+impl <Props: Any, ViewData: VViewData, F: Fn(&mut VComponentContextImpl<'_, Props, ViewData>) -> VComponentBody<ViewData> + 'static> VComponentConstruct for VComponentConstructImpl<Props, ViewData, F> {
     type ViewData = ViewData;
-
-    fn props(&self) -> &dyn Any {
-        &self.props
-    }
 
     fn construct(&mut self, component: &mut VComponentHead<Self::ViewData>) -> VComponentBody<Self::ViewData> {
         let construct = &self.construct;
@@ -102,11 +108,12 @@ impl <ViewData: VViewData, Props: Any, F: Fn(&mut VComponentContextImpl<'_, Prop
     fn run_effects(&mut self, component: &mut VComponentHead<Self::ViewData>) {
         let mut c = VEffectContextImpl {
             component,
-            props: &self.props
+            props: &self.props,
+            destructors: &mut self.destructors,
         };
 
         while let Some(effect) = self.effects.effects.pop() {
-            if self.head.has_pending_updates {
+            if component.has_pending_updates {
                 break
             }
 
@@ -115,7 +122,7 @@ impl <ViewData: VViewData, Props: Any, F: Fn(&mut VComponentContextImpl<'_, Prop
     }
 
     fn run_update_destructors(&mut self, component: &mut VComponentHead<Self::ViewData>) {
-        let mut c = VEffectContextImpl {
+        let mut c = VDestructorContextImpl {
             component,
             props: &self.props
         };
@@ -126,7 +133,7 @@ impl <ViewData: VViewData, Props: Any, F: Fn(&mut VComponentContextImpl<'_, Prop
     }
 
     fn run_permanent_destructors(&mut self, component: &mut VComponentHead<Self::ViewData>) {
-        let mut c = VEffectContextImpl {
+        let mut c = VDestructorContextImpl {
             component,
             props: &self.props
         };
@@ -144,10 +151,10 @@ pub struct VComponentRef<ViewData: VViewData> {
 
 pub struct VComponent<ViewData: VViewData> {
     pub head: VComponentHead<ViewData>,
-
     construct: Box<dyn VComponentConstruct<ViewData = ViewData>>,
 }
 
+#[derive(Debug)]
 struct RecursiveUpdateStack(Vec<RecursiveUpdateFrame>);
 
 impl RecursiveUpdateStack {
@@ -179,6 +186,10 @@ impl RecursiveUpdateStack {
     pub fn clear(&mut self) {
         self.0.clear();
     }
+
+    pub fn len(&self) -> usize {
+        self.0.len()
+    }
 }
 
 impl Display for RecursiveUpdateStack {
@@ -191,6 +202,7 @@ impl Display for RecursiveUpdateStack {
     }
 }
 
+#[derive(Debug)]
 struct RecursiveUpdateFrame {
     simultaneous: Vec<Cow<'static, str>>,
     is_open: bool
@@ -235,7 +247,7 @@ pub struct VComponentHead<ViewData: VViewData> {
     /*readonly*/ children: HashMap<VComponentKey, Box<VComponent<ViewData>>>,
     /*readonly*/ renderer: Weak<dyn VComponentRoot<ViewData = ViewData>>,
 
-    pub(in crate::core) h: VComponentHookData<ViewData>,
+    pub(in crate::core) h: VComponentStateData,
 
     is_being_updated: bool,
     is_fresh: bool,
@@ -243,7 +255,7 @@ pub struct VComponentHead<ViewData: VViewData> {
     recursive_update_stack_trace: RecursiveUpdateStack,
 }
 
-pub(in crate::core) struct VComponentHookData<ViewData: VViewData> {
+pub(in crate::core) struct VComponentStateData {
     pub state: Vec<Box<dyn Any>>,
     pub next_state_index: usize,
     // pub(in crate::core) provided_contexts: HashMap<Context, Box<dyn Any>>,
@@ -260,18 +272,19 @@ impl <ViewData: VViewData + 'static> VComponent<ViewData> {
         let action = (|| {
             if let VParent::Component(parent) = parent {
                 // parent is being created = if there are any existing children, they're not being reused, they're a conflict
-                if parent.head.node.is_some() {
-                    let found_child = parent.head.children.remove(&key);
+                if parent.node.is_some() {
+                    let found_child = parent.children.remove(&key);
                     if let Some(mut found_child) = found_child {
-                        if found_child.is_fresh {
+                        if found_child.head.is_fresh {
                             // If the component was already reused this update, it's a conflict. We add back and fall through to VComponent.create which will panic
-                            parent.head.children.insert(key.clone(), found_child);
+                            parent.children.insert(key.clone(), found_child);
                         } else {
                             // Reuse child
                             found_child.construct = Box::new(VComponentConstructImpl {
                                 props,
                                 construct,
                                 effects: VComponentEffects::new(),
+                                destructors: VComponentDestructors::new(),
                                 view_data_type: PhantomData,
                             });
                             found_child.head.is_fresh = true;
@@ -307,7 +320,7 @@ impl <ViewData: VViewData + 'static> VComponent<ViewData> {
                     VParent::Component(component) => component.renderer.clone()
                 },
 
-                h: VComponentHookData {
+                h: VComponentStateData {
                     state: Vec::new(),
                     next_state_index: 0,
                     // provided_contexts: HashMap::new(),
@@ -324,6 +337,7 @@ impl <ViewData: VViewData + 'static> VComponent<ViewData> {
                 props,
                 construct,
                 effects: VComponentEffects::new(),
+                destructors: VComponentDestructors::new(),
                 view_data_type: PhantomData
             }),
         })
@@ -364,7 +378,7 @@ impl <ViewData: VViewData> VComponentHead<ViewData> {
     }
 
     pub(super) fn add_child(&mut self, child: Box<VComponent<ViewData>>) -> &Box<VComponent<ViewData>> {
-        let key = child.key.clone();
+        let key = child.head.key.clone();
         let old_value = self.children.insert(key.clone(), child);
         assert!(old_value.is_none(), "child with key {} added twice", key);
         self.children.get(&key).unwrap()
@@ -383,6 +397,16 @@ impl <ViewData: VViewData> VComponentHead<ViewData> {
 
     pub fn is_being_created(&self) -> bool {
         self.node.is_none()
+    }
+
+    #[allow(clippy::needless_lifetimes)]
+    pub(super) fn child<'a>(&'a self, key: &VComponentKey) -> Option<&'a VComponentHead<ViewData>> {
+        self.children.get(key).map(|component| &component.head)
+    }
+
+    #[allow(clippy::needless_lifetimes)]
+    pub(super) fn child_mut<'a>(&'a mut self, key: &VComponentKey) -> Option<&'a mut VComponentHead<ViewData>> {
+        self.children.get_mut(key).map(|component| &mut component.head)
     }
 
     #[allow(clippy::needless_lifetimes)]
@@ -411,10 +435,7 @@ impl <ViewData: VViewData> VComponent<ViewData> {
                 // Do construct
                 self.do_update(|self_| {
                     // Actually do construct and set node
-                    let mut node = self_.construct.construct(&mut VComponentContextImpl {
-                        component: &mut self_.head,
-                        props: self_.construct.props()
-                    });
+                    let mut node = self_.construct.construct(&mut self_.head);
 
                     // from devolve-ui.js: "Create pixi if pixi component and on web"
                     // should have a hook in view trait we can call through node.view().hook(...)
@@ -427,15 +448,12 @@ impl <ViewData: VViewData> VComponent<ViewData> {
             } else {
                 // Reset
                 self.run_update_destructors();
-                self.head.next_state_index = 0;
-                // self.provided_contexts.clear();
+                self.head.h.next_state_index = 0;
+                // self.head.h.provided_contexts.clear();
 
                 // Do construct
                 self.do_update(|self_| {
-                    let mut node = self_.construct.construct(&mut VComponentContextImpl {
-                        component: &mut self_.head,
-                        props: self_.construct.props()
-                    });
+                    let mut node = self_.construct.construct(&mut self_.head);
 
                     // from devolve-ui.js: "Update pixi if pixi component and on web"
                     // should have a hook in view trait we can call through node.view().hook(...)
@@ -461,7 +479,7 @@ impl <ViewData: VViewData> VComponent<ViewData> {
         // from devolve-ui.js: "Destroy pixi if pixi component and on web"
         // should have a hook in view trait we can call through node.view().hook(...)
 
-        self.invalidate();
+        self.head.invalidate();
 
         for child in self.head.children.into_values() {
             child.destroy()
@@ -503,15 +521,15 @@ impl <ViewData: VViewData> VComponent<ViewData> {
         self.construct.run_permanent_destructors(&mut self.head);
     }
 
-    pub(super) fn child(self: &Box<Self>, key: &VComponentKey) -> Option<&Box<VComponent<ViewData>>> {
+    pub(super) fn child<'a>(self: &'a Box<Self>, key: &VComponentKey) -> Option<&'a Box<VComponent<ViewData>>> {
         self.head.children.get(key)
     }
 
-    pub(super) fn child_mut(self: &mut Box<Self>, key: &VComponentKey) -> Option<&mut Box<VComponent<ViewData>>> {
+    pub(super) fn child_mut<'a>(self: &'a mut Box<Self>, key: &VComponentKey) -> Option<&'a mut Box<VComponent<ViewData>>> {
         self.head.children.get_mut(key)
     }
 
-    pub(in crate::core) fn down_path<'a>(&'a self, path: &'a VComponentPath) -> Option<&Box<VComponent<ViewData>>> {
+    pub(in crate::core) fn down_path<'a>(self: &'a Box<Self>, path: &'a VComponentPath) -> Option<&Box<VComponent<ViewData>>> {
         let mut current = self;
         for segment in path.iter() {
             current = current.child(segment)?;
@@ -519,7 +537,7 @@ impl <ViewData: VViewData> VComponent<ViewData> {
         Some(current)
     }
 
-    pub(in crate::core) fn down_path_mut<'a>(&'a mut self, path: &'a VComponentPath) -> Option<&mut Box<VComponent<ViewData>>> {
+    pub(in crate::core) fn down_path_mut<'a>(self: &'a mut Box<Self>, path: &'a VComponentPath) -> Option<&mut Box<VComponent<ViewData>>> {
         let mut current = self;
         for segment in path.iter() {
             current = current.child_mut(segment)?;
@@ -562,19 +580,44 @@ impl <ViewData: VViewData + Debug> Debug for VComponentHead<ViewData> {
             .field("has_pending_updates", &self.has_pending_updates)
             .field("#h.state", &self.h.state.len())
             .field("h.next_state_index", &self.h.next_state_index)
-            .field("#h.effects", &self.h.effects.len())
-            .field("#h.update_destructors", &self.h.update_destructors.len())
-            .field("#h.permanent_destructors", &self.h.permanent_destructors.len())
-            .field("#h.next_update_destructors", &self.h.next_update_destructors.len())
             .field("recursive_update_stack_trace", &self.recursive_update_stack_trace)
             .field("node", &self.node)
+            .finish_non_exhaustive()
+    }
+}
+
+impl <Props: Any, ViewData: VViewData, F: Fn(&mut VComponentContextImpl<'_, Props, ViewData>) -> VComponentBody<ViewData> + 'static> Debug for VComponentConstructImpl<Props, ViewData, F> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("VComponentConstructImpl")
+            .field("effects", &self.effects)
+            .finish_non_exhaustive()
+    }
+}
+
+impl <Props: Any, ViewData: VViewData> Debug for VComponentEffects<Props, ViewData> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("VComponentEffects")
+            .field("#effects", &self.effects.len())
+            .finish()
+    }
+}
+
+impl <Props: Any, ViewData: VViewData> Debug for VComponentDestructors<Props, ViewData> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("VComponentDestructors")
+            .field("#update_destructors", &self.update_destructors.len())
+            .field("#next_update_destructors", &self.next_update_destructors.len())
+            .field("#permanent_destructors", &self.permanent_destructors.len())
             .finish()
     }
 }
 
 impl <ViewData: VViewData + Debug> Debug for VComponent<ViewData> {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        f.debug_tuple("VComponent").field(&self.head).finish()
+        f.debug_struct("VComponent")
+            .field("head", &self.head)
+            .field("construct", &self.construct)
+            .finish()
     }
 }
 

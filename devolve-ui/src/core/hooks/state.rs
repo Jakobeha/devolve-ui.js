@@ -18,8 +18,8 @@ use backtrace::Backtrace;
 use std::any::Any;
 use std::borrow::Cow;
 use std::ops::{Deref, DerefMut};
-use crate::core::component::component::{VComponent, VComponentHead};
-use crate::core::component::context::VContext;
+use crate::core::component::component::VComponentHead;
+use crate::core::component::context::{VComponentContext, VContext};
 use crate::core::view::view::VViewData;
 use crate::core::hooks::state_internal::{NonUpdatingState, use_non_updating_state};
 
@@ -34,15 +34,15 @@ pub struct StateDeref<'a, T: Any, ViewData: VViewData> {
     value: &'a mut T
 }
 
-pub fn use_state<T: Any, ViewData: VViewData, F: FnOnce() -> T>(
-    c: &mut Box<VComponent<ViewData>>,
+pub fn use_state<'a, T: Any, ViewData: VViewData + 'a, F: FnOnce() -> T>(
+    c: &'a mut impl VComponentContext<'a, ViewData=ViewData>,
     initial_state: F
 ) -> State<T, ViewData> {
     State(use_non_updating_state(c, initial_state))
 }
 
 impl <T: Any, ViewData: VViewData> State<T, ViewData> {
-    pub fn get<'a>(&'a self, c: &'a Box<VComponent<ViewData>>) -> &'a T {
+    pub fn get<'a>(&'a self, c: &'a mut impl VContext<'a, ViewData=ViewData>) -> &'a T {
         self.0.get(c)
     }
 

@@ -13,7 +13,7 @@ use std::any::Any;
 use std::marker::PhantomData;
 use std::ops::{Deref, DerefMut, Drop};
 use std::sync::{Arc, Weak, LockResult, Mutex, MutexGuard, TryLockResult};
-use crate::core::component::component::VComponent;
+use crate::core::component::context::VComponentContext;
 use crate::core::hooks::state_internal::use_non_updating_state;
 use crate::core::misc::map_lock_result::MappableLockResult;
 use crate::core::misc::notify_flag::NotifyFlag;
@@ -28,13 +28,13 @@ pub struct AtomicAccess<'a, T: Any, ViewData: VViewData>(MutexGuard<'a, T>, Phan
 #[derive(Debug)]
 pub struct AtomicAccessMut<'a, T: Any, ViewData: VViewData>(MutexGuard<'a, T>, Weak<NotifyFlag>, PhantomData<ViewData>);
 
-pub fn use_atomic_ref_state<T: Any, ViewData: VViewData>(
-    c: &mut Box<VComponent<ViewData>>,
+pub fn use_atomic_ref_state<'a, T: Any, ViewData: VViewData + 'a>(
+    c: &'a mut impl VComponentContext<'a, ViewData=ViewData>,
     get_initial: impl FnOnce() -> T
 ) -> AtomicRefState<T, ViewData> {
     AtomicRefState(
         use_non_updating_state(c, || Arc::new(Mutex::new(get_initial()))).get(c).clone(),
-        c.invalidate_flag(),
+        c.component().invalidate_flag(),
         PhantomData
     )
 }

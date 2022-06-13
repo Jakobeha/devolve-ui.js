@@ -13,7 +13,7 @@ use std::cell::RefCell;
 use std::rc::Rc;
 #[cfg(feature = "time")]
 use std::time::{Duration, Instant};
-use crate::core::component::context::{VComponentContextImpl, VEffectContextImpl};
+use crate::core::component::context::{VComponentContextImpl, VContext, VDestructorContextImpl, VEffectContextImpl};
 use crate::core::component::root::VComponentRoot;
 #[cfg(feature = "input")]
 use crate::core::misc::input::{KeyEvent, MouseEvent, ResizeEvent};
@@ -26,11 +26,11 @@ fn _use_event_listener<Props : Any, Event: 'static, ViewData: VViewData + 'stati
     c: &mut VComponentContextImpl<'_, Props, ViewData>,
     rerun: UseEffectRerun<NoDependencies>,
     register_listener: impl Fn(&mut VEffectContextImpl<'_, Props, ViewData>, Rc<dyn VComponentRoot<ViewData = ViewData>>) -> RendererListenerId<Event> + 'static,
-    unregister_listener: impl Fn(&mut VEffectContextImpl<'_, Props, ViewData>, Rc<dyn VComponentRoot<ViewData = ViewData>>, RendererListenerId<Event>) + 'static
+    unregister_listener: impl Fn(&mut VDestructorContextImpl<'_, Props, ViewData>, Rc<dyn VComponentRoot<ViewData = ViewData>>, RendererListenerId<Event>) + 'static
 ) {
     let unregister_listener = Rc::new(unregister_listener);
     use_effect(c, rerun, move |c| {
-        let weak_renderer = c.renderer();
+        let weak_renderer = c.component().renderer();
         let renderer = weak_renderer.upgrade();
 
         if renderer.is_none() {
@@ -58,7 +58,7 @@ fn _use_tick_listener<Props : Any, ViewData: VViewData + 'static>(
 ) {
     let listener = Rc::new(listener);
     _use_event_listener(c, rerun, move |c, renderer| {
-        let c_ref = c.vref();
+        let c_ref = c.component().vref();
         let listener = listener.clone();
         renderer.clone().listen_for_time(Box::new(move |delta_time| {
             let listener = listener.clone();
@@ -101,7 +101,7 @@ fn _use_key_listener<Props : Any, ViewData: VViewData + 'static>(
 ) {
     let listener = Rc::new(listener);
     _use_event_listener(c, rerun, move |c, renderer| {
-        let c_ref = c.vref();
+        let c_ref = c.component().vref();
         let listener = listener.clone();
         renderer.listen_for_keys(Box::new(move |event| {
             let listener = listener.clone();
@@ -142,7 +142,7 @@ fn _use_mouse_listener<Props : Any, ViewData: VViewData + 'static>(
 ) {
     let listener = Rc::new(listener);
     _use_event_listener(c, rerun,move |c, renderer| {
-        let c_ref = c.vref();
+        let c_ref = c.component().vref();
         let listener = listener.clone();
         renderer.listen_for_mouse(Box::new(move |event| {
             let listener = listener.clone();
@@ -183,7 +183,7 @@ fn _use_resize_listener<Props : Any, ViewData: VViewData + 'static>(
 ) {
     let listener = Rc::new(listener);
     _use_event_listener(c, rerun, move |c, renderer| {
-        let c_ref = c.vref();
+        let c_ref = c.component().vref();
         let listener = listener.clone();
         renderer.listen_for_resize(Box::new(move |event| {
             let listener = listener.clone();
@@ -259,8 +259,8 @@ pub fn use_interval<Props : Any, ViewData: VViewData + 'static>(
 /// Note that the function can't be called exactly on the interval because the ticks may not line up,
 /// but it will be called as soon as possible when or after the tick.
 #[cfg(feature = "time")]
-pub fn use_delay<Props : Any, ViewData: VViewData + 'static>(
-    c: &mut VComponentContextImpl<'_, Props, ViewData>,
+pub fn use_delay<'a, Props : Any, ViewData: VViewData + 'static>(
+    c: &'a mut VComponentContextImpl<'a, Props, ViewData>,
     delay: Duration,
     listener: impl FnOnce(&mut VEffectContextImpl<'_, Props, ViewData>) + 'static
 ) {
