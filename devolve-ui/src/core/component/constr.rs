@@ -18,7 +18,7 @@ pub fn make_component<
     ViewData: VViewData + 'static,
     Str: Into<VComponentKey>,
     Props: 'static,
-    F: Fn(VComponentContext2<'_, '_, Props, ViewData>) -> VComponentBody<ViewData> + 'static
+    F: Fn(VComponentContext2<'_, Props, ViewData>) -> VComponentBody<ViewData> + 'static
 >(
     c: &'a mut impl VComponentContext<'a, ViewData=ViewData>,
     key: Str,

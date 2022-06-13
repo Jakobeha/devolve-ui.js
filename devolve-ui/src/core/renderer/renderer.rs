@@ -184,7 +184,7 @@ impl <Engine: RenderEngine> Renderer<Engine> where Engine::RenderLayer: VRenderL
         self.is_visible.get()
     }
 
-    pub fn root(self: &Rc<Self>, construct: impl Fn(VComponentContext2<'_, '_, (), Engine::ViewData>) -> VNode<Engine::ViewData> + 'static) {
+    pub fn root(self: &Rc<Self>, construct: impl Fn(VComponentContext2<'_, (), Engine::ViewData>) -> VNode<Engine::ViewData> + 'static) {
         self._root(|parent| VComponent::new(parent, ().into(), (), move |c| VComponentBody::new(construct(c))))
     }
 

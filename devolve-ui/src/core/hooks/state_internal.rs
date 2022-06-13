@@ -31,13 +31,13 @@ pub fn use_non_updating_state<'a, T: Any, ViewData: VViewData + 'a>(c: &'a mut i
 }
 
 impl <T: Any, ViewData: VViewData> NonUpdatingState<T, ViewData> {
-    pub fn get<'a>(&self, c: &'a mut impl VContext<'a, ViewData=ViewData>) -> &'a T where ViewData: 'a {
+    pub fn get<'a: 'b, 'b>(&self, c: &'b mut impl VContext<'a, ViewData=ViewData>) -> &'b T where ViewData: 'b {
         c.component().h.state
             .get(self.index).expect("unaligned hooks: state index out of bounds")
             .downcast_ref::<T>().expect("unaligned hooks: state type mismatch")
     }
 
-    pub fn get_mut<'a>(&self, c: &'a mut impl VContext<'a, ViewData=ViewData>) -> &'a mut T where ViewData: 'a {
+    pub fn get_mut<'a: 'b, 'b>(&self, c: &'b mut impl VContext<'a, ViewData=ViewData>) -> &'b mut T where ViewData: 'b {
         self._get_mut(&mut c.component().h.state)
     }
 

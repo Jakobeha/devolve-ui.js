@@ -64,7 +64,7 @@ impl <ViewData: VViewData> dyn VComponentConstruct<ViewData=ViewData> {
     }
 }
 
-struct VComponentConstructImpl<Props: Any, ViewData: VViewData, F: Fn(VComponentContext2<'_, '_, Props, ViewData>) -> VComponentBody<ViewData> + 'static> {
+struct VComponentConstructImpl<Props: Any, ViewData: VViewData, F: Fn(VComponentContext2<'_, Props, ViewData>) -> VComponentBody<ViewData> + 'static> {
     props: Props,
     construct: F,
     effects: VComponentEffects<Props, ViewData>,
@@ -73,13 +73,13 @@ struct VComponentConstructImpl<Props: Any, ViewData: VViewData, F: Fn(VComponent
 }
 
 pub(in crate::core) struct VComponentEffects<Props: Any, ViewData: VViewData> {
-    pub effects: Vec<Box<dyn Fn(VEffectContext2<'_, '_, Props, ViewData>) -> ()>>,
+    pub effects: Vec<Box<dyn Fn(VEffectContext2<'_, Props, ViewData>) -> ()>>,
 }
 
 pub(in crate::core) struct VComponentDestructors<Props: Any, ViewData: VViewData> {
-    pub update_destructors: Vec<Box<dyn FnOnce(VDestructorContext2<'_, '_, Props, ViewData>) -> ()>>,
-    pub next_update_destructors: Vec<Box<dyn FnOnce(VDestructorContext2<'_, '_, Props, ViewData>) -> ()>>,
-    pub permanent_destructors: Vec<Box<dyn FnOnce(VDestructorContext2<'_, '_, Props, ViewData>) -> ()>>
+    pub update_destructors: Vec<Box<dyn FnOnce(VDestructorContext2<'_, Props, ViewData>) -> ()>>,
+    pub next_update_destructors: Vec<Box<dyn FnOnce(VDestructorContext2<'_, Props, ViewData>) -> ()>>,
+    pub permanent_destructors: Vec<Box<dyn FnOnce(VDestructorContext2<'_, Props, ViewData>) -> ()>>
 }
 
 impl <Props: Any, ViewData: VViewData> VComponentEffects<Props, ViewData> {
@@ -100,7 +100,7 @@ impl <Props: Any, ViewData: VViewData> VComponentDestructors<Props, ViewData> {
     }
 }
 
-impl <Props: Any, ViewData: VViewData, F: Fn(VComponentContext2<'_, '_, Props, ViewData>) -> VComponentBody<ViewData> + 'static> VComponentConstruct for VComponentConstructImpl<Props, ViewData, F> {
+impl <Props: Any, ViewData: VViewData, F: Fn(VComponentContext2<'_, Props, ViewData>) -> VComponentBody<ViewData> + 'static> VComponentConstruct for VComponentConstructImpl<Props, ViewData, F> {
     type ViewData = ViewData;
 
     fn props(&self) -> &dyn Any {
@@ -109,11 +109,10 @@ impl <Props: Any, ViewData: VViewData, F: Fn(VComponentContext2<'_, '_, Props, V
 
     fn construct(&mut self, component: &mut VComponentHead<Self::ViewData>) -> VComponentBody<Self::ViewData> {
         let construct = &self.construct;
-        let mut c = VComponentContext1 {
+        construct((VComponentContext1 {
             component,
             effects: &mut self.effects,
-        };
-        construct((&mut c, &self.props))
+        }, &self.props))
     }
 
     fn run_effects(&mut self, component: &mut VComponentHead<Self::ViewData>) {
@@ -122,33 +121,29 @@ impl <Props: Any, ViewData: VViewData, F: Fn(VComponentContext2<'_, '_, Props, V
                 break
             }
 
-            let mut c = VEffectContext1 {
+            effect((VEffectContext1 {
                 component,
-                destructors: &mut self.destructors,
-            };
-
-            effect((&mut c, &self.props));
+                destructors: &mut self.destructors
+            }, &self.props));
         }
     }
 
     fn run_update_destructors(&mut self, component: &mut VComponentHead<Self::ViewData>) {
         while let Some(update_destructor) = self.destructors.update_destructors.pop() {
-            let mut c = VDestructorContext1 {
+            update_destructor((VDestructorContext1 {
                 component,
                 phantom: PhantomData
-            };
-            update_destructor((&mut c, &self.props));
+            }, &self.props))
         }
         self.destructors.update_destructors.append(&mut self.destructors.next_update_destructors);
     }
 
     fn run_permanent_destructors(&mut self, component: &mut VComponentHead<Self::ViewData>) {
         while let Some(permanent_destructor) = self.destructors.permanent_destructors.pop() {
-            let mut c = VDestructorContext1 {
+            permanent_destructor((VDestructorContext1 {
                 component,
                 phantom: PhantomData
-            };
-            permanent_destructor((&mut c, &self.props));
+            }, &self.props))
         }
     }
 }
@@ -273,7 +268,7 @@ pub(in crate::core) struct VComponentStateData {
 }
 
 impl <ViewData: VViewData + 'static> VComponent<ViewData> {
-    pub(in crate::core) fn new<Props: 'static, F: Fn(VComponentContext2<'_, '_, Props, ViewData>) -> VComponentBody<ViewData> + 'static>(parent: VParent<'_, ViewData>, key: VComponentKey, props: Props, construct: F) -> Box<VComponent<ViewData>> {
+    pub(in crate::core) fn new<Props: 'static, F: Fn(VComponentContext2<'_, Props, ViewData>) -> VComponentBody<ViewData> + 'static>(parent: VParent<'_, ViewData>, key: VComponentKey, props: Props, construct: F) -> Box<VComponent<ViewData>> {
         enum Action<'a, ViewData_: VViewData, Props_, F_> {
             Reuse(Box<VComponent<ViewData_>>),
             Create(VParent<'a, ViewData_>, Props_, F_)
@@ -317,7 +312,7 @@ impl <ViewData: VViewData + 'static> VComponent<ViewData> {
         }
     }
 
-    fn create<Props: 'static, F: Fn(VComponentContext2<'_, '_, Props, ViewData>) -> VComponentBody<ViewData> + 'static>(parent: VParent<'_, ViewData>, key: VComponentKey, props: Props, construct: F) -> Box<Self>{
+    fn create<Props: 'static, F: Fn(VComponentContext2<'_, Props, ViewData>) -> VComponentBody<ViewData> + 'static>(parent: VParent<'_, ViewData>, key: VComponentKey, props: Props, construct: F) -> Box<Self>{
         Box::new(VComponent {
             head: VComponentHead {
                 id: VNode::<ViewData>::next_id(),
@@ -596,7 +591,7 @@ impl <ViewData: VViewData + Debug> Debug for VComponentHead<ViewData> {
     }
 }
 
-impl <Props: Any, ViewData: VViewData, F: Fn(VComponentContext2<'_, '_, Props, ViewData>) -> VComponentBody<ViewData> + 'static> Debug for VComponentConstructImpl<Props, ViewData, F> {
+impl <Props: Any, ViewData: VViewData, F: Fn(VComponentContext2<'_, Props, ViewData>) -> VComponentBody<ViewData> + 'static> Debug for VComponentConstructImpl<Props, ViewData, F> {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("VComponentConstructImpl")
             .field("effects", &self.effects)

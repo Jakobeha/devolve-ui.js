@@ -42,11 +42,11 @@ pub fn use_state<'a, T: Any, ViewData: VViewData + 'a, F: FnOnce() -> T>(
 }
 
 impl <T: Any, ViewData: VViewData> State<T, ViewData> {
-    pub fn get<'a>(&self, c: &'a mut impl VContext<'a, ViewData=ViewData>) -> &'a T where ViewData: 'a {
+    pub fn get<'a: 'b, 'b>(&self, c: &'b mut impl VContext<'a, ViewData=ViewData>) -> &'b T where ViewData: 'b {
         self.0.get(c)
     }
 
-    pub fn get_mut<'a>(&self, c: &'a mut impl VContext<'a, ViewData=ViewData>) -> StateDeref<'a, T, ViewData> where ViewData: 'a {
+    pub fn get_mut<'a: 'b, 'b>(&self, c: &'b mut impl VContext<'a, ViewData=ViewData>) -> StateDeref<'b, T, ViewData> where ViewData: 'b {
         #[cfg(feature = "backtrace")]
             let backtrace = Backtrace::new();
         #[cfg(not(feature = "backtrace"))]

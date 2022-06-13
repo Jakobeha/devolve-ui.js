@@ -46,13 +46,13 @@ pub struct VEffectContextRef<Props: Any, ViewData: VViewData> {
     phantom: PhantomData<Props>
 }
 
-pub type VComponentContext2<'a: 'b, 'b, Props: Any, ViewData: VViewData> = (&'b mut VComponentContext1<'a, Props, ViewData>, &'a Props);
+pub type VComponentContext2<'a, Props: Any, ViewData: VViewData> = (VComponentContext1<'a, Props, ViewData>, &'a Props);
 
-pub type VEffectContext2<'a: 'b, 'b, Props: Any, ViewData: VViewData> = (&'b mut VEffectContext1<'a, Props, ViewData>, &'a Props);
+pub type VEffectContext2<'a, Props: Any, ViewData: VViewData> = (VEffectContext1<'a, Props, ViewData>, &'a Props);
 
-pub type VDestructorContext2<'a: 'b, 'b, Props: Any, ViewData: VViewData> = (&'b mut VDestructorContext1<'a, Props, ViewData>, &'a Props);
+pub type VDestructorContext2<'a, Props: Any, ViewData: VViewData> = (VDestructorContext1<'a, Props, ViewData>, &'a Props);
 
-pub type VPlainContext2<'a: 'b, 'b, Props: Any, ViewData: VViewData> = (&'b mut VPlainContext1<'a, Props, ViewData>, &'a Props);
+pub type VPlainContext2<'a, Props: Any, ViewData: VViewData> = (VPlainContext1<'a, Props, ViewData>, &'a Props);
 
 pub trait VContext<'a> {
     type ViewData: VViewData;
@@ -107,17 +107,20 @@ impl <'a, Props: Any, ViewData: VViewData> VEffectContext1<'a, Props, ViewData> 
         }
     }
 
-    pub fn with_shortened<'b, R>(&'b mut self, fun: impl FnOnce(&'b mut VEffectContext1<'a, Props, ViewData>) -> R) -> R where 'a: 'b {
-        fun(self)
+    pub fn with<'b, R>(&'b mut self, fun: impl FnOnce(VEffectContext1<'b, Props, ViewData>) -> R) -> R {
+        fun(VEffectContext1 {
+            component: self.component,
+            destructors: self.destructors
+        })
     }
 }
 
 impl <Props: Any, ViewData: VViewData + 'static> VEffectContextRef<Props, ViewData> {
-    fn with<R>(&self, fun: impl FnOnce(Option<VPlainContext2<'_, '_, Props, ViewData>>) -> R) -> R {
+    fn with<R>(&self, fun: impl FnOnce(Option<VPlainContext2<'_, Props, ViewData>>) -> R) -> R {
         self.component.with(|component| {
             match component {
                 None => fun(None),
-                Some(component) => fun(Some((&mut VPlainContext1 {
+                Some(component) => fun(Some((VPlainContext1 {
                     component: &mut component.head,
                     phantom: PhantomData
                 }, component.construct.cast_props())))
@@ -125,9 +128,9 @@ impl <Props: Any, ViewData: VViewData + 'static> VEffectContextRef<Props, ViewDa
         })
     }
 
-    pub fn try_with<R>(&self, fun: impl FnOnce(VPlainContext2<'_, '_, Props, ViewData>) -> R) -> Option<R> {
+    pub fn try_with<R>(&self, fun: impl FnOnce(VPlainContext2<'_, Props, ViewData>) -> R) -> Option<R> {
         self.component.try_with(|component| {
-            fun((&mut VPlainContext1 {
+            fun((VPlainContext1 {
                 component: &mut component.head,
                 phantom: PhantomData
             }, component.construct.cast_props()))
@@ -151,21 +154,21 @@ impl <'a, Props: Any, ViewData: VViewData> VContext<'a> for VPlainContext1<'a, P
     }
 }
 
-pub fn with_destructor_context<Props: Any, ViewData: VViewData, R>(
-    (c, props): VEffectContext2<'_, '_, Props, ViewData>,
-    fun: impl FnOnce(VDestructorContext2<'_, '_, Props, ViewData>) -> R
+pub fn with_destructor_context<'a, Props: Any, ViewData: VViewData, R>(
+    (c, props): (&mut VEffectContext1<'a, Props, ViewData>, &'a Props),
+    fun: impl FnOnce(VDestructorContext2<'_, Props, ViewData>) -> R
 ) -> R {
-    fun((&mut VDestructorContext1 {
+    fun((VDestructorContext1 {
         component: c.component,
         phantom: PhantomData
     }, props))
 }
 
-pub fn with_plain_context<Props: Any, ViewData: VViewData, R>(
-    (c, props): VEffectContext2<'_, '_, Props, ViewData>,
-    fun: impl FnOnce(VPlainContext2<'_, '_, Props, ViewData>) -> R
+pub fn with_plain_context<'a, Props: Any, ViewData: VViewData, R>(
+    (c, props): (&mut VEffectContext1<'a, Props, ViewData>, &'a Props),
+    fun: impl FnOnce(VPlainContext2<'_, Props, ViewData>) -> R
 ) -> R {
-    fun((&mut VPlainContext1 {
+    fun((VPlainContext1 {
         component: c.component,
         phantom: PhantomData
     }, props))
