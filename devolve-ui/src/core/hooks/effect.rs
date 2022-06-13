@@ -4,11 +4,13 @@
 //! According to good design, it should also be "pure" and side effects should be distinctly marked
 //! by being in `use_effect` closures.
 
+use std::any::Any;
 use std::cell::RefCell;
 use std::convert::Infallible;
 use std::mem;
 use std::slice::Iter;
 use crate::core::component::component::VComponent;
+use crate::core::component::context::{VComponentContextImpl, VContext, VEffectContextImpl};
 use crate::core::view::view::VViewData;
 use crate::core::hooks::state_internal::use_non_updating_state;
 
@@ -87,7 +89,15 @@ pub type NoDependencies = Infallible;
 /// Runs a closure according to `rerun`. The closure should contain an effect,
 /// while the component's body should otherwise be a "pure" function based on its
 /// props and state hooks like `use_state`.
-pub fn use_effect<Destructor: FnOnce(&mut Box<VComponent<ViewData>>) + 'static, ViewData: VViewData + 'static>(c: &mut Box<VComponent<ViewData>>, rerun: UseEffectRerun<NoDependencies>, effect: impl Fn(&mut Box<VComponent<ViewData>>) -> Destructor + 'static) {
+pub fn use_effect<
+    Props : Any,
+    Destructor: FnOnce(&mut VEffectContextImpl<'_, Props, ViewData>) + 'static,
+    ViewData: VViewData + 'static
+>(
+    c: &mut VComponentContextImpl<'_, Props, ViewData>,
+    rerun: UseEffectRerun<NoDependencies>,
+    effect: impl Fn(&mut VEffectContextImpl<'_, Props, ViewData>) -> Destructor + 'static
+) {
     use_effect_with_deps(c, rerun, effect);
 }
 
@@ -97,7 +107,14 @@ pub fn use_effect<Destructor: FnOnce(&mut Box<VComponent<ViewData>>) + 'static, 
 ///
 /// The behavior is exactly like `use_effect` and `use_effect_with_deps` when given `UseEffectRerun::OnCreate`.
 /// However, this function allows you to pass an `FnOnce` to `effect` since we statically know it will only be called once.
-pub fn use_effect_on_create<Destructor: FnOnce(&mut Box<VComponent<ViewData>>) + 'static, ViewData: VViewData + 'static>(c: &mut Box<VComponent<ViewData>>, effect: impl FnOnce(&mut Box<VComponent<ViewData>>) -> Destructor + 'static) {
+pub fn use_effect_on_create<
+    Props : Any,
+    Destructor: FnOnce(&mut VEffectContextImpl<'_, Props, ViewData>) + 'static,
+    ViewData: VViewData + 'static
+>(
+    c: &mut VComponentContextImpl<'_, Props, ViewData>,
+    effect: impl FnOnce(&mut VEffectContextImpl<'_, Props, ViewData>) -> Destructor + 'static
+) {
     let effect = RefCell::new(Some(effect));
     use_effect(c, UseEffectRerun::OnCreate, move |c| {
         let effect = effect.borrow_mut().take().expect("unexpected: use_effect_on_create's effect requested multiple times");
@@ -111,24 +128,34 @@ pub fn use_effect_on_create<Destructor: FnOnce(&mut Box<VComponent<ViewData>>) +
 ///
 /// This function is actually the exact same as `use_effect`, but exposes the dependencies as a type parameter.
 /// Without the 2 versions, you would always have to specify dependencies on `use_effect` even if the enum variant didn't have them.
-pub fn use_effect_with_deps<Dependencies: CollectionOfPartialEqs + 'static, Destructor: FnOnce(&mut Box<VComponent<ViewData>>) + 'static, ViewData: VViewData + 'static>(c: &mut Box<VComponent<ViewData>>, rerun: UseEffectRerun<Dependencies>, effect: impl Fn(&mut Box<VComponent<ViewData>>) -> Destructor + 'static) {
+pub fn use_effect_with_deps<
+    Props : Any,
+    Dependencies: CollectionOfPartialEqs + 'static,
+    Destructor: FnOnce(&mut VEffectContextImpl<'_, Props, ViewData>) + 'static,
+    ViewData: VViewData + 'static
+>(
+    c: &mut VComponentContextImpl<'_, Props, ViewData>,
+    rerun: UseEffectRerun<Dependencies>,
+    effect: impl Fn(&mut VEffectContextImpl<'_, Props, ViewData>) -> Destructor + 'static
+) {
+    let co = c.component();
     match rerun {
         UseEffectRerun::OnCreate => {
-            if c.is_being_created() {
-                c.effects.push(Box::new(move |c| {
+            if co.is_being_created() {
+                co.h.effects.push(Box::new(move |c| {
                     let destructor = effect(c);
                     c.permanent_destructors.push(Box::new(move |c| destructor(c)));
                 }))
             }
         },
         UseEffectRerun::OnUpdate => {
-            c.effects.push(Box::new(move |c| {
+            co.h.effects.push(Box::new(move |c| {
                 let destructor = effect(c);
                 c.update_destructors.push(Box::new(|c| destructor(c)));
             }));
         },
         UseEffectRerun::OnChange(mut dependencies) => {
-            let is_created = c.is_being_created();
+            let is_created = co.is_being_created();
             // on mem::replace - we want to move dependencies, because we know that it will only be
             // moved when is_created is true, and when is_created is true we also don't access dependencies
             // afterwards. However, Rust won't allow that, and I'm pretty sure it would cause undefined
@@ -140,7 +167,7 @@ pub fn use_effect_with_deps<Dependencies: CollectionOfPartialEqs + 'static, Dest
             // and then set the new ones, and mem::replace happens to be the perfect tool for this.
             let old_dependencies = mem::replace(memo.get_mut(c), dependencies);
 
-            c.effects.push(Box::new(move |c| {
+            co.h.effects.push(Box::new(move |c| {
                 let do_effect = if is_created {
                     true
                 } else {

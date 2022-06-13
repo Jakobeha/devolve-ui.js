@@ -5,6 +5,7 @@
 use std::any::Any;
 use std::marker::PhantomData;
 use crate::core::component::component::VComponent;
+use crate::core::component::context::{VComponentContext, VContext};
 use crate::core::view::view::VViewData;
 
 #[derive(Debug)]
@@ -13,14 +14,15 @@ pub struct NonUpdatingState<T: Any, ViewData: VViewData> {
     pub phantom_view_data: PhantomData<(T, ViewData)>
 }
 
-pub fn use_non_updating_state<T: Any, ViewData: VViewData>(c: &mut Box<VComponent<ViewData>>, initial_state: impl FnOnce() -> T) -> NonUpdatingState<T, ViewData> {
-    let index = c.next_state_index;
-    c.next_state_index += 1;
+pub fn use_non_updating_state<T: Any, ViewData: VViewData>(c: &mut impl VComponentContext<'_, ViewData=ViewData>, initial_state: impl FnOnce() -> T) -> NonUpdatingState<T, ViewData> {
+    let c = c.component();
+    let index = c.h.next_state_index;
+    c.h.next_state_index += 1;
     if c.is_being_created() {
-        if c.state.len() != index {
+        if c.h.state.len() != index {
             panic!("unaligned hooks: state length ({}) != state index ({})", c.state.len(), index);
         }
-        c.state.push(Box::new(initial_state()));
+        c.h.state.push(Box::new(initial_state()));
     }
 
     NonUpdatingState {
@@ -30,14 +32,14 @@ pub fn use_non_updating_state<T: Any, ViewData: VViewData>(c: &mut Box<VComponen
 }
 
 impl <T: Any, ViewData: VViewData> NonUpdatingState<T, ViewData> {
-    pub fn get<'a>(&'a self, c: &'a Box<VComponent<ViewData>>) -> &'a T {
-        c.state
+    pub fn get<'a>(&'a self, c: &impl VContext<'a, ViewData=ViewData>) -> &'a T {
+        c.component().h.state
             .get(self.index).expect("unaligned hooks: state index out of bounds")
             .downcast_ref::<T>().expect("unaligned hooks: state type mismatch")
     }
 
-    pub fn get_mut<'a>(&'a self, c: &'a mut Box<VComponent<ViewData>>) -> &'a mut T {
-        self._get_mut(&mut c.state)
+    pub fn get_mut<'a>(&'a self, c: &mut impl VContext<'a, ViewData=ViewData>) -> &'a mut T {
+        self._get_mut(&mut c.component().h.state)
     }
 
     pub fn _get_mut<'a>(&'a self, c_state: &'a mut Vec<Box<dyn Any>>) -> &'a mut T {

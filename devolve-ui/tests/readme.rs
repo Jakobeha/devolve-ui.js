@@ -124,6 +124,7 @@ fn test_render() {
     renderer.show();
     // renderer.resume();
 
+    // TODO generalize how we do this
     let mut test_output_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     test_output_dir.push("test-output");
     assert!(test_output_dir.exists(), "test output dir doesn't exist! {}", test_output_dir.display());

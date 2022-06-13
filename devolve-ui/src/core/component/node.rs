@@ -80,16 +80,15 @@ impl <ViewData: VViewData> VNode<ViewData> {
 
     // Lifetimes must be different here because we borrow parent in resolve_mut and in the VNodeResolvedMut::View case.
     // This is OK because the lifetime in VNodeResolvedMut::View's view is different than that in parent
-    pub fn update(&mut self, parent: &mut Box<VComponent<ViewData>>, details: Cow<'static, str>) {
+    pub fn update(&mut self, parent: &mut Box<VComponent<ViewData>>) {
         match self.resolve_mut(parent) {
             VNodeResolvedMut::Component(component) => {
-                component.update(details);
+                component.update();
             },
             VNodeResolvedMut::View(view) => {
                 if let Some((children, _)) = view.d.children_mut() {
-                    for (index, child) in children.enumerate() {
-                        let sub_details = Cow::Owned(format!("{}[{}]", details, index));
-                        child.update(parent, sub_details);
+                    for child in children {
+                        child.update(parent);
                     }
                 }
             }
@@ -98,14 +97,14 @@ impl <ViewData: VViewData> VNode<ViewData> {
 
     pub fn component_and_view<'a>(&'a self, parent: &'a Box<VComponent<ViewData>>) -> VComponentAndView<'a, ViewData> {
         match self.resolve(parent) {
-            VNodeResolved::Component(component) => component.component_and_view(),
+            VNodeResolved::Component(component) => component.head.component_and_view(),
             VNodeResolved::View(view) => (parent, view)
         }
     }
 
     pub fn view<'a>(&'a self, parent: &'a Box<VComponent<ViewData>>) -> &'a Box<VView<ViewData>> {
         match self.resolve(parent) {
-            VNodeResolved::Component(component) => component.view(),
+            VNodeResolved::Component(component) => component.head.view(),
             VNodeResolved::View(view) => view
         }
     }

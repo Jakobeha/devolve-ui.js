@@ -18,7 +18,8 @@ use backtrace::Backtrace;
 use std::any::Any;
 use std::borrow::Cow;
 use std::ops::{Deref, DerefMut};
-use crate::core::component::component::VComponent;
+use crate::core::component::component::{VComponent, VComponentHead};
+use crate::core::component::context::VContext;
 use crate::core::view::view::VViewData;
 use crate::core::hooks::state_internal::{NonUpdatingState, use_non_updating_state};
 
@@ -28,7 +29,7 @@ pub struct State<T: Any, ViewData: VViewData>(NonUpdatingState<T, ViewData>);
 /// Smart pointer which allows access to the state, and calls `update` when it gets dropped.
 pub struct StateDeref<'a, T: Any, ViewData: VViewData> {
     // See comment in StateDeref::drop
-    c: *mut Box<VComponent<ViewData>>,
+    component: *mut VComponentHead<ViewData>,
     update_message: String,
     value: &'a mut T
 }
@@ -45,7 +46,7 @@ impl <T: Any, ViewData: VViewData> State<T, ViewData> {
         self.0.get(c)
     }
 
-    pub fn get_mut<'a>(&'a self, c: &'a mut Box<VComponent<ViewData>>) -> StateDeref<'a, T, ViewData> {
+    pub fn get_mut<'a>(&'a self, c: &'a mut impl VContext<ViewData=ViewData>) -> StateDeref<'a, T, ViewData> {
         #[cfg(feature = "backtrace")]
             let backtrace = Backtrace::new();
         #[cfg(not(feature = "backtrace"))]
@@ -53,7 +54,7 @@ impl <T: Any, ViewData: VViewData> State<T, ViewData> {
         let update_message = format!("set:state{}\n{:?}", self.0.index, backtrace);
         StateDeref {
             // See comment in StateDeref::drop
-            c: c as *mut Box<VComponent<ViewData>>,
+            component: c.component(),
             update_message,
             value: self.0.get_mut(c)
         }
@@ -80,8 +81,8 @@ impl <'a, T: Any, ViewData: VViewData> Drop for StateDeref<'a, T, ViewData> {
         // However, this is sound because we never use both of these simultaneously.
         // value is used in deref and deref_mut. c is not used until drop.
         // deref and deref_mut will never be called in drop and vice versa.
-        let c = unsafe { self.c.as_mut().unwrap() };
-        c.update(Cow::Owned(self.update_message.clone()));
+        let component = unsafe { self.component.as_mut().unwrap() };
+        component.update(Cow::Owned(self.update_message.clone()));
     }
 }
 

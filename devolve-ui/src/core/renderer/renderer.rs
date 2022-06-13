@@ -16,7 +16,7 @@ use std::time::{Duration, Instant};
 use tokio::runtime;
 use crate::core::component::component::{VComponent, VComponentBody};
 use crate::core::component::node::{NodeId, VComponentAndView, VNode};
-use crate::core::component::parent::{_VParent, VParent};
+use crate::core::component::parent::VParent;
 use crate::core::component::path::VComponentPath;
 use crate::core::component::root::VComponentRoot;
 #[cfg(feature = "input")]
@@ -189,7 +189,7 @@ impl <Engine: RenderEngine> Renderer<Engine> where Engine::RenderLayer: VRenderL
 
     fn _root(self: &Rc<Self>, construct: impl FnOnce(VParent<'_, Engine::ViewData>) -> Box<VComponent<Engine::ViewData>>) {
         let self_upcast = self.clone().upcast();
-        let root_component = construct(VParent(_VParent::Root(&self_upcast)));
+        let root_component = construct(VParent::Root(&self_upcast));
         self.set_root_component(Some(root_component));
 
         if self.is_visible.get() {
@@ -202,8 +202,9 @@ impl <Engine: RenderEngine> Renderer<Engine> where Engine::RenderLayer: VRenderL
         let mut self_root_component = self.root_component.borrow_mut();
         *self_root_component = root_component;
         if let Some(self_root_component) = self_root_component.as_mut() {
-            self_root_component.update(Cow::Borrowed("init:"));
+            self_root_component.update();
         }
+        // TODO: call .update() later (idk when) to flush pending updates
     }
 
     /// Make the renderer visible and render once
@@ -230,7 +231,7 @@ impl <Engine: RenderEngine> Renderer<Engine> where Engine::RenderLayer: VRenderL
     fn render(self: &Rc<Self>, is_first: bool) {
         assert!(self.is_visible.get(), "can't render while invisible");
         let borrowed_root_component = self.root_component.borrow();
-        let root_component = borrowed_root_component.as_ref().expect("can't render without root component");
+        let root_component = &borrowed_root_component.as_ref().expect("can't render without root component").head;
 
         self.needs_rerender.clear();
 
