@@ -4,7 +4,6 @@
 
 use std::any::Any;
 use std::marker::PhantomData;
-use crate::core::component::component::VComponent;
 use crate::core::component::context::{VComponentContext, VContext};
 use crate::core::view::view::VViewData;
 
@@ -14,7 +13,7 @@ pub struct NonUpdatingState<T: Any, ViewData: VViewData> {
     pub phantom_view_data: PhantomData<(T, ViewData)>
 }
 
-pub fn use_non_updating_state<T: Any, ViewData: VViewData>(c: &mut impl VComponentContext<'_, ViewData=ViewData>, initial_state: impl FnOnce() -> T) -> NonUpdatingState<T, ViewData> {
+pub fn use_non_updating_state<'a, T: Any, ViewData: VViewData>(c: &mut impl VComponentContext<'a, ViewData=ViewData>, initial_state: impl FnOnce() -> T) -> NonUpdatingState<T, ViewData> {
     let c = c.component();
     let index = c.h.next_state_index;
     c.h.next_state_index += 1;
@@ -32,7 +31,7 @@ pub fn use_non_updating_state<T: Any, ViewData: VViewData>(c: &mut impl VCompone
 }
 
 impl <T: Any, ViewData: VViewData> NonUpdatingState<T, ViewData> {
-    pub fn get<'a>(&'a self, c: &impl VContext<'a, ViewData=ViewData>) -> &'a T {
+    pub fn get<'a>(&'a self, c: &mut impl VContext<'a, ViewData=ViewData>) -> &'a T {
         c.component().h.state
             .get(self.index).expect("unaligned hooks: state index out of bounds")
             .downcast_ref::<T>().expect("unaligned hooks: state type mismatch")

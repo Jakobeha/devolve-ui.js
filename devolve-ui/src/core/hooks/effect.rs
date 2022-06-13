@@ -9,7 +9,6 @@ use std::cell::RefCell;
 use std::convert::Infallible;
 use std::mem;
 use std::slice::Iter;
-use crate::core::component::component::VComponent;
 use crate::core::component::context::{VComponentContextImpl, VContext, VEffectContextImpl};
 use crate::core::view::view::VViewData;
 use crate::core::hooks::state_internal::use_non_updating_state;

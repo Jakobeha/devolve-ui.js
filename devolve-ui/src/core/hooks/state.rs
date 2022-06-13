@@ -46,7 +46,7 @@ impl <T: Any, ViewData: VViewData> State<T, ViewData> {
         self.0.get(c)
     }
 
-    pub fn get_mut<'a>(&'a self, c: &'a mut impl VContext<ViewData=ViewData>) -> StateDeref<'a, T, ViewData> {
+    pub fn get_mut<'a>(&'a self, c: &'a mut impl VContext<'a, ViewData=ViewData>) -> StateDeref<'a, T, ViewData> {
         #[cfg(feature = "backtrace")]
             let backtrace = Backtrace::new();
         #[cfg(not(feature = "backtrace"))]

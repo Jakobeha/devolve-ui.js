@@ -13,14 +13,14 @@
 //! instead of throwing runtime exceptions or just returning `undefined`.
 
 use std::any::Any;
-use std::marker::PhantomData;
-use crate::core::component::component::{VComponent, VComponentHead};
+use crate::core::component::component::{VComponentEffects, VComponentHead};
 use crate::core::view::view::VViewData;
 
 #[derive(Debug)]
 pub struct VComponentContextImpl<'a, Props: Any, ViewData: VViewData> {
     pub(super) component: &'a mut VComponentHead<ViewData>,
     pub(super) props: &'a Props,
+    pub(in crate::core) effects: &'a mut VComponentEffects<Props, ViewData>
 }
 
 #[derive(Debug)]
@@ -30,36 +30,25 @@ pub struct VEffectContextImpl<'a, Props: Any, ViewData: VViewData> {
 }
 
 pub trait VContext<'a> {
-    type Props: Any;
     type ViewData: VViewData;
 
-    fn component(self: &mut &'a mut Self) -> &'a mut VComponentHead<Self::ViewData>;
-    fn props(self: &&'a Self) -> &'a Self::Props;
-}
-
-pub trait VComponentContext<'a> : VContext<'a> {
-    type EffectContext: VEffectContext<'a, Self::Props, Self::ViewData>;
-
-    fn into_effect_ctx(self: Self) -> Self::EffectContext;
+    fn component(&'a mut self) -> &'a mut VComponentHead<Self::ViewData>;
 }
 
 impl <'a, Props: Any, ViewData: VViewData> VContext<'a> for VComponentContextImpl<'a, Props, ViewData> {
-    type Props = Props;
     type ViewData = ViewData;
 
-    fn component(self: &mut &'a mut Self) -> &'a mut VComponentHead<Self::ViewData> {
+    fn component(&'a mut self) -> &'a mut VComponentHead<Self::ViewData> {
         self.component
-    }
-
-    fn props(self: &&'a Self) -> &'a Self::Props {
-        self.props
     }
 }
 
-impl <'a, Props: Any, ViewData: VViewData> VComponentContext<'a> for VComponentContextImpl<'a, Props, ViewData> {
-    type EffectContext = VEffectContextImpl<'a, Props, ViewData>;
+impl <'a, Props: Any, ViewData: VViewData> VComponentContextImpl<'a, Props, ViewData> {
+    pub fn props(&'a self) -> &'a Props {
+        self.props
+    }
 
-    fn into_effect_ctx(self: Self) -> Self::EffectContext {
+    pub fn into_effect_ctx(self) -> VEffectContextImpl<'a, Props, ViewData> {
         Self::EffectContext {
             component: self.component,
             props: self.props
@@ -67,15 +56,16 @@ impl <'a, Props: Any, ViewData: VViewData> VComponentContext<'a> for VComponentC
     }
 }
 
-impl <'a, Props: Any, ViewData: VViewData> VContext<'a> for &'a mut VEffectContextImpl<'a, Props, ViewData> {
-    type Props = Props;
+impl <'a, Props: Any, ViewData: VViewData> VContext<'a> for VEffectContextImpl<'a, Props, ViewData> {
     type ViewData = ViewData;
 
-    fn component(self: &mut &'a mut Self) -> &'a mut VComponentHead<Self::ViewData> {
+    fn component(&'a mut self) -> &'a mut VComponentHead<Self::ViewData> {
         self.component
     }
+}
 
-    fn props(self: &&'a Self) -> &'a Self::Props {
+impl <'a, Props: Any, ViewData: VViewData> VEffectContextImpl<'a, Props, ViewData> {
+    pub fn props(&'a self) -> &'a Props {
         self.props
     }
 }

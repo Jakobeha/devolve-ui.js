@@ -29,7 +29,7 @@ use std::mem::MaybeUninit;
 use std::rc::{Rc, Weak};
 use std::sync::{Weak as WeakArc};
 use std::fmt::{Debug, Display, Formatter};
-use crate::core::component::context::{VComponentContext, VComponentContextImpl, VContext};
+use crate::core::component::context::{VComponentContext, VComponentContextImpl, VContext, VEffectContextImpl};
 use crate::core::component::path::{VComponentKey, VComponentPath};
 use crate::core::component::root::VComponentRoot;
 use crate::core::misc::notify_flag::NotifyFlag;
@@ -50,27 +50,89 @@ trait VComponentConstruct {
     type ViewData: VViewData;
 
     fn props(&self) -> &dyn Any;
-    fn construct(&self, c: &mut dyn VComponentContext<'_, ViewData=Self::ViewData>) -> VComponentBody<Self::ViewData>;
+    fn construct(&self, component: &mut VComponentHead<Self::ViewData>) -> VComponentBody<Self::ViewData>;
+
+    fn run_effects(&mut self, component: &mut VComponentHead<Self::ViewData>);
+    fn run_update_destructors(&mut self, component: &mut VComponentHead<Self::ViewData>);
+    fn run_permanent_destructors(&mut self, component: &mut VComponentHead<Self::ViewData>);
 }
 
-struct VComponentConstructImpl<ViewData: VViewData, Props: Any, F: Fn(&mut VComponentContextImpl<'_, Props, ViewData>, &Props) -> VComponentBody<ViewData> + 'static> {
+struct VComponentConstructImpl<ViewData: VViewData, Props: Any, F: Fn(&mut VComponentContextImpl<'_, Props, ViewData>) -> VComponentBody<ViewData> + 'static> {
     props: Props,
     construct: F,
+    effects: VComponentEffects<ViewData, Props>,
     view_data_type: PhantomData<ViewData>
 }
 
-impl <ViewData: VViewData, Props: Any, F: Fn(&mut VComponentContextImpl<'_, Props, ViewData>, &Props) -> VComponentBody<ViewData> + 'static> VComponentConstruct for VComponentConstructImpl<ViewData, Props, F> {
+pub(in crate::core) struct VComponentEffects<ViewData: VViewData, Props: Any> {
+    pub effects: Vec<Box<dyn Fn(&mut VEffectContextImpl<'_, Props, ViewData>) -> ()>>,
+    pub update_destructors: Vec<Box<dyn FnOnce(&mut VEffectContextImpl<'_, Props, ViewData>) -> ()>>,
+    pub next_update_destructors: Vec<Box<dyn FnOnce(&mut VEffectContextImpl<'_, Props, ViewData>) -> ()>>,
+    pub permanent_destructors: Vec<Box<dyn FnOnce(&mut VEffectContextImpl<'_, Props, ViewData>) -> ()>>
+}
+
+impl <ViewData: VViewData, Props: Any> VComponentEffects<ViewData, Props> {
+    pub fn new() -> Self {
+        Self {
+            effects: Vec::new(),
+            update_destructors: Vec::new(),
+            next_update_destructors: Vec::new(),
+            permanent_destructors: Vec::new()
+        }
+    }
+}
+
+impl <ViewData: VViewData, Props: Any, F: Fn(&mut VComponentContextImpl<'_, Props, ViewData>) -> VComponentBody<ViewData> + 'static> VComponentConstruct for VComponentConstructImpl<ViewData, Props, F> {
     type ViewData = ViewData;
-    type Ctx<'a> = VComponentContextImpl<'a, Props, ViewData>;
 
     fn props(&self) -> &dyn Any {
         &self.props
     }
 
-    fn construct(&self, c: &mut dyn VComponentContext<'_, ViewData=Self::ViewData>) -> VComponentBody<Self::ViewData> {
-        let c = c as &mut VComponentContextImpl<'_, Props, ViewData>;
+    fn construct(&mut self, component: &mut VComponentHead<Self::ViewData>) -> VComponentBody<Self::ViewData> {
         let construct = &self.construct;
-        construct(c, &self.props)
+        let mut c = VComponentContextImpl {
+            component,
+            props: &self.props,
+            effects: &mut self.effects,
+        };
+        construct(&mut c)
+    }
+
+    fn run_effects(&mut self, component: &mut VComponentHead<Self::ViewData>) {
+        let mut c = VEffectContextImpl {
+            component,
+            props: &self.props
+        };
+
+        while let Some(effect) = self.effects.effects.pop() {
+            if self.head.has_pending_updates {
+                break
+            }
+
+            effect(&mut c);
+        }
+    }
+
+    fn run_update_destructors(&mut self, component: &mut VComponentHead<Self::ViewData>) {
+        let mut c = VEffectContextImpl {
+            component,
+            props: &self.props
+        };
+        while let Some(update_destructor) = self.effects.update_destructors.pop() {
+            update_destructor(&mut c)
+        }
+        self.effects.update_destructors.append(&mut self.effects.next_update_destructors);
+    }
+
+    fn run_permanent_destructors(&mut self, component: &mut VComponentHead<Self::ViewData>) {
+        let mut c = VEffectContextImpl {
+            component,
+            props: &self.props
+        };
+        while let Some(permanent_destructor) = self.effects.permanent_destructors.pop() {
+            permanent_destructor(&mut c);
+        }
     }
 }
 
@@ -184,16 +246,12 @@ pub struct VComponentHead<ViewData: VViewData> {
 pub(in crate::core) struct VComponentHookData<ViewData: VViewData> {
     pub state: Vec<Box<dyn Any>>,
     pub next_state_index: usize,
-    // pub(in crate::core) providedContexts: HashMap<Context, Box<dyn Any>>,
-    // pub(in crate::core) consumedContexts: HashMap<Context, Box<dyn Any>>
-    pub effects: Vec<Box<dyn Fn(&mut dyn VContext<'_, ViewData = ViewData>) -> ()>>,
-    pub update_destructors: Vec<Box<dyn FnOnce(&mut dyn VContext<'_, ViewData = ViewData>) -> ()>>,
-    pub next_update_destructors: Vec<Box<dyn FnOnce(&mut dyn VContext<'_, ViewData = ViewData>) -> ()>>,
-    pub permanent_destructors: Vec<Box<dyn FnOnce(&mut dyn VContext<'_, ViewData = ViewData>) -> ()>>,
+    // pub(in crate::core) provided_contexts: HashMap<Context, Box<dyn Any>>,
+    // pub(in crate::core) consumed_contexts: HashMap<Context, Box<dyn Any>>
 }
 
 impl <ViewData: VViewData + 'static> VComponent<ViewData> {
-    pub(in crate::core) fn new<Props: 'static, F: Fn(&mut VComponentContextImpl<'_, Props, ViewData>, &Props) -> VComponentBody<ViewData> + 'static>(parent: VParent<'_, ViewData>, key: VComponentKey, props: Props, construct: F) -> Box<VComponent<ViewData>> {
+    pub(in crate::core) fn new<Props: 'static, F: Fn(&mut VComponentContextImpl<'_, Props, ViewData>) -> VComponentBody<ViewData> + 'static>(parent: VParent<'_, ViewData>, key: VComponentKey, props: Props, construct: F) -> Box<VComponent<ViewData>> {
         enum Action<'a, ViewData_: VViewData, Props_, F_> {
             Reuse(Box<VComponent<ViewData_>>),
             Create(VParent<'a, ViewData_>, Props_, F_)
@@ -202,22 +260,22 @@ impl <ViewData: VViewData + 'static> VComponent<ViewData> {
         let action = (|| {
             if let VParent::Component(parent) = parent {
                 // parent is being created = if there are any existing children, they're not being reused, they're a conflict
-                if parent.node.is_some() {
-                    let found_child = parent.children.remove(&key);
+                if parent.head.node.is_some() {
+                    let found_child = parent.head.children.remove(&key);
                     if let Some(mut found_child) = found_child {
                         if found_child.is_fresh {
                             // If the component was already reused this update, it's a conflict. We add back and fall through to VComponent.create which will panic
-                            parent.children.insert(key.clone(), found_child);
+                            parent.head.children.insert(key.clone(), found_child);
                         } else {
                             // Reuse child
                             found_child.construct = Box::new(VComponentConstructImpl {
                                 props,
                                 construct,
+                                effects: VComponentEffects::new(),
                                 view_data_type: PhantomData,
                             });
-                            found_child.is_fresh = true;
-                            let details = Cow::Owned(format!("child:{}", key));
-                            found_child.update(details);
+                            found_child.head.is_fresh = true;
+                            found_child.update();
                             // When we return this it will be added back to parent.children
                             return Action::Reuse(found_child)
                         }
@@ -236,7 +294,7 @@ impl <ViewData: VViewData + 'static> VComponent<ViewData> {
         }
     }
 
-    fn create<Props: 'static, F: Fn(&mut VComponentContextImpl<'_, Props, ViewData>, &Props) -> VComponentBody<ViewData> + 'static>(parent: VParent<'_, ViewData>, key: VComponentKey, props: Props, construct: F) -> Box<Self>{
+    fn create<Props: 'static, F: Fn(&mut VComponentContextImpl<'_, Props, ViewData>) -> VComponentBody<ViewData> + 'static>(parent: VParent<'_, ViewData>, key: VComponentKey, props: Props, construct: F) -> Box<Self>{
         Box::new(VComponent {
             head: VComponentHead {
                 id: VNode::<ViewData>::next_id(),
@@ -252,12 +310,8 @@ impl <ViewData: VViewData + 'static> VComponent<ViewData> {
                 h: VComponentHookData {
                     state: Vec::new(),
                     next_state_index: 0,
-                    // providedContexts: HashMap::new(),
-                    // consumedContexts: HashMap::new(),
-                    effects: Vec::new(),
-                    update_destructors: Vec::new(),
-                    next_update_destructors: Vec::new(),
-                    permanent_destructors: Vec::new()
+                    // provided_contexts: HashMap::new(),
+                    // consumed_contexts: HashMap::new(),
                 },
 
                 is_being_updated: false,
@@ -269,6 +323,7 @@ impl <ViewData: VViewData + 'static> VComponent<ViewData> {
             construct: Box::new(VComponentConstructImpl {
                 props,
                 construct,
+                effects: VComponentEffects::new(),
                 view_data_type: PhantomData
             }),
         })
@@ -437,26 +492,15 @@ impl <ViewData: VViewData> VComponent<ViewData> {
     }
 
     fn run_effects(self: &mut Box<Self>) {
-        while let Some(effect) = self.head.h.effects.pop() {
-            if self.head.has_pending_updates {
-                break
-            }
-
-            effect(self);
-        }
+        self.construct.run_effects(&mut self.head);
     }
 
     fn run_update_destructors(self: &mut Box<Self>) {
-        while let Some(update_destructor) = self.head.h.update_destructors.pop() {
-            update_destructor(self)
-        }
-        self.head.h.update_destructors.append(&mut self.head.h.next_update_destructors);
+        self.construct.run_update_destructors(&mut self.head);
     }
 
     fn run_permanent_destructors(self: &mut Box<Self>) {
-        while let Some(permanent_destructor) = self.head.h.permanent_destructors.pop() {
-            permanent_destructor(self)
-        }
+        self.construct.run_permanent_destructors(&mut self.head);
     }
 
     pub(super) fn child(self: &Box<Self>, key: &VComponentKey) -> Option<&Box<VComponent<ViewData>>> {
