@@ -9,7 +9,7 @@ use std::cell::RefCell;
 use std::convert::Infallible;
 use std::mem;
 use std::slice::Iter;
-use crate::core::component::context::{VComponentContextImpl, VContext, VDestructorContextImpl, VEffectContextImpl};
+use crate::core::component::context::{VComponentContext1, VDestructorContext2, VEffectContext2, with_destructor_context};
 use crate::core::view::view::VViewData;
 use crate::core::hooks::state_internal::use_non_updating_state;
 
@@ -89,13 +89,14 @@ pub type NoDependencies = Infallible;
 /// while the component's body should otherwise be a "pure" function based on its
 /// props and state hooks like `use_state`.
 pub fn use_effect<
+    'a,
     Props : Any,
-    Destructor: FnOnce(&mut VDestructorContextImpl<'_, Props, ViewData>) + 'static,
+    Destructor: FnOnce(VDestructorContext2<'_, '_, Props, ViewData>) + 'static,
     ViewData: VViewData + 'static
 >(
-    c: &mut VComponentContextImpl<'_, Props, ViewData>,
+    c: &'a mut VComponentContext1<'a, Props, ViewData>,
     rerun: UseEffectRerun<NoDependencies>,
-    effect: impl Fn(&mut VEffectContextImpl<'_, Props, ViewData>) -> Destructor + 'static
+    effect: impl Fn(VEffectContext2<'_, '_, Props, ViewData>) -> Destructor + 'static
 ) {
     use_effect_with_deps(c, rerun, effect);
 }
@@ -107,12 +108,13 @@ pub fn use_effect<
 /// The behavior is exactly like `use_effect` and `use_effect_with_deps` when given `UseEffectRerun::OnCreate`.
 /// However, this function allows you to pass an `FnOnce` to `effect` since we statically know it will only be called once.
 pub fn use_effect_on_create<
+    'a,
     Props : Any,
-    Destructor: FnOnce(&mut VDestructorContextImpl<'_, Props, ViewData>) + 'static,
+    Destructor: FnOnce(VDestructorContext2<'_, '_, Props, ViewData>) + 'static,
     ViewData: VViewData + 'static
 >(
-    c: &mut VComponentContextImpl<'_, Props, ViewData>,
-    effect: impl FnOnce(&mut VEffectContextImpl<'_, Props, ViewData>) -> Destructor + 'static
+    c: &'a mut VComponentContext1<'a, Props, ViewData>,
+    effect: impl FnOnce(VEffectContext2<'_, '_, Props, ViewData>) -> Destructor + 'static
 ) {
     let effect = RefCell::new(Some(effect));
     use_effect(c, UseEffectRerun::OnCreate, move |c| {
@@ -128,29 +130,30 @@ pub fn use_effect_on_create<
 /// This function is actually the exact same as `use_effect`, but exposes the dependencies as a type parameter.
 /// Without the 2 versions, you would always have to specify dependencies on `use_effect` even if the enum variant didn't have them.
 pub fn use_effect_with_deps<
+    'a,
     Props : Any,
     Dependencies: CollectionOfPartialEqs + 'static,
-    Destructor: FnOnce(&mut VDestructorContextImpl<'_, Props, ViewData>) + 'static,
+    Destructor: FnOnce(VDestructorContext2<'_, '_, Props, ViewData>) + 'static,
     ViewData: VViewData + 'static
 >(
-    c: &mut VComponentContextImpl<'_, Props, ViewData>,
+    c: &'a mut VComponentContext1<'a, Props, ViewData>,
     rerun: UseEffectRerun<Dependencies>,
-    effect: impl Fn(&mut VEffectContextImpl<'_, Props, ViewData>) -> Destructor + 'static
+    effect: impl Fn(VEffectContext2<'_, '_, Props, ViewData>) -> Destructor + 'static
 ) {
     let (co, ce) = c.component_and_effects();
     match rerun {
         UseEffectRerun::OnCreate => {
             if co.is_being_created() {
-                ce.effects.push(Box::new(move |c| {
-                    let destructor = effect(c);
-                    c.permanent_destructors.push(Box::new(move |c| destructor(c)));
+                ce.effects.push(Box::new(move |(c, props)| {
+                    let destructor = effect((c, props));
+                    c.destructors().permanent_destructors.push(Box::new(move |c| destructor(c)));
                 }))
             }
         },
         UseEffectRerun::OnUpdate => {
-            ce.effects.push(Box::new(move |c| {
-                let destructor = effect(c);
-                c.destructors.update_destructors.push(Box::new(|c| destructor(c)));
+            ce.effects.push(Box::new(move |(c, props)| {
+                let destructor = effect((c, props));
+                c.destructors().update_destructors.push(Box::new(|c| destructor(c)));
             }));
         },
         UseEffectRerun::OnChange(mut dependencies) => {
@@ -166,8 +169,7 @@ pub fn use_effect_with_deps<
             // and then set the new ones, and mem::replace happens to be the perfect tool for this.
             let old_dependencies = mem::replace(memo.get_mut(c), dependencies);
 
-            ce.effects.push(Box::new(move |c| {
-                let (co, cd) = c.component_and_destructors();
+            ce.effects.push(Box::new(move |(c, props)| {
                 let do_effect = if is_created {
                     true
                 } else {
@@ -178,11 +180,13 @@ pub fn use_effect_with_deps<
                 if do_effect {
                     let current_destructor_index = *destructor_index.get(c);
                     if current_destructor_index != -1 {
+                        let cd = c.destructors();
                         // We can't screw up indices for other OnChange operations, so we replace with a no-op closure
                         let old_destructor = mem::replace(cd.permanent_destructors.get_mut(current_destructor_index as usize).unwrap(), Box::new(|_| ()));
-                        old_destructor(c.into_destructor_context());
+                        with_destructor_context((c, props), old_destructor);
                     }
-                    let new_destructor = effect(c);
+                    let new_destructor = effect((c, props));
+                    let (co, cd) = c.component_and_destructors();
                     *destructor_index._get_mut(&mut co.h.state) = cd.permanent_destructors.len() as i32;
                     cd.permanent_destructors.push(Box::new(move |c| new_destructor(c)));
                 }
@@ -193,18 +197,19 @@ pub fn use_effect_with_deps<
             let destructor_index = use_non_updating_state::<i32, _>(c, || -1);
             let old_predicate = mem::replace(memo.get_mut(c), predicate);
 
-            ce.effects.push(Box::new(move |c| {
-                let (co, cd) = c.component_and_destructors();
+            ce.effects.push(Box::new(move |(c, props)| {
                 if predicate && !old_predicate {
                     // Run effect
-                    let destructor = effect(c);
+                    let destructor = effect((c, props));
+                    let (co, cd) = c.component_and_destructors();
                     *destructor_index._get_mut(&mut co.h.state) = cd.permanent_destructors.len() as i32;
                     cd.permanent_destructors.push(Box::new(move |c| destructor(c)));
                 } else if !predicate && old_predicate {
                     // Run destructor
                     let current_destructor_index = *destructor_index.get(c);
+                    let cd = c.destructors();
                     let destructor = mem::replace(cd.permanent_destructors.get_mut(current_destructor_index as usize).unwrap(), Box::new(|_| ()));
-                    destructor(c.into_destructor_context());
+                    with_destructor_context((c, props), destructor);
                 }
             }))
         },
@@ -213,18 +218,19 @@ pub fn use_effect_with_deps<
             let destructor_index = use_non_updating_state::<i32, _>(c, || -1);
             let (old_dependencies, old_predicate) = mem::replace(memo.get_mut(c), (dependencies, false));
 
-            ce.effects.push(Box::new(move |c| {
-                let (co, cd) = c.component_and_destructors();
+            ce.effects.push(Box::new(move |(c, props)| {
                 if predicate && !old_predicate {
                     // Run effect
-                    let destructor = effect(c);
+                    let destructor = effect((c, props));
+                    let (co, cd) = c.component_and_destructors();
                     *destructor_index._get_mut(&mut co.h.state) = cd.permanent_destructors.len() as i32;
-                    cd.permanent_destructors.push(Box::new(move |c| destructor(c)));
+                    cd.permanent_destructors.push(Box::new(move |(c, props)| destructor((c, props))));
                 } else if !predicate && old_predicate {
                     // Run destructor
                     let current_destructor_index = *destructor_index.get(c);
+                    let cd = c.destructors();
                     let destructor = mem::replace(cd.permanent_destructors.get_mut(current_destructor_index as usize).unwrap(), Box::new(|_| ()));
-                    destructor(c.into_destructor_context());
+                    with_destructor_context((c, props), destructor);
                 } else if predicate && old_predicate {
                     let (dependencies, _) = memo.get(c);
                     let do_effect = {
@@ -235,11 +241,13 @@ pub fn use_effect_with_deps<
                         // Run destructor and then predicate if dependencies change
                         let current_destructor_index = *destructor_index.get(c);
                         if current_destructor_index != -1 {
+                            let cd = c.destructors();
                             // We can't screw up indices for other OnChange operations, so we replace with a no-op closure
                             let old_destructor = mem::replace(cd.permanent_destructors.get_mut(current_destructor_index as usize).unwrap(), Box::new(|_| ()));
-                            old_destructor(c.into_destructor_context());
+                            with_destructor_context((c, props), old_destructor);
                         }
-                        let new_destructor = effect(c);
+                        let new_destructor = effect((c, props));
+                        let (co, cd) = c.component_and_destructors();
                         *destructor_index._get_mut(&mut co.h.state) = cd.permanent_destructors.len() as i32;
                         cd.permanent_destructors.push(Box::new(move |c| new_destructor(c)));
                     }

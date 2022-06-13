@@ -2,7 +2,7 @@
 //! since creating `VComponent`s manually is very verbose.
 
 use crate::core::component::component::{VComponent, VComponentBody};
-use crate::core::component::context::{VComponentContext, VComponentContextImpl};
+use crate::core::component::context::{VComponentContext, VComponentContext2};
 use crate::core::component::node::VNode;
 use crate::core::component::parent::VParent;
 use crate::core::component::path::VComponentKey;
@@ -18,7 +18,7 @@ pub fn make_component<
     ViewData: VViewData + 'static,
     Str: Into<VComponentKey>,
     Props: 'static,
-    F: Fn(&mut VComponentContextImpl<'_, Props, ViewData>) -> VComponentBody<ViewData> + 'static
+    F: Fn(VComponentContext2<'_, '_, Props, ViewData>) -> VComponentBody<ViewData> + 'static
 >(
     c: &'a mut impl VComponentContext<'a, ViewData=ViewData>,
     key: Str,

@@ -32,9 +32,11 @@ pub fn use_atomic_ref_state<'a, T: Any, ViewData: VViewData + 'a>(
     c: &'a mut impl VComponentContext<'a, ViewData=ViewData>,
     get_initial: impl FnOnce() -> T
 ) -> AtomicRefState<T, ViewData> {
+    let state = use_non_updating_state(c, || Arc::new(Mutex::new(get_initial())));
+    let invalidate_flag = c.component().invalidate_flag();
     AtomicRefState(
-        use_non_updating_state(c, || Arc::new(Mutex::new(get_initial()))).get(c).clone(),
-        c.component().invalidate_flag(),
+        state.get(c).clone(),
+        invalidate_flag,
         PhantomData
     )
 }
