@@ -1,7 +1,7 @@
 //! Utilities to create terse constructors for your custom components,
 //! since creating `VComponent`s manually is very verbose.
 
-use crate::core::component::component::{VComponent, VComponentBody};
+use crate::core::component::component::{VComponent};
 use crate::core::component::context::{VComponentContext, VComponentContext2};
 use crate::core::component::node::VNode;
 use crate::core::component::parent::VParent;
@@ -18,7 +18,7 @@ pub fn make_component<
     ViewData: VViewData + 'static,
     Str: Into<VComponentKey>,
     Props: 'static,
-    F: Fn(VComponentContext2<'_, Props, ViewData>) -> VComponentBody<ViewData> + 'static
+    F: Fn(VComponentContext2<'_, Props, ViewData>) -> VNode<ViewData> + 'static
 >(
     c: &'a mut impl VComponentContext<'a, ViewData=ViewData>,
     key: Str,
@@ -47,37 +47,44 @@ pub macro _make_component2(
         $d key:expr,
         { $d ( $d field:ident : $d field_value:expr ),* }
         $d ( $d children:expr )?
-    ) {
+    ) { {
+        let props = $Props {
+            $d ( $d field : $d field_value, )*
+            $d ( children : $d children, )?
+            ..Default::default()
+        };
         make_component(
             $d c,
             $d key,
-            $Props {
-                $d ( $d field : $d field_value, )*
-                $d ( children : $d children, )?
-                ..Default::default()
-            },
+            props,
             $fun
         )
-    }
+    } }
 }
 
-/// Usage: `make_component2!(pub app, app_fn, AppProps)`
+/// Usage: `make_component2!(pub app, AppProps)` or `make_component2!(pub app, app_fn_with_weird_name, AppProps)`
 ///
 /// Like `make_component` except you must define the props and function yourself.
 /// This one defines the macro.
 ///
 /// Pro tip: To get IntelliJ to understand this macro you must also import `_make_component2`
-pub macro make_component2(
-    $vis:vis $name:ident,
-    $fun:path,
-    $Props:ident
-) {
-    _make_component2!(
-        ($) @
-        $vis $name,
-        $fun,
-        $Props
-    );
+pub macro make_component2 {
+    ($vis:vis $name:ident, $Props:ident) => {
+        _make_component2!(
+            ($) @
+            $vis $name,
+            $name,
+            $Props
+        );
+    },
+    ($vis:vis $name:ident, $fun:path, $Props:ident) => {
+        _make_component2!(
+            ($) @
+            $vis $name,
+            $fun,
+            $Props
+        );
+    },
 }
 
 /// Create a custom component. Creates a function and macro which you can call with the component's name.
@@ -138,9 +145,9 @@ pub macro _make_component(
         }
     }
 
-    fn $name($c: &mut Box<VComponent<$ViewData>>, props: &$Props) -> VComponentBody<$ViewData> {
+    fn $name($c: &mut Box<VComponent<$ViewData>>, props: &$Props) -> VNode<$ViewData> {
         let $Props { $( $field ),* } = props;
-        VComponentBody::new($body)
+        $body
     }
 
     _make_component2!(
@@ -154,7 +161,7 @@ pub macro _make_component(
 #[cfg(test)]
 #[cfg(feature = "tui")]
 mod tests {
-    use crate::core::component::component::{VComponent, VComponentBody};
+    use crate::core::component::component::VComponent;
     use crate::core::component::constr::{make_component, make_component2};
     use crate::core::component::node::VNode;
     use crate::core::renderer::renderer::Renderer;
@@ -170,11 +177,11 @@ mod tests {
         pub settings: &'static str,
     }
 
-    fn my_component2_fn(_c: &mut Box<VComponent<TuiViewData>>, props: &MyComponent2Props) -> VComponentBody<TuiViewData> {
-        VComponentBody::new(vbox!({}, {}, vec![
+    fn my_component2_fn(_c: &mut Box<VComponent<TuiViewData>>, props: &MyComponent2Props) -> VNode<TuiViewData> {
+        vbox!({}, {}, vec![
             text!({}, {}, "Hello world!".to_owned()),
             text!({}, {}, props.children.to_owned()),
-        ]))
+        ])
     }
 
     make_component2!(pub my_component2, my_component2_fn, MyComponent2Props);

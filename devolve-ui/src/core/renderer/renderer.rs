@@ -14,7 +14,7 @@ use std::sync::{Arc, Weak as WeakArc};
 use std::time::{Duration, Instant};
 #[cfg(feature = "time-blocking")]
 use tokio::runtime;
-use crate::core::component::component::{VComponent, VComponentBody};
+use crate::core::component::component::VComponent;
 use crate::core::component::context::VComponentContext2;
 use crate::core::component::node::{NodeId, VComponentAndView, VNode};
 use crate::core::component::parent::VParent;
@@ -185,7 +185,7 @@ impl <Engine: RenderEngine> Renderer<Engine> where Engine::RenderLayer: VRenderL
     }
 
     pub fn root(self: &Rc<Self>, construct: impl Fn(VComponentContext2<'_, (), Engine::ViewData>) -> VNode<Engine::ViewData> + 'static) {
-        self._root(|parent| VComponent::new(parent, ().into(), (), move |c| VComponentBody::new(construct(c))))
+        self._root(|parent| VComponent::new(parent, ().into(), (), construct))
     }
 
     fn _root(self: &Rc<Self>, construct: impl FnOnce(VParent<'_, Engine::ViewData>) -> Box<VComponent<Engine::ViewData>>) {

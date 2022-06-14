@@ -14,7 +14,8 @@
 
 use std::any::Any;
 use std::marker::PhantomData;
-use crate::core::component::component::{VComponentDestructors, VComponentEffects, VComponentHead, VComponentRef};
+use crate::core::component::component::{VComponentDestructors, VComponentEffects, VComponentHead};
+use crate::core::component::path::VComponentRef;
 use crate::core::view::view::VViewData;
 
 #[derive(Debug)]

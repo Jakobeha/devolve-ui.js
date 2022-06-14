@@ -3,9 +3,14 @@
 //! component with `Renderer::with_component`. The component may not exist in which case
 //! `with_component` returns `None`.
 
-use std::fmt::{Display, Formatter};
+use std::fmt::{Debug, Display, Formatter};
 use std::ops::Add;
 use std::ops::AddAssign;
+use std::rc::Weak;
+use std::mem::MaybeUninit;
+use crate::core::component::component::VComponent;
+use crate::core::component::root::VComponentRoot;
+use crate::core::view::view::VViewData;
 
 /// Identifies a `VComponent` among its siblings.
 /// Needed because the siblings may change and we need to remember the component and check if it was deleted.
@@ -19,6 +24,36 @@ pub struct VComponentKey(&'static str, usize, Option<String>);
 /// from its path.
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Hash)]
 pub struct VComponentPath(Vec<VComponentKey>);
+
+// region ref
+#[derive(Clone)]
+pub struct VComponentRef<ViewData: VViewData> {
+    pub(super) renderer: Weak<dyn VComponentRoot<ViewData = ViewData>>,
+    pub(super) path: VComponentPath
+}
+
+impl <ViewData: VViewData> VComponentRef<ViewData> {
+    pub fn with<R>(&self, fun: impl FnOnce(Option<&mut Box<VComponent<ViewData>>>) -> R) -> R {
+        match self.renderer.upgrade() {
+            None => fun(None),
+            Some(renderer) => {
+                // We can't return values in renderer's `with` because it's a trait object
+                let mut return_value: MaybeUninit<R> = MaybeUninit::uninit();
+                renderer.with_component(&self.path, |component| {
+                    return_value.write(fun(component));
+                });
+                unsafe { return_value.assume_init() }
+            }
+        }
+    }
+
+    pub fn try_with<R>(&self, fun: impl FnOnce(&mut Box<VComponent<ViewData>>) -> R) -> Option<R> {
+        self.with(|component| {
+            component.map(fun)
+        })
+    }
+}
+// endregion
 
 // region boilerplate
 impl VComponentPath {
@@ -129,6 +164,24 @@ impl From<(&'static str, usize)> for VComponentKey {
 impl From<String> for VComponentKey {
     fn from(string: String) -> Self {
         VComponentKey("", 0, Some(string))
+    }
+}
+
+impl <ViewData: VViewData> Debug for VComponentRef<ViewData> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("VComponentRef")
+            .field("path", &self.path)
+            .finish_non_exhaustive()
+    }
+}
+
+impl <ViewData: VViewData> PartialEq for VComponentRef<ViewData> {
+    fn eq(&self, other: &Self) -> bool {
+        self.path == other.path
+    }
+
+    fn ne(&self, other: &Self) -> bool {
+        self.path != other.path
     }
 }
 // endregion

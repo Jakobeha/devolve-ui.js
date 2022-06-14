@@ -6,3 +6,4 @@ pub mod node;
 pub(in crate::core) mod parent;
 pub mod path;
 pub(in crate::core) mod root;
+mod update_details;
