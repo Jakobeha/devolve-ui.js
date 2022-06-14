@@ -164,7 +164,8 @@ impl <ViewData: VViewData + 'static> VComponent<ViewData> {
 
                 is_being_updated: false,
                 is_fresh: true,
-                has_pending_updates: false,
+                // Create = needs update
+                has_pending_updates: true,
                 recursive_update_stack_trace: RecursiveUpdateStack::new(),
             },
 

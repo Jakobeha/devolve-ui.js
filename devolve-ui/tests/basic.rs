@@ -88,13 +88,13 @@ fn test_basic_render() {
         additional_store: Default::default(),
         ignore_events: false
     });
-    renderer.root(|(mut c, ())| basic!(&mut c, "basic", { text: "Hello world".into() }));
+    renderer.root(|(mut c, ())| basic!(&mut c, "basic", { text: "foo bar".into() }));
     // renderer.interval_between_frames(Duration::from_millis(25)); // optional
     renderer.show();
     // renderer.resume();
     // TODO: Windows support
     assert_eq!(
         OsStr::from_bytes(&output.snapshot_buf()),
-        OsStr::new("\u{1b}[?1049h\u{1b}[2J\u{1b}[25l\u{1b}[1;1HHello world!\u{1b}[0m")
+        OsStr::new("\u{1b}[?1049h\u{1b}[2J\u{1b}[25l\u{1b}[1;1HHello world!\u{1b}[0m\u{1b}[2;1Hfoo bar     \u{1b}[0m")
     )
 }
