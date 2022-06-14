@@ -23,12 +23,6 @@ pub enum VNode<ViewData: VViewData> {
 }
 
 #[derive(Debug)]
-enum VNodeResolved<'c, 'v, ViewData: VViewData> {
-    Component(&'c Box<VComponent<ViewData>>),
-    View(&'v Box<VView<ViewData>>)
-}
-
-#[derive(Debug)]
 enum VNodeResolvedHead<'c, 'v, ViewData: VViewData> {
     Component(&'c VComponentHead<ViewData>),
     View(&'v Box<VView<ViewData>>)
@@ -69,14 +63,14 @@ impl <ViewData: VViewData> VNode<ViewData> {
         }
     }
 
-    pub fn resolve<'c, 'v>(&'v self, parent: &'c VComponentHead<ViewData>) -> VNodeResolvedHead<'c, 'v, ViewData> {
+    fn resolve<'c, 'v>(&'v self, parent: &'c VComponentHead<ViewData>) -> VNodeResolvedHead<'c, 'v, ViewData> {
         match self {
             VNode::Component { id: _id, key } => VNodeResolvedHead::Component(parent.child(key).expect("VNode::resolve failed: component not in parent")),
             VNode::View(view) => VNodeResolvedHead::View(view)
         }
     }
 
-    pub fn resolve_mut<'c, 'v>(&'v mut self, parent: &'c mut Box<VComponent<ViewData>>) -> VNodeResolvedMut<'c, 'v, ViewData> {
+    fn resolve_mut<'c, 'v>(&'v mut self, parent: &'c mut Box<VComponent<ViewData>>) -> VNodeResolvedMut<'c, 'v, ViewData> {
         match self {
             VNode::Component { id: _id, key } => VNodeResolvedMut::Component(parent.child_mut(key).expect("VNode::resolve failed: component not in parent")),
             VNode::View(view) => VNodeResolvedMut::View(view)

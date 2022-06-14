@@ -19,18 +19,23 @@ use crate::core::view::view::VViewData;
 
 #[derive(Debug)]
 pub struct VComponentContext1<'a, Props: Any, ViewData: VViewData> {
-    pub(super) component: &'a mut VComponentHead<ViewData>,
-    pub(super) effects: &'a mut VComponentEffects<Props, ViewData>
+    pub(in crate::core) component: &'a mut VComponentHead<ViewData>,
+    pub(in crate::core) effects: &'a mut VComponentEffects<Props, ViewData>,
+    // This doesn't need to be PhantomData but it needs to be private so crate::core can't construct this
+    pub(super) phantom: PhantomData<Props>
 }
 
 pub struct VEffectContext1<'a, Props: Any, ViewData: VViewData> {
-    pub(super) component: &'a mut VComponentHead<ViewData>,
-    pub(super) destructors: &'a mut VComponentDestructors<Props, ViewData>
+    pub(in crate::core) component: &'a mut VComponentHead<ViewData>,
+    pub(in crate::core) destructors: &'a mut VComponentDestructors<Props, ViewData>,
+    // This doesn't need to be PhantomData but it needs to be private so crate::core can't construct this
+    pub(super) phantom: PhantomData<Props>
 }
 
 #[derive(Debug)]
 pub struct VDestructorContext1<'a, Props: Any, ViewData: VViewData> {
-    pub(super) component: &'a mut VComponentHead<ViewData>,
+    pub component: &'a mut VComponentHead<ViewData>,
+    // This needs to be private so users can't construct this even though all other fields are public
     pub(super) phantom: PhantomData<Props>
 }
 
@@ -46,13 +51,13 @@ pub struct VEffectContextRef<Props: Any, ViewData: VViewData> {
     phantom: PhantomData<Props>
 }
 
-pub type VComponentContext2<'a, Props: Any, ViewData: VViewData> = (VComponentContext1<'a, Props, ViewData>, &'a Props);
+pub type VComponentContext2<'a, Props, ViewData> = (VComponentContext1<'a, Props, ViewData>, &'a Props);
 
-pub type VEffectContext2<'a, Props: Any, ViewData: VViewData> = (VEffectContext1<'a, Props, ViewData>, &'a Props);
+pub type VEffectContext2<'a, Props, ViewData> = (VEffectContext1<'a, Props, ViewData>, &'a Props);
 
-pub type VDestructorContext2<'a, Props: Any, ViewData: VViewData> = (VDestructorContext1<'a, Props, ViewData>, &'a Props);
+pub type VDestructorContext2<'a, Props, ViewData> = (VDestructorContext1<'a, Props, ViewData>, &'a Props);
 
-pub type VPlainContext2<'a, Props: Any, ViewData: VViewData> = (VPlainContext1<'a, Props, ViewData>, &'a Props);
+pub type VPlainContext2<'a, Props, ViewData> = (VPlainContext1<'a, Props, ViewData>, &'a Props);
 
 pub trait VContext<'a> {
     type ViewData: VViewData;
@@ -72,12 +77,6 @@ impl <'a, Props: Any, ViewData: VViewData> VContext<'a> for VComponentContext1<'
 
 impl <'a, Props: Any, ViewData: VViewData> VComponentContext<'a> for VComponentContext1<'a, Props, ViewData> {}
 
-impl <'a, Props: Any, ViewData: VViewData> VComponentContext1<'a, Props, ViewData> {
-    pub(in crate::core) fn component_and_effects(&'a mut self) -> (&'a mut VComponentHead<ViewData>, &'a mut VComponentEffects<Props, ViewData>) {
-        (self.component, self.effects)
-    }
-}
-
 impl <'a, Props: Any, ViewData: VViewData> VContext<'a> for VEffectContext1<'a, Props, ViewData> {
     type ViewData = ViewData;
 
@@ -87,11 +86,11 @@ impl <'a, Props: Any, ViewData: VViewData> VContext<'a> for VEffectContext1<'a, 
 }
 
 impl <'a, Props: Any, ViewData: VViewData> VEffectContext1<'a, Props, ViewData> {
-    pub(in crate::core) fn component_and_destructors(&'a mut self) -> (&'a mut VComponentHead<ViewData>, &'a mut VComponentDestructors<Props, ViewData>) {
+    pub(in crate::core) fn component_and_destructors<'b>(&'b mut self) -> (&'b mut VComponentHead<ViewData>, &'b mut VComponentDestructors<Props, ViewData>) where 'a: 'b {
         (self.component, self.destructors)
     }
 
-    pub(in crate::core) fn destructors(&'a mut self) -> &'a mut VComponentDestructors<Props, ViewData> {
+    pub(in crate::core) fn destructors<'b>(&'b mut self) -> &'b mut VComponentDestructors<Props, ViewData> where 'a: 'b {
         self.destructors
     }
 
@@ -100,7 +99,7 @@ impl <'a, Props: Any, ViewData: VViewData> VEffectContext1<'a, Props, ViewData> 
     /// This allows you to transfer effect context data (e.g. props) across time and threads.
     ///
     /// **Warning:** Calling `with` on multiple components at the same time (e.g. nested) will cause a runtime error.
-    pub fn vref(&'a mut self) -> VEffectContextRef<Props, ViewData> {
+    pub fn vref(&mut self) -> VEffectContextRef<Props, ViewData> {
         VEffectContextRef {
             component: self.component.vref(),
             phantom: PhantomData
@@ -110,13 +109,14 @@ impl <'a, Props: Any, ViewData: VViewData> VEffectContext1<'a, Props, ViewData> 
     pub fn with<'b, R>(&'b mut self, fun: impl FnOnce(VEffectContext1<'b, Props, ViewData>) -> R) -> R {
         fun(VEffectContext1 {
             component: self.component,
-            destructors: self.destructors
+            destructors: self.destructors,
+            phantom: PhantomData
         })
     }
 }
 
 impl <Props: Any, ViewData: VViewData + 'static> VEffectContextRef<Props, ViewData> {
-    fn with<R>(&self, fun: impl FnOnce(Option<VPlainContext2<'_, Props, ViewData>>) -> R) -> R {
+    pub fn with<R>(&self, fun: impl FnOnce(Option<VPlainContext2<'_, Props, ViewData>>) -> R) -> R {
         self.component.with(|component| {
             match component {
                 None => fun(None),
@@ -146,11 +146,29 @@ impl <'a, Props: Any, ViewData: VViewData> VContext<'a> for VDestructorContext1<
     }
 }
 
+impl <'a, Props: Any, ViewData: VViewData> VDestructorContext1<'a, Props, ViewData> {
+    pub fn with<'b, R>(&'b mut self, fun: impl FnOnce(VDestructorContext1<'b, Props, ViewData>) -> R) -> R {
+        fun(VDestructorContext1 {
+            component: self.component,
+            phantom: PhantomData
+        })
+    }
+}
+
 impl <'a, Props: Any, ViewData: VViewData> VContext<'a> for VPlainContext1<'a, Props, ViewData> {
     type ViewData = ViewData;
 
     fn component<'b>(&'b mut self) -> &'b mut VComponentHead<Self::ViewData> where 'a: 'b {
         self.component
+    }
+}
+
+impl <'a, Props: Any, ViewData: VViewData> VPlainContext1<'a, Props, ViewData> {
+    pub fn with<'b, R>(&'b mut self, fun: impl FnOnce(VPlainContext1<'b, Props, ViewData>) -> R) -> R {
+        fun(VPlainContext1 {
+            component: self.component,
+            phantom: PhantomData
+        })
     }
 }
 

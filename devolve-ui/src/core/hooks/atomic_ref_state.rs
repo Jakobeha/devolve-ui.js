@@ -29,7 +29,7 @@ pub struct AtomicAccess<'a, T: Any, ViewData: VViewData>(MutexGuard<'a, T>, Phan
 pub struct AtomicAccessMut<'a, T: Any, ViewData: VViewData>(MutexGuard<'a, T>, Weak<NotifyFlag>, PhantomData<ViewData>);
 
 pub fn use_atomic_ref_state<'a, T: Any, ViewData: VViewData + 'a>(
-    c: &'a mut impl VComponentContext<'a, ViewData=ViewData>,
+    c: &mut impl VComponentContext<'a, ViewData=ViewData>,
     get_initial: impl FnOnce() -> T
 ) -> AtomicRefState<T, ViewData> {
     let state = use_non_updating_state(c, || Arc::new(Mutex::new(get_initial())));

@@ -94,7 +94,7 @@ pub fn use_effect<
     Destructor: FnOnce(VDestructorContext2<'_, Props, ViewData>) + 'static,
     ViewData: VViewData + 'static
 >(
-    c: &'a mut VComponentContext1<'a, Props, ViewData>,
+    c: &mut VComponentContext1<'a, Props, ViewData>,
     rerun: UseEffectRerun<NoDependencies>,
     effect: impl Fn(VEffectContext2<'_, Props, ViewData>) -> Destructor + 'static
 ) {
@@ -113,7 +113,7 @@ pub fn use_effect_on_create<
     Destructor: FnOnce(VDestructorContext2<'_, Props, ViewData>) + 'static,
     ViewData: VViewData + 'static
 >(
-    c: &'a mut VComponentContext1<'a, Props, ViewData>,
+    c: &mut VComponentContext1<'a, Props, ViewData>,
     effect: impl FnOnce(VEffectContext2<'_, Props, ViewData>) -> Destructor + 'static
 ) {
     let effect = RefCell::new(Some(effect));
@@ -136,28 +136,27 @@ pub fn use_effect_with_deps<
     Destructor: FnOnce(VDestructorContext2<'_, Props, ViewData>) + 'static,
     ViewData: VViewData + 'static
 >(
-    c: &'a mut VComponentContext1<'a, Props, ViewData>,
+    c: &mut VComponentContext1<'a, Props, ViewData>,
     rerun: UseEffectRerun<Dependencies>,
     effect: impl Fn(VEffectContext2<'_, Props, ViewData>) -> Destructor + 'static
 ) {
-    let (co, ce) = c.component_and_effects();
     match rerun {
         UseEffectRerun::OnCreate => {
-            if co.is_being_created() {
-                ce.effects.push(Box::new(move |(mut c, props)| {
+            if c.component.is_being_created() {
+                c.effects.effects.push(Box::new(move |(mut c, props)| {
                     let destructor = c.with(|c| effect((c, props)));
                     c.destructors().permanent_destructors.push(Box::new(move |c| destructor(c)));
                 }))
             }
         },
         UseEffectRerun::OnUpdate => {
-            ce.effects.push(Box::new(move |(mut c, props)| {
+            c.effects.effects.push(Box::new(move |(mut c, props)| {
                 let destructor = c.with(|c| effect((c, props)));
                 c.destructors().update_destructors.push(Box::new(|c| destructor(c)));
             }));
         },
         UseEffectRerun::OnChange(mut dependencies) => {
-            let is_created = co.is_being_created();
+            let is_created = c.component.is_being_created();
             // on mem::replace - we want to move dependencies, because we know that it will only be
             // moved when is_created is true, and when is_created is true we also don't access dependencies
             // afterwards. However, Rust won't allow that, and I'm pretty sure it would cause undefined
@@ -169,7 +168,7 @@ pub fn use_effect_with_deps<
             // and then set the new ones, and mem::replace happens to be the perfect tool for this.
             let old_dependencies = mem::replace(memo.get_mut(c), dependencies);
 
-            ce.effects.push(Box::new(move |(mut c, props)| {
+            c.effects.effects.push(Box::new(move |(mut c, props)| {
                 let do_effect = if is_created {
                     true
                 } else {
@@ -181,15 +180,13 @@ pub fn use_effect_with_deps<
                     let current_destructor_index = *destructor_index.get(&mut c);
                     if current_destructor_index != -1 {
                         c.with(|mut c| {
-                            let old_destructor = c.with(|mut c| {
-                                let cd = c.destructors();
-                                // We can't screw up indices for other OnChange operations, so we replace with a no-op closure
-                                mem::replace(cd.permanent_destructors.get_mut(current_destructor_index as usize).unwrap(), Box::new(|_| ()))
-                            });
+                            let cd = c.destructors();
+                            // We can't screw up indices for other OnChange operations, so we replace with a no-op closure
+                            let old_destructor = mem::replace(cd.permanent_destructors.get_mut(current_destructor_index as usize).unwrap(), Box::new(|_| ()));
                             with_destructor_context((&mut c, props), old_destructor);
                         });
                     }
-                    let new_destructor = effect((c, props));
+                    let new_destructor = c.with(|c| effect((c, props)));
                     let (co, cd) = c.component_and_destructors();
                     *destructor_index._get_mut(&mut co.h.state) = cd.permanent_destructors.len() as i32;
                     cd.permanent_destructors.push(Box::new(move |c| new_destructor(c)));
@@ -201,10 +198,10 @@ pub fn use_effect_with_deps<
             let destructor_index = use_non_updating_state::<i32, _>(c, || -1);
             let old_predicate = mem::replace(memo.get_mut(c), predicate);
 
-            ce.effects.push(Box::new(move |(mut c, props)| {
+            c.effects.effects.push(Box::new(move |(mut c, props)| {
                 if predicate && !old_predicate {
                     // Run effect
-                    let destructor = effect((c, props));
+                    let destructor = c.with(|c| effect((c, props)));
                     let (co, cd) = c.component_and_destructors();
                     *destructor_index._get_mut(&mut co.h.state) = cd.permanent_destructors.len() as i32;
                     cd.permanent_destructors.push(Box::new(move |c| destructor(c)));
@@ -222,13 +219,13 @@ pub fn use_effect_with_deps<
             let destructor_index = use_non_updating_state::<i32, _>(c, || -1);
             let (old_dependencies, old_predicate) = mem::replace(memo.get_mut(c), (dependencies, false));
 
-            ce.effects.push(Box::new(move |(mut c, props)| {
+            c.effects.effects.push(Box::new(move |(mut c, props)| {
                 if predicate && !old_predicate {
                     // Run effect
-                    let destructor = effect((c, props));
+                    let destructor = c.with(|c| effect((c, props)));
                     let (co, cd) = c.component_and_destructors();
                     *destructor_index._get_mut(&mut co.h.state) = cd.permanent_destructors.len() as i32;
-                    cd.permanent_destructors.push(Box::new(move |(mut c, props)| destructor((c, props))));
+                    cd.permanent_destructors.push(Box::new(move |(c, props)| destructor((c, props))));
                 } else if !predicate && old_predicate {
                     // Run destructor
                     let current_destructor_index = *destructor_index.get(&mut c);
@@ -250,7 +247,7 @@ pub fn use_effect_with_deps<
                             let old_destructor = mem::replace(cd.permanent_destructors.get_mut(current_destructor_index as usize).unwrap(), Box::new(|_| ()));
                             with_destructor_context((&mut c, props), old_destructor);
                         }
-                        let new_destructor = effect((c, props));
+                        let new_destructor = c.with(|c| effect((c, props)));
                         let (co, cd) = c.component_and_destructors();
                         *destructor_index._get_mut(&mut co.h.state) = cd.permanent_destructors.len() as i32;
                         cd.permanent_destructors.push(Box::new(move |c| new_destructor(c)));

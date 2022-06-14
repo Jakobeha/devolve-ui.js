@@ -46,7 +46,7 @@ impl <ViewData: VViewData> VComponentBody<ViewData> {
     }
 }
 
-trait VComponentConstruct: Debug {
+pub(super) trait VComponentConstruct: Debug {
     type ViewData: VViewData;
 
     fn props(&self) -> &dyn Any;
@@ -112,6 +112,7 @@ impl <Props: Any, ViewData: VViewData, F: Fn(VComponentContext2<'_, Props, ViewD
         construct((VComponentContext1 {
             component,
             effects: &mut self.effects,
+            phantom: PhantomData
         }, &self.props))
     }
 
@@ -123,7 +124,8 @@ impl <Props: Any, ViewData: VViewData, F: Fn(VComponentContext2<'_, Props, ViewD
 
             effect((VEffectContext1 {
                 component,
-                destructors: &mut self.destructors
+                destructors: &mut self.destructors,
+                phantom: PhantomData
             }, &self.props));
         }
     }
@@ -219,10 +221,6 @@ impl RecursiveUpdateFrame {
             simultaneous: Vec::new(),
             is_open: true
         }
-    }
-
-    pub fn is_open(&self) -> bool {
-        self.is_open
     }
 
     pub fn close(&mut self) {
@@ -382,6 +380,14 @@ impl <ViewData: VViewData> VComponentHead<ViewData> {
         self.parent_path.clone() + self.key.clone()
     }
 
+    #[allow(clippy::needless_lifetimes)]
+    pub(super) fn child<'a>(&'a self, key: &VComponentKey) -> Option<&'a VComponentHead<ViewData>> {
+        match self.children.get(key) {
+            None => None,
+            Some(component) => Some(&component.head)
+        }
+    }
+
     pub(super) fn add_child(&mut self, child: Box<VComponent<ViewData>>) -> &Box<VComponent<ViewData>> {
         let key = child.head.key.clone();
         let old_value = self.children.insert(key.clone(), child);
@@ -405,16 +411,6 @@ impl <ViewData: VViewData> VComponentHead<ViewData> {
     }
 
     #[allow(clippy::needless_lifetimes)]
-    pub(super) fn child<'a>(&'a self, key: &VComponentKey) -> Option<&'a VComponentHead<ViewData>> {
-        self.children.get(key).map(|component| &component.head)
-    }
-
-    #[allow(clippy::needless_lifetimes)]
-    pub(super) fn child_mut<'a>(&'a mut self, key: &VComponentKey) -> Option<&'a mut VComponentHead<ViewData>> {
-        self.children.get_mut(key).map(|component| &mut component.head)
-    }
-
-    #[allow(clippy::needless_lifetimes)]
     pub fn component_and_view<'a>(&'a self) -> VComponentAndView<'a, ViewData> {
         self.node.as_ref().expect("tried to get view of uninitialized component").0.component_and_view(self)
     }
@@ -433,6 +429,7 @@ impl <ViewData: VViewData> VComponent<ViewData> {
     pub(in crate::core) fn update(mut self: &mut Box<Self>) {
         while self.head.has_pending_updates {
             self.head.has_pending_updates = false;
+            self.head.recursive_update_stack_trace.close_last();
             let recursive_update_stack_trace = &self.head.recursive_update_stack_trace;
             assert!(recursive_update_stack_trace.len() < VMode::max_recursive_updates_before_loop_detected(), "update loop detected:\n{}", recursive_update_stack_trace);
 
@@ -526,20 +523,8 @@ impl <ViewData: VViewData> VComponent<ViewData> {
         self.construct.run_permanent_destructors(&mut self.head);
     }
 
-    pub(super) fn child<'a>(self: &'a Box<Self>, key: &VComponentKey) -> Option<&'a Box<VComponent<ViewData>>> {
-        self.head.children.get(key)
-    }
-
     pub(super) fn child_mut<'a>(self: &'a mut Box<Self>, key: &VComponentKey) -> Option<&'a mut Box<VComponent<ViewData>>> {
         self.head.children.get_mut(key)
-    }
-
-    pub(in crate::core) fn down_path<'a>(self: &'a Box<Self>, path: &'a VComponentPath) -> Option<&Box<VComponent<ViewData>>> {
-        let mut current = self;
-        for segment in path.iter() {
-            current = current.child(segment)?;
-        }
-        Some(current)
     }
 
     pub(in crate::core) fn down_path_mut<'a>(self: &'a mut Box<Self>, path: &'a VComponentPath) -> Option<&mut Box<VComponent<ViewData>>> {
