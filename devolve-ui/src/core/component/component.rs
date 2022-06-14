@@ -32,15 +32,20 @@ use crate::core::component::context::{VComponentContext1, VComponentContext2, VD
 use crate::core::component::path::{VComponentKey, VComponentPath, VComponentRef};
 use crate::core::component::root::VComponentRoot;
 use crate::core::component::update_details::RecursiveUpdateStack;
-use crate::core::misc::notify_flag::NotifyFlag;
+use crate::core::renderer::stale_data::NeedsUpdateFlag;
 use crate::core::view::view::{VView, VViewData};
 
 // region VComponent and sub-structures
+/// You don't usually use this directly
 pub struct VComponent<ViewData: VViewData> {
+    /// Part of component which doesn't depend on `Props`.
     pub head: VComponentHead<ViewData>,
+    /// Part of component with data whose size depends on `Props`, so it's runtime-sized.
     pub(super) construct: Box<dyn VComponentConstruct<ViewData = ViewData>>,
 }
 
+/// Part of component which doesn't depend on `Props`.
+/// You don't usually call methods on this directly but instead pass it to hooks and other constructors.
 pub struct VComponentHead<ViewData: VViewData> {
     /* readonly pub */  id: NodeId,
     /* readonly pub */  key: VComponentKey,
@@ -66,6 +71,7 @@ pub(in crate::core) struct VComponentStateData {
     // pub(in crate::core) consumed_contexts: HashMap<Context, Box<dyn Any>>
 }
 
+/// Part of the component with data whose size depends on `Props`, so it's a runtime-sized trait object.
 pub(super) trait VComponentConstruct: Debug {
     type ViewData: VViewData;
 
@@ -77,6 +83,8 @@ pub(super) trait VComponentConstruct: Debug {
     fn run_permanent_destructors(&mut self, component: &mut VComponentHead<Self::ViewData>);
 }
 
+/// Part of the component with data whose size depends on `Props`. This is the compile-time sized implementation
+/// which requires a specific `Props`.
 struct VComponentConstructImpl<Props: Any, ViewData: VViewData, F: Fn(VComponentContext2<'_, Props, ViewData>) -> VNode<ViewData> + 'static> {
     props: Props,
     construct: F,
@@ -98,6 +106,7 @@ pub(in crate::core) struct VComponentDestructors<Props: Any, ViewData: VViewData
 
 // region impls
 impl <ViewData: VViewData + 'static> VComponent<ViewData> {
+    /// Create a new component *or* update and reuse the existing component, if it has the same parent or key.
     pub(in crate::core) fn new<Props: 'static, F: Fn(VComponentContext2<'_, Props, ViewData>) -> VNode<ViewData> + 'static>(parent: VParent<'_, ViewData>, key: VComponentKey, props: Props, construct: F) -> Box<VComponent<ViewData>> {
         enum Action<'a, ViewData_: VViewData, Props_, F_> {
             Reuse(Box<VComponent<ViewData_>>),
@@ -142,6 +151,7 @@ impl <ViewData: VViewData + 'static> VComponent<ViewData> {
         }
     }
 
+    /// Create a new component with the parent and key. Don't call if there is already an existing component.
     fn create<Props: 'static, F: Fn(VComponentContext2<'_, Props, ViewData>) -> VNode<ViewData> + 'static>(parent: VParent<'_, ViewData>, key: VComponentKey, props: Props, construct: F) -> Box<Self>{
         Box::new(VComponent {
             head: VComponentHead {
@@ -181,6 +191,7 @@ impl <ViewData: VViewData + 'static> VComponent<ViewData> {
 }
 
 impl <ViewData: VViewData> VComponent<ViewData> {
+    /// Run pending updates on this component.
     pub(in crate::core) fn update(mut self: &mut Box<Self>) {
         while self.head.has_pending_updates {
             self.head.has_pending_updates = false;
@@ -227,6 +238,7 @@ impl <ViewData: VViewData> VComponent<ViewData> {
         self.head.recursive_update_stack_trace.clear()
     }
 
+    /// Destroy the component: run destructors and invalidate + children
     fn destroy(mut self: Box<Self>) {
         assert!(self.head.node.is_some(), "tried to destroy uninitialized component");
 
@@ -243,6 +255,7 @@ impl <ViewData: VViewData> VComponent<ViewData> {
         }
     }
 
+    /// `body` will change the component's `node`, and this does other necessary changes.
     fn do_update(mut self: &mut Box<Self>, body: impl FnOnce(&mut Box<Self>) -> ()) {
         self.head.is_being_updated = true;
 
@@ -253,6 +266,9 @@ impl <ViewData: VViewData> VComponent<ViewData> {
         self.run_effects();
     }
 
+    /// Remove children who weren't re-used in the update.
+    /// For children that were reused, `is_fresh` will be true, and then this sets it to `false`
+    /// so in the next update if they aren't re-used they will be removed.
     fn clear_fresh_and_remove_stale_children(self: &mut Box<Self>) {
         let child_keys: Vec<VComponentKey> = self.head.children.keys().cloned().collect();
         for child_key in child_keys {
@@ -266,22 +282,27 @@ impl <ViewData: VViewData> VComponent<ViewData> {
         }
     }
 
+    /// Runs effects: forwards to `construct`.
     fn run_effects(self: &mut Box<Self>) {
         self.construct.run_effects(&mut self.head);
     }
 
+    /// Runs update destructors: forwards to `construct`.
     fn run_update_destructors(self: &mut Box<Self>) {
         self.construct.run_update_destructors(&mut self.head);
     }
 
+    /// Runs permanent destructors: forwards to `construct`.
     fn run_permanent_destructors(self: &mut Box<Self>) {
         self.construct.run_permanent_destructors(&mut self.head);
     }
 
+    /// Child component with the given key
     pub(super) fn child_mut<'a>(self: &'a mut Box<Self>, key: &VComponentKey) -> Option<&'a mut Box<VComponent<ViewData>>> {
         self.head.children.get_mut(key)
     }
 
+    /// Descendent with the given path.
     pub(in crate::core) fn down_path_mut<'a>(self: &'a mut Box<Self>, path: &'a VComponentPath) -> Option<&mut Box<VComponent<ViewData>>> {
         let mut current = self;
         for segment in path.iter() {
@@ -292,6 +313,8 @@ impl <ViewData: VViewData> VComponent<ViewData> {
 }
 
 impl <ViewData: VViewData> VComponentHead<ViewData> {
+    /// Mark that the component has pending updates if not already marked.
+    /// `details` is used for the debug message if we detect an infinite loop.
     pub(in crate::core) fn update(&mut self, details: Cow<'static, str>) {
         self.has_pending_updates = true;
         if VMode::is_debug() {
@@ -299,31 +322,38 @@ impl <ViewData: VViewData> VComponentHead<ViewData> {
         }
     }
 
+    /// Mark that this component needs updates and its view is stale.
     fn invalidate(&self) {
         if let Some(renderer) = self.renderer.upgrade() {
-            renderer.invalidate(self.view());
+            renderer.invalidate(self.path(), self.view());
         }
     }
 
-    pub(in crate::core) fn invalidate_flag(&self) -> WeakArc<NotifyFlag> {
+    /// A flag for another thread or time which, when set,
+    /// marks that this component needs updates and its view is stale (if it still exists).
+    pub(in crate::core) fn invalidate_flag(&self) -> WeakArc<NeedsUpdateFlag> {
         match self.renderer.upgrade() {
             None => WeakArc::new(),
-            Some(renderer) => renderer.invalidate_flag_for(self.view())
+            Some(renderer) => renderer.invalidate_flag_for(self.path(), self.view())
         }
     }
 
+    /// Id unique for every component and view.
     pub fn id(&self) -> NodeId {
         self.id
     }
 
+    /// Key which identifies this component in updates.
     pub fn key(&self) -> VComponentKey {
         self.key.clone()
     }
 
+    /// Path which identifies this component from the root, by following keys.
     pub(super) fn path(&self) -> VComponentPath {
         self.parent_path.clone() + self.key.clone()
     }
 
+    /// Child component's head
     #[allow(clippy::needless_lifetimes)]
     pub(super) fn child<'a>(&'a self, key: &VComponentKey) -> Option<&'a VComponentHead<ViewData>> {
         match self.children.get(key) {
@@ -332,6 +362,7 @@ impl <ViewData: VViewData> VComponentHead<ViewData> {
         }
     }
 
+    /// Add a new child component.
     pub(super) fn add_child(&mut self, child: Box<VComponent<ViewData>>) -> &Box<VComponent<ViewData>> {
         let key = child.head.key.clone();
         let old_value = self.children.insert(key.clone(), child);
@@ -350,26 +381,32 @@ impl <ViewData: VViewData> VComponentHead<ViewData> {
         }
     }
 
-    pub fn is_being_created(&self) -> bool {
+    /// Is the component being created? Otherwise it's already created but may or may not be updating.
+    pub(in crate::core) fn is_being_created(&self) -> bool {
         self.node.is_none()
     }
 
+    /// Gets the components root child view and that view's actual component:
+    /// If the `node` is another component, recurses, and otherwise the component will be `self`.
     #[allow(clippy::needless_lifetimes)]
-    pub fn component_and_view<'a>(&'a self) -> VComponentAndView<'a, ViewData> {
+    pub(in crate::core) fn component_and_view<'a>(&'a self) -> VComponentAndView<'a, ViewData> {
         self.node.as_ref().expect("tried to get view of uninitialized component").component_and_view(self)
     }
 
+    /// Gets the components root child view: if the `node` is another component, recurses.
     #[allow(clippy::needless_lifetimes)]
-    pub fn view<'a>(&'a self) -> &'a Box<VView<ViewData>> {
+    pub(in crate::core) fn view<'a>(&'a self) -> &'a Box<VView<ViewData>> {
         self.node.as_ref().expect("tried to get view of uninitialized component").view(self)
     }
 
+    /// Gets the renderer, which has the root component and controls rendering.
     pub(in crate::core) fn renderer(&self) -> Weak<dyn VComponentRoot<ViewData = ViewData>> {
         self.renderer.clone()
     }
 }
 
 impl <ViewData: VViewData> dyn VComponentConstruct<ViewData=ViewData> {
+    /// Runtime-cast `props` to whatever we want, but it panics if they're not the same type.
     #[allow(clippy::needless_lifetimes)]
     pub(super) fn cast_props<'a, Props: Any>(&'a self) -> &'a Props {
         self.props().downcast_ref().expect("props casted to the wrong type")

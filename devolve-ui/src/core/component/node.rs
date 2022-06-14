@@ -45,17 +45,19 @@ pub type VComponentAndView<'a, ViewData> = (&'a VComponentHead<ViewData>, &'a Bo
 
 static mut NEXT_ID: usize = 0;
 
-impl <ViewData: VViewData> VNode<ViewData> {
-    pub const NULL_ID: NodeId = NodeId(0);
+impl NodeId {
+    pub const NULL: NodeId = NodeId(0);
 
-    pub fn next_id() -> NodeId {
+    pub fn next() -> NodeId {
         // TODO: Make thread safe?
         unsafe {
             NEXT_ID += 1;
             NodeId(NEXT_ID)
         }
     }
+}
 
+impl <ViewData: VViewData> VNode<ViewData> {
     pub fn id(&self) -> NodeId {
         match self {
             VNode::Component { id, key: _key} => *id,

@@ -34,10 +34,8 @@ impl <Engine: RenderEngine + 'static> WeakRunning<Engine> for Weak<Running<Engin
 #[cfg(feature = "time")]
 impl <Engine: RenderEngine + 'static> RcRunning<Engine> where Engine::RenderLayer: VRenderLayer {
     pub(super) fn new(renderer: &Rc<Renderer<Engine>>) -> Self {
-        // Render once at start if necessary; polling waits interval before re-rendering
-        if renderer.needs_rerender().get() && renderer.is_visible() {
-            renderer.rerender();
-        }
+        // Update once at start if necessary; polling waits interval before updating
+        renderer.update_and_rerender();
 
         Self(Rc::new(Running {
             renderer: Rc::downgrade(renderer),
@@ -55,9 +53,7 @@ impl <Engine: RenderEngine + 'static> RcRunning<Engine> where Engine::RenderLaye
         let renderer = renderer.unwrap();
 
         renderer.tick();
-        if renderer.needs_rerender().get() && renderer.is_visible() {
-            renderer.rerender();
-        }
+        renderer.update_and_rerender();
 
         // Not done (gets polled again and calls interval's poll)
         Poll::Pending
