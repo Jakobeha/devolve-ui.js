@@ -116,7 +116,7 @@ pub fn constr_view<ViewData: VViewData>(
 /// source!({
 ///   anchor_x: 0.5f32,
 ///   anchor_y: 0.5f32
-/// }, Source::File("/some/path.png"));
+/// }, {}, Source::File("/some/path.png"));
 /// ```
 pub macro make_view(
     $vis:vis $name:ident,

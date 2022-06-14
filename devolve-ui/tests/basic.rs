@@ -12,7 +12,8 @@ use std::io::Write;
 use std::os::unix::ffi::OsStrExt;
 use std::rc::Rc;
 #[allow(unused_imports)] // Needed for IntelliJ macro expansion
-use devolve_ui::core::component::constr::{_make_component2, make_component2};
+use devolve_ui::core::component::constr::{_make_component_macro, make_component_macro};
+use devolve_ui::core::misc::partial_default::PartialDefault;
 use devolve_ui::core::component::context::VComponentContext2;
 use devolve_ui::core::component::node::VNode;
 use devolve_ui::core::renderer::renderer::{Renderer, RendererOverrides};
@@ -21,9 +22,18 @@ use devolve_ui::engines::tui::tui::{TuiConfig, TuiEngine};
 use devolve_ui::view_data::tui::tui::TuiViewData;
 use devolve_ui::view_data::tui::constr::{vbox, text};
 
-#[derive(Default)]
 pub struct BasicProps {
-    text: String
+    pub text: String
+}
+
+impl PartialDefault for BasicProps {
+    type RequiredArgs = (String,);
+
+    fn partial_default((text,): Self::RequiredArgs) -> Self {
+        Self {
+            text
+        }
+    }
 }
 
 pub fn basic((_c, props): VComponentContext2<BasicProps, TuiViewData>) -> VNode<TuiViewData> {
@@ -33,7 +43,7 @@ pub fn basic((_c, props): VComponentContext2<BasicProps, TuiViewData>) -> VNode<
     ])
 }
 
-make_component2!(pub basic, basic, BasicProps);
+make_component_macro!(pub basic, basic, BasicProps);
 
 struct TestOutput {
     buf: Rc<RefCell<Vec<u8>>>
@@ -88,7 +98,7 @@ fn test_basic_render() {
         additional_store: Default::default(),
         ignore_events: false
     });
-    renderer.root(|(mut c, ())| basic!(&mut c, "basic", { text: "foo bar".into() }));
+    renderer.root(|(mut c, ())| basic!(&mut c, "basic", {}, "foo bar".into()));
     // renderer.interval_between_frames(Duration::from_millis(25)); // optional
     renderer.show();
     // renderer.resume();

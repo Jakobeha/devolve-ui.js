@@ -14,8 +14,7 @@ use std::rc::Rc;
 use std::path::PathBuf;
 use std::time::Duration;
 #[allow(unused_imports)] // Needed for IntelliJ macro expansion
-use devolve_ui::core::component::constr::{_make_component, _make_component2, make_component};
-use devolve_ui::core::component::constr::make_component2;
+use devolve_ui::core::component::constr::{_make_component_macro, make_component};
 use devolve_ui::core::component::context::VComponentContext2;
 use devolve_ui::core::component::node::VNode;
 use devolve_ui::core::renderer::renderer::{Renderer, RendererOverrides};
@@ -30,15 +29,10 @@ use devolve_ui::view_data::attrs::BorderStyle;
 use devolve_ui::view_data::tui::constr::{border, hbox, source, text, zbox};
 use devolve_ui::core::hooks::event::{CallFirst, use_interval};
 
-#[derive(Default)]
-pub struct HeaderProps {
-    name: String
-}
-
-#[derive(Default)]
-pub struct ReadmeProps {
-    name: String
-}
+make_component!(pub header, HeaderProps {} [ name: String ]);
+make_component!(pub readme, ReadmeProps {
+    name: String = "".to_string()
+} []);
 
 pub fn header((mut c, HeaderProps { name }): VComponentContext2<HeaderProps, TuiViewData>) -> VNode<TuiViewData> {
     let counter = use_state(&mut c, || 0);
@@ -58,15 +52,12 @@ pub fn header((mut c, HeaderProps { name }): VComponentContext2<HeaderProps, Tui
 pub fn readme((mut c, ReadmeProps { name }): VComponentContext2<ReadmeProps, TuiViewData>) -> VNode<TuiViewData> {
     zbox!({ width: smt!(100%) }, {}, vec![
         hbox!({ x: mt!(2), y: mt!(1), width: smt!(100% - 4) }, { gap: mt!(1) }, vec![
-            header!(&mut c, "header", { name: name.clone() }),
+            header!(&mut c, "header", {}, name.clone()),
             source!({ width: smt!(34), height: smt!(16) }, {}, Source::Path(PathBuf::from("assets/dog.png")))
         ]),
         border!({ width: smt!(100%), height: smt!(prev + 2) }, { color: Some(Color::blue()) }, BorderStyle::Rounded)
     ])
 }
-
-make_component2!(pub header, HeaderProps);
-make_component2!(pub readme, ReadmeProps);
 
 struct TestOutput {
     buf: Rc<RefCell<Vec<u8>>>

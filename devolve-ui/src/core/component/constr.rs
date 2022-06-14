@@ -34,24 +34,23 @@ pub fn make_component<
     }
 }
 
-/// See `make_component2`, this one is required for macro expansion.
-pub macro _make_component2(
+/// See `make_component_macro`, this one is required for macro expansion.
+pub macro _make_component_macro(
     ($d:tt) @
     $vis:vis $name:ident,
     $fun:path,
     $Props:ident
 ) {
-    /// Usage: `$name!(c, key, { settings: my_settings } vec![...] )`
+    /// Usage: `$name!(c, key, { optional_field: "optional value".to_string() }, "required value".to_string())`
     $vis macro $name(
         $d c:expr,
         $d key:expr,
-        { $d ( $d field:ident : $d field_value:expr ),* }
-        $d ( $d children:expr )?
+        { $d ( $d opt_field:ident : $d opt_field_value:expr ),* }
+        $d ( , $d req_prop_id:expr )*
     ) { {
         let props = $Props {
-            $d ( $d field : $d field_value, )*
-            $d ( children : $d children, )?
-            ..Default::default()
+            $d ( $d opt_field : $d opt_field_value, )*
+            ..$crate::core::misc::partial_default::PartialDefault::partial_default(($d ( $d req_prop_id, )*))
         };
         make_component(
             $d c,
@@ -62,15 +61,51 @@ pub macro _make_component2(
     } }
 }
 
-/// Usage: `make_component2!(pub app, AppProps)` or `make_component2!(pub app, app_fn_with_weird_name, AppProps)`
+/// Usage:
+/// ```rust
+/// use devolve_ui::core::component::constr::make_component_macro;
+/// use devolve_ui::core::component::context::VComponentContext2;
+/// use devolve_ui::core::component::node::VNode;
+/// use devolve_ui::core::misc::partial_default::PartialDefault;
+/// use devolve_ui::view_data::tui::constr::text;
+/// use devolve_ui::view_data::tui::tui::TuiViewData;
 ///
-/// Like `make_component` except you must define the props and function yourself.
-/// This one defines the macro.
+/// pub struct AppProps {
+///     required_field1: String,
+///     required_field2: String
+/// }
 ///
-/// Pro tip: To get IntelliJ to understand this macro you must also import `_make_component2`
-pub macro make_component2 {
+/// impl PartialDefault for AppProps {
+///     type RequiredArgs = (String, String,);
+///
+///     fn partial_default((required_field1, required_field2,): Self::RequiredArgs) -> Self {
+///         Self {
+///             required_field1,
+///             required_field2
+///         }
+///     }
+/// }
+///
+/// fn app((c, AppProps { required_field1, required_field2 }): &mut VComponentContext2<AppProps, TuiViewData>) -> VNode<TuiViewData> {
+///     text!({}, {}, "Hello world!".to_string())
+/// }
+///
+/// fn app_fn_with_weird_name((c, AppProps { required_field1, required_field2 }): &mut VComponentContext2<AppProps, TuiViewData>) -> VNode<TuiViewData> {
+///     text!({}, {}, "Hello world!".to_string())
+/// }
+///
+/// make_component_macro!(pub app, AppProps [ required_field1 required_field2 ]);
+/// // or
+/// make_component_macro!(pub app2, app_fn_with_weird_name, AppProps [ required_field1, required_field2 ]);
+/// ```
+///
+/// Like `make_component` except you must define the props and defaults yourself.
+/// This one only defines the macro.
+///
+/// Pro tip: To get IntelliJ to understand this macro you must also import `_make_component_macro`
+pub macro make_component_macro {
     ($vis:vis $name:ident, $Props:ident) => {
-        _make_component2!(
+        _make_component_macro!(
             ($) @
             $vis $name,
             $name,
@@ -78,7 +113,7 @@ pub macro make_component2 {
         );
     },
     ($vis:vis $name:ident, $fun:path, $Props:ident) => {
-        _make_component2!(
+        _make_component_macro!(
             ($) @
             $vis $name,
             $fun,
@@ -89,69 +124,59 @@ pub macro make_component2 {
 
 /// Create a custom component. Creates a function and macro which you can call with the component's name.
 ///
-/// Pro tip: To get IntelliJ to understand this macro you must also import `_make_component` and `_make_component2`
+/// Pro tip: To get IntelliJ to understand this macro you must also import `_make_component_macro`
 ///
 /// Usage:
 ///
 /// ```
-/// use devolve_ui::core::component::constr::{_make_component, _make_component2, make_component};
+/// use devolve_ui::core::component::constr::{_make_component_macro, make_component};
+/// use devolve_ui::core::component::context::VComponentContext2;
+/// use devolve_ui::core::component::node::VNode;
 /// use devolve_ui::view_data::tui::constr::{vbox, text};
 /// use devolve_ui::view_data::tui::tui::TuiViewData;
 ///
 /// make_component!(pub basic, BasicProps {
-///     text: String
-/// }, {
-///     text: Default::default()
-/// }, <TuiViewData>|_c, text| {
-///     vbox!({}, {}, vec![
-///         text!({}, {}, "Hello world!")
-///     ])
-/// });
+///     optional_field: String = "default value".to_string(),
+///     another_optional: usize = 1
+/// } [ required_field: String ]);
 ///
-/// basic!(c, "basic", { text: "Hello world".into() })
+/// fn basic((c, BasicProps { optional_field, another_optional, required_field }): VComponentContext2<BasicProps, TuiViewData>) -> VNode<TuiViewData> {
+///     vbox!({}, {}, vec![
+///         text!({}, {}, format!("{} and {}", requireD_field, optional_field)),
+///         text!({}, {}, "Hello world!".to_string())
+///     ])
+/// }
+///
+/// fn somewhere_else((c, ()): VComponentContext2<(), TuiViewData>) {
+///     basic!(&mut c, "key", {
+///         optional_field: "overridden value".to_string()
+///     }, "required value".to_string())
+/// }
 /// ```
 pub macro make_component(
     $vis:vis $name:ident,
-    $Props:ident { $( $ty_field:ident : $ty_field_ty:ty ),* },
-    { $( $default_field:ident : $default_field_default:expr ),* },
-    <$ViewData:ty>|$c:ident $( , $field:ident)*| $body:expr
-) {
-    _make_component!(
-        ($) @
-        $vis $name,
-        $Props { $( $ty_field : $ty_field_ty ),* },
-        { $( $default_field : $default_field_default ),* },
-        <$ViewData>|$c $( , $field)*| $body
-    );
-}
-
-/// See `make_component`, this one is required for macro expansion.
-pub macro _make_component(
-    ($d:tt) @
-    $vis:vis $name:ident,
-    $Props:ident { $( $ty_field:ident : $ty_field_ty:ty ),* },
-    { $( $default_field:ident : $default_field_default:expr ),* },
-    <$ViewData:ty>|$c:ident $( , $field:ident)*| $body:expr
+    $Props:ident
+    { $( $opt_prop_id:ident : $opt_prop_ty:ty = $opt_prop_default:expr ),* }
+    [ $( $req_prop_id:ident : $req_prop_ty:ty ),* ]
 ) {
     $vis struct $Props {
-        $( pub $ty_field : $ty_field_ty ),*
+        $( pub $opt_prop_id : $opt_prop_ty, )*
+        $( pub $req_prop_id : $req_prop_ty, )*
     }
 
-    impl Default for $Props {
-        fn default() -> Self {
+    impl $crate::core::misc::partial_default::PartialDefault for $Props {
+        type RequiredArgs = ( $( $req_prop_ty, )* );
+
+        fn partial_default(($( $req_prop_id, )*): Self::RequiredArgs) -> Self {
             Self {
-                $( $default_field : $default_field_default ),*
+                $( $opt_prop_id : $opt_prop_default, )*
+                $( $req_prop_id, )*
             }
         }
     }
 
-    fn $name($c: &mut Box<VComponent<$ViewData>>, props: &$Props) -> VNode<$ViewData> {
-        let $Props { $( $field ),* } = props;
-        $body
-    }
-
-    _make_component2!(
-        ($d) @
+    _make_component_macro!(
+        ($) @
         $vis $name,
         $name,
         $Props
