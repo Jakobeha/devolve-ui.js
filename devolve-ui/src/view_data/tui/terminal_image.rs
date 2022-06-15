@@ -1,12 +1,76 @@
 //! Data types for `devolve_ui::engines::tui::terminal_image`.
 
-use std::fmt;
+use std::{env, fmt};
 use std::fmt::{Debug, Display, Formatter};
 use std::fs::File;
 use std::io;
 use std::io::Read;
 use std::path::PathBuf;
 use png;
+use semver::Version;
+
+// region tui image format
+/// How the image is rendered to the terminal.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Hash)]
+pub enum TuiImageFormat {
+    /// Rendered as character blocks with 2 colors. For terminals which don't support "real" images
+    Fallback,
+    /// Proprietary format used by iTerm: https://iterm2.com/documentation-images.html
+    Iterm,
+    /// Proprietary format used by Kitty: https://sw.kovidgoyal.net/kitty/graphics-protocol/#transferring-pixel-data
+    Kitty,
+    /// Sixel format: https://github.com/saitoha/libsixel
+    Sixel
+}
+
+const SIXEL_TERMINALS: [&'static str; 14] = [
+    "xterm",
+    "contour",
+    "mlterm",
+    "mintty",
+    "msys2",
+    "dxterm",
+    "kermit",
+    "zste",
+    "wrq",
+    "rlogin",
+    "yaft",
+    "recterm",
+    "seq2gif",
+    "cancer"
+];
+
+impl TuiImageFormat {
+    /// Infer the image format for this terminal from the current environment.
+    /// This should work for most terminals.
+    pub fn infer_from_env() -> Self {
+        let terminal = env::var("LC_TERMINAL")
+            .or_else(|_err| env::var("TERM_PROGRAM"))
+            .unwrap_or_else(|_err| String::new());
+        let terminal_version = env::var("LC_TERMINAL_VERSION")
+            .or_else(|_err| env::var("TERM_PROGRAM_VERSION"))
+            .ok()
+            .and_then(|s| Version::parse(&s).ok());
+        let konsole_version: usize = env::var("KONSOLE_VERSION")
+            .unwrap_or_else(|_err| String::new())
+            .parse()
+            .unwrap_or(0);
+        if terminal.starts_with("iterm") && terminal_version.is_some_and(|v| v.major >= 3) {
+            Self::Iterm
+        } else if terminal.starts_with("kitty") {
+            Self::Kitty
+        } else if konsole_version > 220000 || (terminal.starts_with("konsole") && terminal_version.is_some_and(|v| v.major >= 22)) {
+            // Konsole doesn't seem to set LC_TERMINAL or LC_TERMINAL_VERSION,
+            // however it does set KONSOLE_VERSION.
+            Self::Sixel
+        } else if SIXEL_TERMINALS.iter().any(|prefix| terminal.starts_with(prefix)) {
+            Self::Sixel
+        } else {
+            Self::Fallback
+        }
+    }
+}
+// endregion
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub enum SourceFormat {

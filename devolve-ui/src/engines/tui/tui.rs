@@ -24,7 +24,7 @@ use crate::engines::tui::layer::{RenderCell, RenderLayer};
 use crate::engines::tui::terminal_image::{Image, ImageRender};
 use crate::view_data::attrs::{BorderStyle, DividerDirection, DividerStyle, TextWrapMode};
 use crate::view_data::tui::terminal_image;
-use crate::view_data::tui::terminal_image::{HandleAspectRatio, Source};
+use crate::view_data::tui::terminal_image::{HandleAspectRatio, Source, TuiImageFormat};
 #[cfg(feature = "input")]
 use crate::core::renderer::engine::InputListeners;
 #[cfg(feature = "time")]
@@ -58,6 +58,7 @@ pub struct TuiConfig<Input: Read, Output: Write> {
     #[cfg(target_family = "unix")]
     pub termios_fd: Option<RawFd>,
     pub raw_mode: bool,
+    pub image_format: TuiImageFormat
 }
 
 #[derive(Debug)]
@@ -87,6 +88,7 @@ impl Default for TuiConfig<Stdin, Stdout> {
             output,
             termios_fd: Some(fd),
             raw_mode: true,
+            image_format: TuiImageFormat::infer_from_env()
         }
     }
 }
@@ -332,7 +334,13 @@ impl <Input: Read, Output: Write> TuiEngine<Input, Output> {
             terminal_image::Measurement::Pixels((height * column_size.height) as u16)
         });
         let image = Image::try_from(source).map_err(|err| LayoutError::new(format!("failed to load source: {}", err)))?;
-        let ImageRender { mut layer, size_in_pixels: (width_pixels, height_pixels) } = image.render(width, height, handle_aspect_ratio, column_size).map_err(|msg| LayoutError::new(format!("failed to render source {}: {}", source, msg)))?;
+        let ImageRender { mut layer, size_in_pixels: (width_pixels, height_pixels) } = image.render(
+            self.config.image_format,
+            width,
+            height,
+            handle_aspect_ratio,
+            column_size
+        ).map_err(|msg| LayoutError::new(format!("failed to render source {}: {}", source, msg)))?;
         let width = width_pixels as f32 / column_size.width;
         let height = height_pixels as f32 / column_size.height;
         layer.translate1(bounds);

@@ -24,14 +24,13 @@
 //! - cancer: sixel
 //! - all others: fallback
 
-use std::{env, ptr};
+use std::ptr;
 use std::fmt;
 use std::fmt::{Display, Formatter};
 use std::io;
 use std::io::Read;
 use std::os::raw::{c_char, c_int, c_uchar, c_void};
 use std::slice;
-use semver::Version;
 use png;
 use sixel_sys;
 use sixel_sys::status::Status as SixelStatus;
@@ -39,60 +38,7 @@ use base64;
 use crate::core::view::color::PackedColor;
 use crate::core::view::layout::geom::Size;
 use crate::engines::tui::layer::{RenderCell, RenderLayer};
-use crate::view_data::tui::terminal_image::{FailedToGetSize, HandleAspectRatio, InferredFileExtension, Measurement, Source, SourceFormat};
-
-enum ImageSupport {
-    Fallback,
-    Iterm,
-    Kitty,
-    Sixel
-}
-
-const SIXEL_TERMINALS: [&'static str; 14] = [
-    "xterm",
-    "contour",
-    "mlterm",
-    "mintty",
-    "msys2",
-    "dxterm",
-    "kermit",
-    "zste",
-    "wrq",
-    "rlogin",
-    "yaft",
-    "recterm",
-    "seq2gif",
-    "cancer"
-];
-
-impl ImageSupport {
-    fn get() -> Self {
-        let terminal = env::var("LC_TERMINAL")
-            .or_else(|_err| env::var("TERM_PROGRAM"))
-            .unwrap_or_else(|_err| String::new());
-        let terminal_version = env::var("LC_TERMINAL_VERSION")
-            .or_else(|_err| env::var("TERM_PROGRAM_VERSION"))
-            .ok()
-            .and_then(|s| Version::parse(&s).ok());
-        let konsole_version: usize = env::var("KONSOLE_VERSION")
-            .unwrap_or_else(|_err| String::new())
-            .parse()
-            .unwrap_or(0);
-        if terminal.starts_with("iterm") && terminal_version.is_some_and(|v| v.major >= 3) {
-            Self::Iterm
-        } else if terminal.starts_with("kitty") {
-            Self::Kitty
-        } else if konsole_version > 220000 || (terminal.starts_with("konsole") && terminal_version.is_some_and(|v| v.major >= 22)) {
-            // Konsole doesn't seem to set LC_TERMINAL or LC_TERMINAL_VERSION,
-            // however it does set KONSOLE_VERSION.
-            Self::Sixel
-        } else if SIXEL_TERMINALS.iter().any(|prefix| terminal.starts_with(prefix)) {
-            Self::Sixel
-        } else {
-            Self::Fallback
-        }
-    }
-}
+use crate::view_data::tui::terminal_image::{FailedToGetSize, HandleAspectRatio, InferredFileExtension, Measurement, Source, SourceFormat, TuiImageFormat};
 
 pub struct Image<R: Read> {
     pub width: u16,
@@ -276,20 +222,21 @@ impl ImageRender {
 impl <R: Read> Image<R> {
     pub fn render(
         self,
+        image_format: TuiImageFormat,
         width: Measurement,
         height: Measurement,
         handle_aspect_ratio: HandleAspectRatio,
-        column_size: &Size
+        column_size: &Size,
     ) -> Result<ImageRender, String> {
         let (width, height) = calculate_scaled_width_height(self.width, self.height, width, height, handle_aspect_ratio)?;
         if width == 0 || height == 0 {
             return Ok(ImageRender::empty());
         }
-        let render = match ImageSupport::get() {
-            ImageSupport::Fallback => self.render_fallback(width, height, column_size),
-            ImageSupport::Iterm => self.render_iterm(width, height),
-            ImageSupport::Kitty => self.render_kitty(width, height, column_size),
-            ImageSupport::Sixel => self.render_sixel(width, height)
+        let render = match image_format {
+            TuiImageFormat::Fallback => self.render_fallback(width, height, column_size),
+            TuiImageFormat::Iterm => self.render_iterm(width, height),
+            TuiImageFormat::Kitty => self.render_kitty(width, height, column_size),
+            TuiImageFormat::Sixel => self.render_sixel(width, height)
         }?;
         Ok(ImageRender {
             layer: render,

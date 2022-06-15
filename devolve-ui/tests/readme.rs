@@ -24,7 +24,7 @@ use devolve_ui::core::view::layout::geom::Size;
 use devolve_ui::core::view::layout::macros::{mt, smt};
 use devolve_ui::engines::tui::tui::{TuiConfig, TuiEngine};
 use devolve_ui::view_data::tui::tui::TuiViewData;
-use devolve_ui::view_data::tui::terminal_image::{Source, HandleAspectRatio};
+use devolve_ui::view_data::tui::terminal_image::{Source, HandleAspectRatio, TuiImageFormat};
 use devolve_ui::view_data::attrs::BorderStyle;
 use devolve_ui::view_data::tui::constr::{border, hbox, source, text, zbox};
 use devolve_ui::core::hooks::event::{CallFirst, use_interval};
@@ -103,6 +103,7 @@ fn test_render() {
         raw_mode: true,
         #[cfg(target_family = "unix")]
         termios_fd: None,
+        image_format: TuiImageFormat::Fallback
     }), RendererOverrides {
         override_size: Some(Size { width: 80f32, height: 40f32 }),
         ignore_events: true,
