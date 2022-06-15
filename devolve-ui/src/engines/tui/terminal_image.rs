@@ -24,7 +24,6 @@
 //! - cancer: sixel
 //! - all others: fallback
 
-use std::ptr;
 use std::fmt;
 use std::fmt::{Display, Formatter};
 use std::io;
@@ -313,13 +312,24 @@ fn _render_sixel(rgba32: &[u8], width: u16, height: u16) -> Result<String, Sixel
     unsafe {
         let mut output_str = String::new();
         let output = sixel_sys::sixel_output_create(Some(read_sixel), &mut output_str as *mut String as *mut c_void);
+        let dither = sixel_sys::sixel_dither_create(32);
+
         // I don't believe sixel_encode actually mutates the first argument,
         // but the signature requires *mut c_char. Is this an oversight?
         // If not we have to make rgba32 &mut [u8]
-        let status = sixel_sys::sixel_encode(rgba32.as_ptr() as *mut c_uchar, width as c_int, height as c_int, 8, ptr::null_mut(), output);
+        let status = sixel_sys::sixel_encode(
+            rgba32.as_ptr() as *mut c_uchar,
+            width as c_int,
+            height as c_int,
+            8,
+            dither,
+            output
+        );
         if status != sixel_sys::status::OK {
             return Err(status)
         }
+
+        sixel_sys::sixel_dither_destroy(dither);
         sixel_sys::sixel_output_destroy(output);
         Ok(output_str)
     }
