@@ -1,3 +1,6 @@
+//! Data types for color. This wasn't needed in `devolve-ui` and may move to `tui` in the future.
+//! However almost all renders will need color and hopefully this is a sensible implementation.
+
 use std::fmt;
 use std::fmt::{Debug, Formatter};
 use palette::{Packed, Lcha, Srgba, IntoColor};

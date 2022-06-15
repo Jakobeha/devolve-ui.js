@@ -13,20 +13,20 @@ use std::any::Any;
 use std::marker::PhantomData;
 use std::ops::{Deref, DerefMut, Drop};
 use std::sync::{Arc, Weak, LockResult, Mutex, MutexGuard, TryLockResult};
+use crate::core::renderer::stale_data::NeedsUpdateFlag;
 use crate::core::component::context::VComponentContext;
 use crate::core::hooks::state_internal::use_non_updating_state;
 use crate::core::misc::map_lock_result::MappableLockResult;
-use crate::core::misc::notify_flag::NotifyFlag;
 use crate::core::view::view::VViewData;
 
 #[derive(Debug)]
-pub struct AtomicRefState<T: Any, ViewData: VViewData>(Arc<Mutex<T>>, Weak<NotifyFlag>, PhantomData<ViewData>);
+pub struct AtomicRefState<T: Any, ViewData: VViewData>(Arc<Mutex<T>>, Weak<NeedsUpdateFlag>, PhantomData<ViewData>);
 
 #[derive(Debug)]
 pub struct AtomicAccess<'a, T: Any, ViewData: VViewData>(MutexGuard<'a, T>, PhantomData<ViewData>);
 
 #[derive(Debug)]
-pub struct AtomicAccessMut<'a, T: Any, ViewData: VViewData>(MutexGuard<'a, T>, Weak<NotifyFlag>, PhantomData<ViewData>);
+pub struct AtomicAccessMut<'a, T: Any, ViewData: VViewData>(MutexGuard<'a, T>, Weak<NeedsUpdateFlag>, PhantomData<ViewData>);
 
 pub fn use_atomic_ref_state<'a, T: Any, ViewData: VViewData + 'a>(
     c: &mut impl VComponentContext<'a, ViewData=ViewData>,
@@ -66,7 +66,7 @@ impl <'a, T: Any, ViewData: VViewData> AtomicAccess<'a, T, ViewData> {
 }
 
 impl <'a, T: Any, ViewData: VViewData> AtomicAccessMut<'a, T, ViewData> {
-    fn new(inner: MutexGuard<'a, T>, invalidate_flag: Weak<NotifyFlag>) -> AtomicAccessMut<'a, T, ViewData> {
+    fn new(inner: MutexGuard<'a, T>, invalidate_flag: Weak<NeedsUpdateFlag>) -> AtomicAccessMut<'a, T, ViewData> {
         AtomicAccessMut(inner, invalidate_flag, PhantomData)
     }
 }

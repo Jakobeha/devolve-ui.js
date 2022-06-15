@@ -1,3 +1,10 @@
+//! Data types for all kinds of input supported by devolve-ui.
+//! Unfortunately devolve-ui isn't extensible enough to support any other kinds of input.
+//!
+//! A lot of this is taken straight from crossterm's event data structures:
+//! https://docs.rs/crossterm/0.23.2/src/crossterm/event.rs.html#297-413
+//! Generalized to support non-terminal environments and platform-specific actions,
+//! although not every environment / platform will support those.
 use bitflags::bitflags;
 use crate::core::view::layout::geom::{Pos, Size};
 #[cfg(feature = "crossterm")]
@@ -10,12 +17,6 @@ use crossterm::event::{
     MouseEvent as CrosstermMouseEvent,
     MouseEventKind as CrosstermMouseEventKind
 };
-
-
-///! A lot of this is taken straight from crossterm's event data structures:
-///! https://docs.rs/crossterm/0.23.2/src/crossterm/event.rs.html#297-413
-///! Generalized to support non-terminal environments and platform-specific actions,
-///! although not every environment / platform will support those
 
 /// Represents an event.
 #[derive(Debug, PartialEq, Clone, Copy)]

@@ -8,7 +8,7 @@ use std::time::Duration;
 use crate::core::component::component::VComponent;
 use crate::core::component::path::VComponentPath;
 #[cfg(feature = "input")]
-use crate::core::misc::input::{KeyEvent, MouseEvent, ResizeEvent};
+use crate::core::renderer::input::{KeyEvent, MouseEvent, ResizeEvent};
 use crate::core::misc::notify_flag::NotifyFlag;
 use crate::core::renderer::listeners::{RendererListener, RendererListenerId};
 use crate::core::renderer::stale_data::NeedsUpdateFlag;

@@ -1,8 +1,22 @@
 //! The `Renderer` manages component data, events / listeners, and rendering.
 //! It delegates the rendering to its `RenderEngine` (e.g. `TuiRenderEngine` to render to TUIs).
 //!
-//! If the `time` feature is enabled, you can call `resume` or one of its variants to make the renderer
-//! send time events. Otherwise it will only re-render when one of its components updates. TODO fix
+//! ## Runtime
+//! The renderer is designed to re-render when component data is updated.
+//! However, Rust does not have a common runtime and updates may come in from other threads while
+//! the renderer thread is busy. You can choose to either use the renderer's asynchronous runtime,
+//! or `poll` the renderer manually (which causes it to flush updates and rerender).
+//!
+//! - **Built-in fixed-interval runtime:** This is under the `time` feature. You call `resume` or
+//!   one of its variants to make the renderer "tick" at a fixed interval (e.g. 25 times per second).
+//!   On each tick, the renderer will a) send a tick event, and b) poll itself, flushing any updates
+//!   and redrawing. This runtime is implemented via `async` the Tokio runtime, but you can also start
+//!   it synchronously: enable the `time-blocking` feature and call `resume_blocking_with_escape` or
+//!   `resume_blocking`.
+//! - **Manual runtime:** Call `poll` whenever you want the renderer to re-render. The renderer is
+//!   neither `Sync` nor `Send` so you must find a way to call into the main thread in order to do this.
+//! - **No runtime:** If you use devolve-ui to just render a single frame, you don't need to worry about
+//!   updates or runtime.
 
 use std::borrow::Cow;
 use std::cell::{Cell, RefCell, RefMut};
@@ -21,7 +35,7 @@ use crate::core::component::parent::VParent;
 use crate::core::component::path::VComponentPath;
 use crate::core::component::root::VComponentRoot;
 #[cfg(feature = "input")]
-use crate::core::misc::input::{KeyEvent, MouseEvent, ResizeEvent};
+use crate::core::renderer::input::{KeyEvent, MouseEvent, ResizeEvent};
 use crate::core::misc::notify_flag::NotifyFlag;
 use crate::core::misc::option_f32::OptionF32;
 use crate::core::view::layout::geom::{Rectangle, Size};
@@ -43,6 +57,7 @@ struct CachedRender<Layer> {
     parent: NodeId
 }
 
+/// See module-level documentation
 pub struct Renderer<Engine: RenderEngine + 'static> {
     engine: RefCell<Engine>,
     overrides: RendererOverrides,
@@ -198,7 +213,7 @@ impl <Engine: RenderEngine> Renderer<Engine> where Engine::RenderLayer: VRenderL
     }
 
     /// Updates components and rerenders if necessary
-    pub fn update_and_rerender(self: &Rc<Self>) {
+    pub fn poll(self: &Rc<Self>) {
         self.update_components();
         self.invalidate_views_from_other_threads();
         if renderer.needs_rerender() {

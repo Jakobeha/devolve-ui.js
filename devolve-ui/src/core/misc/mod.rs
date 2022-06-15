@@ -1,5 +1,5 @@
-#[cfg(feature = "input")]
-pub mod input;
+//! Random utility code which aren't really `devolve-ui` specific but needed by `devolve-ui`.
+
 pub mod io_write_2_fmt_write;
 pub(crate) mod map_lock_result;
 pub mod notify_flag;

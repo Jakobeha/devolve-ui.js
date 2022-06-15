@@ -30,7 +30,7 @@ use crate::core::renderer::engine::InputListeners;
 #[cfg(feature = "time")]
 use crate::core::renderer::renderer::RendererViewForEngineInTick;
 #[cfg(all(feature = "time", feature = "input"))]
-use crate::core::misc::input::{Event, ResizeEvent};
+use crate::core::renderer::input::{Event, ResizeEvent};
 
 #[cfg(target_family = "unix")]
 lazy_static! {

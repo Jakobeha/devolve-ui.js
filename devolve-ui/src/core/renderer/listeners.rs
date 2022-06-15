@@ -1,8 +1,11 @@
+//! Listen for and emit events: time, keys, mouse, and resize.
+//! So this is the observer pattern.
+
 use std::marker::PhantomData;
 #[cfg(feature = "time")]
 use std::time::Duration;
 #[cfg(feature = "input")]
-use crate::core::misc::input::{KeyEvent, MouseEvent, ResizeEvent};
+use crate::core::renderer::input::{KeyEvent, MouseEvent, ResizeEvent};
 
 pub(super) struct RendererListeners {
     #[cfg(feature = "time")]

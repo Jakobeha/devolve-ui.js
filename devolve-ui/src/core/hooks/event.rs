@@ -16,7 +16,7 @@ use std::time::{Duration, Instant};
 use crate::core::component::context::{VComponentContext1, VContext, VDestructorContext2, VEffectContext2, VPlainContext2, with_plain_context};
 use crate::core::component::root::VComponentRoot;
 #[cfg(feature = "input")]
-use crate::core::misc::input::{KeyEvent, MouseEvent, ResizeEvent};
+use crate::core::renderer::input::{KeyEvent, MouseEvent, ResizeEvent};
 use crate::core::hooks::effect::{NoDependencies, UseEffectRerun, use_effect};
 use crate::core::hooks::state_internal::use_non_updating_state;
 use crate::core::renderer::listeners::RendererListenerId;

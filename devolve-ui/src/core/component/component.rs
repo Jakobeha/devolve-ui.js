@@ -1,4 +1,6 @@
-//! Components are the UI elements in devolve-ui.
+//! Components encapsulate UI elements and their behavior.
+//! They take primitive views like text and borders, and with access to state and effects,
+//! turn them into something meaningful like controls, data sections, prompts, or your entire app.
 //!
 //! Each component is defined by a function, which takes the component's "props" (input)
 //! and returns a node which is the "render" of the component. This render is derived from the input props
@@ -15,8 +17,6 @@
 //!
 //! Each component must have a `key` to distinguish it between updates,
 //! but this key can be `""` or `()` if it's the only child. The key is provided upon creation.
-//!
-//!
 
 use crate::core::component::parent::VParent;
 use crate::core::component::mode::VMode;
