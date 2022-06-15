@@ -298,23 +298,23 @@ impl <R: Read> Image<R> {
     }
 
     fn render_fallback(self, width: u16, height: u16, column_size: &Size) -> Result<RenderLayer, String> {
-        let width = width as f32 / column_size.width;
-        let height = height as f32 / column_size.height;
+        let width = f32::round(width as f32 / column_size.width) as usize;
+        let height = f32::round(height as f32 / column_size.height) as usize;
         let data = self.data.into_rgba32()?;
-        let scale_width = self.width as f32 / width;
-        let scale_height = self.height as f32 / height;
+        let scale_width = self.width as f32 / width as f32;
+        let scale_height = self.height as f32 / height as f32;
 
-        let mut result = RenderLayer::of(RenderCell::transparent(), width as usize, height as usize);
-        for y1 in 0..(f32::round(height) as usize) {
+        let mut result = RenderLayer::of(RenderCell::transparent(), width, height);
+        for y1 in 0..height {
             let y2 = f32::floor(y1 as f32 * scale_height) as u16;
             let y2p1 = f32::floor((y1 as f32 + 0.5f32) * scale_height) as u16;
-            for x1 in 0..(f32::round(width) as usize) {
+            for x1 in 0..width {
                 let x2 = f32::floor(x1 as f32 * scale_width) as u16;
-                let offset_bg = y2 as usize * self.width as usize + x2 as usize;
-                let rgba_bg = u32::from_be_bytes(data[offset_bg..offset_bg +4].try_into().unwrap());
+                let offset_bg = (y2 as usize * self.width as usize + x2 as usize) * 4;
+                let rgba_bg = u32::from_be_bytes(data[offset_bg..offset_bg+4].try_into().unwrap());
                 let color_bg = PackedColor::from(rgba_bg);
-                let offset_fg = y2p1 as usize * self.width as usize + x2 as usize;
-                let rgba_fg = u32::from_be_bytes(data[offset_fg..offset_fg +4].try_into().unwrap());
+                let offset_fg = (y2p1 as usize * self.width as usize + x2 as usize) * 4;
+                let rgba_fg = u32::from_be_bytes(data[offset_fg..offset_fg+4].try_into().unwrap());
                 let color_fg = PackedColor::from(rgba_fg);
                 if !color_fg.is_transparent() || !color_fg.is_transparent() {
                     result[(x1, y1)] = RenderCell::simple_char('▄', color_fg, color_bg);

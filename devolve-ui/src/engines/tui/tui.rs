@@ -326,15 +326,16 @@ impl <Input: Read, Output: Write> TuiEngine<Input, Output> {
 
     fn render_source(&self, bounds: &BoundingBox, column_size: &Size, source: &Source, handle_aspect_ratio: HandleAspectRatio) -> Result<(RenderLayer, Size), LayoutError> {
         let width = bounds.width.map_or(terminal_image::Measurement::Auto, |width| {
-            terminal_image::Measurement::Pixels((width / column_size.width) as u16)
+            terminal_image::Measurement::Pixels((width * column_size.width) as u16)
         });
         let height = bounds.height.map_or(terminal_image::Measurement::Auto, |height| {
-            terminal_image::Measurement::Pixels((height / column_size.height) as u16)
+            terminal_image::Measurement::Pixels((height * column_size.height) as u16)
         });
         let image = Image::try_from(source).map_err(|err| LayoutError::new(format!("failed to load source: {}", err)))?;
-        let ImageRender { layer, size_in_pixels: (width_pixels, height_pixels) } = image.render(width, height, handle_aspect_ratio, column_size).map_err(|msg| LayoutError::new(format!("failed to render source {}: {}", source, msg)))?;
+        let ImageRender { mut layer, size_in_pixels: (width_pixels, height_pixels) } = image.render(width, height, handle_aspect_ratio, column_size).map_err(|msg| LayoutError::new(format!("failed to render source {}: {}", source, msg)))?;
         let width = width_pixels as f32 / column_size.width;
         let height = height_pixels as f32 / column_size.height;
+        layer.translate1(bounds);
         Ok((layer, Size { width, height }))
     }
 }

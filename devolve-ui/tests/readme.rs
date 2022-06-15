@@ -24,7 +24,7 @@ use devolve_ui::core::view::layout::geom::Size;
 use devolve_ui::core::view::layout::macros::{mt, smt};
 use devolve_ui::engines::tui::tui::{TuiConfig, TuiEngine};
 use devolve_ui::view_data::tui::tui::TuiViewData;
-use devolve_ui::view_data::tui::terminal_image::Source;
+use devolve_ui::view_data::tui::terminal_image::{Source, HandleAspectRatio};
 use devolve_ui::view_data::attrs::BorderStyle;
 use devolve_ui::view_data::tui::constr::{border, hbox, source, text, zbox};
 use devolve_ui::core::hooks::event::{CallFirst, use_interval};
@@ -40,12 +40,12 @@ pub fn header((mut c, HeaderProps { name }): VComponentContext2<HeaderProps, Tui
         *counter.get_mut(&mut c) += 1;
     });
 
-    zbox!({ width: smt!(100%) }, {}, vec![
-        zbox!({ x: mt!(1), y: mt!(1), width: smt!(32) }, {}, vec![
+    zbox!({ width: smt!(34) }, {}, vec![
+        zbox!({ x: mt!(2), y: mt!(1), width: smt!(100% - 4) }, {}, vec![
             text!({}, { color: Some(Color::yellow()) }, format!("Hello {}", name)),
             text!({ x: mt!(100%), anchor_x: 1f32 }, { color: Some(Color::yellow()) }, format!("{} seconds", counter.get(&mut c)))
         ]),
-        border!({ width: smt!(34), height: smt!(prev + 2) }, { color: Some(Color::yellow()) }, BorderStyle::Rounded)
+        border!({ width: smt!(100%), height: smt!(prev) }, { color: Some(Color::yellow()) }, BorderStyle::Rounded)
     ])
 }
 
@@ -53,9 +53,9 @@ pub fn readme((mut c, ReadmeProps { name }): VComponentContext2<ReadmeProps, Tui
     zbox!({ width: smt!(100%) }, {}, vec![
         hbox!({ x: mt!(2), y: mt!(1), width: smt!(100% - 4) }, { gap: mt!(1) }, vec![
             header!(&mut c, "header", {}, name.clone()),
-            source!({ width: smt!(34), height: smt!(16) }, {}, Source::Path(PathBuf::from("assets/dog.png")))
+            source!({ width: smt!(34) }, { handle_aspect_ratio: HandleAspectRatio::Stretch }, Source::Path(PathBuf::from(format!("{}/test-resources/assets/dog.png", env!("CARGO_MANIFEST_DIR")))))
         ]),
-        border!({ width: smt!(100%), height: smt!(prev + 2) }, { color: Some(Color::blue()) }, BorderStyle::Rounded)
+        border!({ width: smt!(100%), height: smt!(prev) }, { color: Some(Color::blue()) }, BorderStyle::Rounded)
     ])
 }
 
@@ -130,6 +130,7 @@ fn test_render() {
     expected_file.read_to_end(&mut expected).expect("failed to read expected output");
     assert_eq!(
         OsStr::from_bytes(&actual),
-        OsStr::from_bytes(&expected)
+        OsStr::from_bytes(&expected),
+        "actual (left) != expected (right)"
     );
 }
