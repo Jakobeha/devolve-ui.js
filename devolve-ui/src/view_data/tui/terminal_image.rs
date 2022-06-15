@@ -13,8 +13,10 @@ use semver::Version;
 /// How the image is rendered to the terminal.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Hash)]
 pub enum TuiImageFormat {
+    /// Rendered as unicode shade characters. For terminals which don't support color or ANSI codes.
+    FallbackGray,
     /// Rendered as character blocks with 2 colors. For terminals which don't support "real" images
-    Fallback,
+    FallbackColor,
     /// Proprietary format used by iTerm: https://iterm2.com/documentation-images.html
     Iterm,
     /// Proprietary format used by Kitty: https://sw.kovidgoyal.net/kitty/graphics-protocol/#transferring-pixel-data
@@ -66,7 +68,7 @@ impl TuiImageFormat {
         } else if SIXEL_TERMINALS.iter().any(|prefix| terminal.starts_with(prefix)) {
             Self::Sixel
         } else {
-            Self::Fallback
+            Self::FallbackColor
         }
     }
 }

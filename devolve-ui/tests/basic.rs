@@ -21,6 +21,7 @@ use devolve_ui::core::view::layout::geom::Size;
 use devolve_ui::engines::tui::tui::{TuiConfig, TuiEngine};
 use devolve_ui::view_data::tui::tui::TuiViewData;
 use devolve_ui::view_data::tui::constr::{vbox, text};
+use devolve_ui::view_data::tui::terminal_image::TuiImageFormat;
 
 pub struct BasicProps {
     pub text: String
@@ -88,7 +89,8 @@ fn test_basic_render() {
         output: output.clone(),
         raw_mode: true,
         #[cfg(target_family = "unix")]
-        termios_fd: None
+        termios_fd: None,
+        image_format: TuiImageFormat::FallbackColor
     }), RendererOverrides {
         override_size: Some(Size { width: 80f32, height: 40f32 }),
         override_column_size: Some(Size {

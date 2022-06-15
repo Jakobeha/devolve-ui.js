@@ -232,7 +232,8 @@ impl <R: Read> Image<R> {
             return Ok(ImageRender::empty());
         }
         let render = match image_format {
-            TuiImageFormat::Fallback => self.render_fallback(width, height, column_size),
+            TuiImageFormat::FallbackGray => self.render_fallback_gray(width, height, column_size),
+            TuiImageFormat::FallbackColor => self.render_fallback_color(width, height, column_size),
             TuiImageFormat::Iterm => self.render_iterm(width, height),
             TuiImageFormat::Kitty => self.render_kitty(width, height, column_size),
             TuiImageFormat::Sixel => self.render_sixel(width, height)
@@ -243,7 +244,42 @@ impl <R: Read> Image<R> {
         })
     }
 
-    fn render_fallback(self, width: u16, height: u16, column_size: &Size) -> Result<RenderLayer, String> {
+    fn render_fallback_gray(self, width: u16, height: u16, column_size: &Size) -> Result<RenderLayer, String> {
+        let width = f32::round(width as f32 / column_size.width) as usize;
+        let height = f32::round(height as f32 / column_size.height) as usize;
+        let data = self.data.into_rgba32()?;
+        let scale_width = self.width as f32 / width as f32;
+        let scale_height = self.height as f32 / height as f32;
+
+        let mut result = RenderLayer::of(RenderCell::transparent(), width, height);
+        for y1 in 0..height {
+            let y2 = f32::floor(y1 as f32 * scale_height) as u16;
+            for x1 in 0..width {
+                let x2 = f32::floor(x1 as f32 * scale_width) as u16;
+                let offset_bg = (y2 as usize * self.width as usize + x2 as usize) * 4;
+                let rgba_bg = u32::from_be_bytes(data[offset_bg..offset_bg+4].try_into().unwrap());
+                let color_bg = PackedColor::from(rgba_bg);
+                if !color_bg.is_transparent() {
+                    let grayscale_bg = color_bg.white();
+                    let block = if grayscale_bg > 224 {
+                        '█'
+                    } else if grayscale_bg > 160 {
+                        '▓'
+                    } else if grayscale_bg > 96 {
+                        '▒'
+                    } else if grayscale_bg > 32 {
+                        '░'
+                    } else {
+                        ' '
+                    };
+                    result[(x1, y1)] = RenderCell::simple_char(block, PackedColor::transparent(), PackedColor::transparent());
+                }
+            }
+        }
+        Ok(result)
+    }
+
+    fn render_fallback_color(self, width: u16, height: u16, column_size: &Size) -> Result<RenderLayer, String> {
         let width = f32::round(width as f32 / column_size.width) as usize;
         let height = f32::round(height as f32 / column_size.height) as usize;
         let data = self.data.into_rgba32()?;
@@ -262,7 +298,7 @@ impl <R: Read> Image<R> {
                 let offset_fg = (y2p1 as usize * self.width as usize + x2 as usize) * 4;
                 let rgba_fg = u32::from_be_bytes(data[offset_fg..offset_fg+4].try_into().unwrap());
                 let color_fg = PackedColor::from(rgba_fg);
-                if !color_fg.is_transparent() || !color_fg.is_transparent() {
+                if !color_bg.is_transparent() || !color_fg.is_transparent() {
                     result[(x1, y1)] = RenderCell::simple_char('▄', color_fg, color_bg);
                 }
             }

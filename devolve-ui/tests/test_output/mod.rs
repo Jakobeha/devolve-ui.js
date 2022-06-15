@@ -68,7 +68,7 @@ pub fn assert_render_snapshot(
         raw_mode: true,
         #[cfg(target_family = "unix")]
         termios_fd: None,
-        image_format: TuiImageFormat::Fallback
+        image_format: TuiImageFormat::FallbackColor
     };
     adjust_config(&mut config);
 

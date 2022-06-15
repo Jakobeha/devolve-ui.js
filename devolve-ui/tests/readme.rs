@@ -53,7 +53,19 @@ pub fn readme((mut c, ReadmeProps { name }): VComponentContext2<ReadmeProps, Tui
 }
 
 #[test]
-fn test_snapshot() {
+fn test_snapshot_with_grayscale_image() {
+    test_output::assert_render_snapshot(
+        "readme-grayscale",
+        |(mut c, ())| readme!(&mut c, "readme", { name: "devolve-ui".into() }),
+        |config| {
+            config.image_format = TuiImageFormat::FallbackGray;
+        },
+        |_overrides| {}
+    );
+}
+
+#[test]
+fn test_snapshot_color() {
     test_output::assert_render_snapshot(
         "readme",
         |(mut c, ())| readme!(&mut c, "readme", { name: "devolve-ui".into() }),
