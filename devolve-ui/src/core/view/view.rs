@@ -45,7 +45,7 @@ pub trait VViewData: Sized {
 impl <ViewData: VViewData> VView<ViewData> {
     pub fn new(bounds: Bounds, is_visible: bool, d: ViewData) -> VView<ViewData> {
         VView {
-            id: VNode::<ViewData>::next_id(),
+            id: NodeId::next(),
             bounds,
             is_visible,
             d

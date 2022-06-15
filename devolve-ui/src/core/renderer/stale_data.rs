@@ -25,20 +25,20 @@ pub(super) struct StaleData {
 /// Not really handled because it's not really expected.
 // As of now these could be separate structs, since no function returns both
 #[derive(Debug)]
-pub(super) enum StaleDataError {
+pub enum StaleDataError {
     NeedsUpdatePoison,
     NeedsInvalidateViewsPoison
 }
 
-pub(super) type StaleDataResult<T> = Result<T, NeedsUpdatePoisonError>;
+pub type StaleDataResult<T> = Result<T, StaleDataError>;
 
 /// Allows you to set that the renderer needs to re-render (no specific components need to update)
 /// even from another thread.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct NeedsRerenderFlag(Weak<StaleData>);
 
 /// Allows you to set that a specific component (by path) needs to be updated even from another thread.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct NeedsUpdateFlag {
     stale_data: Weak<StaleData>,
     path: VComponentPath,
@@ -59,9 +59,18 @@ impl NeedsRerenderFlag {
 }
 
 impl NeedsUpdateFlag {
-    pub(super) fn from(stale_data: &Arc<StaleData>, path: VComponentPath, view_id: NodeId) -> NeedsUpdateFlagt {
+    pub(super) fn from(stale_data: &Arc<StaleData>, path: VComponentPath, view_id: NodeId) -> NeedsUpdateFlag {
         NeedsUpdateFlag {
             stale_data: Arc::downgrade(stale_data),
+            path,
+            view_id
+        }
+    }
+
+    /// Flag with empty weak reference which does nothing when set
+    pub(in crate::core) fn empty(path: VComponentPath, view_id: NodeId) -> NeedsUpdateFlag {
+        NeedsUpdateFlag {
+            stale_data: Weak::new(),
             path,
             view_id
         }
@@ -87,18 +96,25 @@ impl StaleData {
         }
     }
 
-    fn needs_update_lock(&self) -> StaleDataResult<MutexGuard<'_, Vec<VComponentPath>>> {
-        self.needs_update.lock().map_err(|| StaleDataError::NeedsUpdatePoison)
+    fn needs_update_lock(&self) -> StaleDataResult<MutexGuard<'_, SmallVec<[VComponentPath; 2]>>> {
+        self.needs_update.lock().map_err(|_err| StaleDataError::NeedsUpdatePoison)
     }
 
-    fn needs_invalidate_views_lock(&self) -> StaleDataResult<MutexGuard<'_, Vec<NodeId>>> {
-        self.needs_invalidate_views.lock().map_err(|| StaleDataError::NeedsInvalidateViewsPoison)
+    fn needs_invalidate_views_lock(&self) -> StaleDataResult<MutexGuard<'_, SmallVec<[NodeId; 2]>>> {
+        self.needs_invalidate_views.lock().map_err(|_err| StaleDataError::NeedsInvalidateViewsPoison)
     }
 
     /// Also should set `needs_rerender` since that is implied by needing to update;
     /// however this function doesn't, `Renderer` which calls this does.
     pub(super) fn queue_path_for_update(&self, path: VComponentPath) -> StaleDataResult<()> {
         self.needs_update_lock()?.push(path);
+        Ok(())
+    }
+
+    /// Also should set `needs_rerender` since that is implied by needing to update;
+    /// however this function doesn't, `Renderer` which calls this does.
+    pub(super) fn queue_view_for_invalidate(&self, view_id: NodeId) -> StaleDataResult<()> {
+        self.needs_invalidate_views_lock()?.push(view_id);
         Ok(())
     }
 
@@ -115,26 +131,12 @@ impl StaleData {
     }
 
     /// Call the given function to invalidate all views and clear the invalidate views queue.
-    pub(super) fn invalidate_views<ViewData: VViewData>(&self, invalidate_view_fn: impl Fn(NodeId)) -> StaleDataResult<()> {
+    pub(super) fn invalidate_views(&self, invalidate_view_fn: impl Fn(NodeId)) -> StaleDataResult<()> {
         let mut local_lock = self.needs_invalidate_views_lock()?;
         for view_id in local_lock.drain(..) {
             invalidate_view_fn(view_id);
         }
         Ok(())
-    }
-
-    /// Whether there are queued updates
-    pub(super) fn needs_updates(&self) -> bool {
-        self.needs_update_lock()
-            .map(|needs_update| !needs_update.is_empty())
-            .unwrap_or(false)
-    }
-
-    /// Whether there are queued views which need to be invalidated (removed from render cache)
-    pub(super) fn needs_invalidate_views(&self) -> bool {
-        self.needs_invalidate_views_lock()
-            .map(|needs_invalidate_views| !needs_invalidate_views.is_empty())
-            .unwrap_or(false)
     }
 
     /// Access the needs_rerender flag to get, set or clear.

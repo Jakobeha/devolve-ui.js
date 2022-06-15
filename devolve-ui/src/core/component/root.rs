@@ -2,14 +2,12 @@
 //! This isn't publicly exposed because it's only used internally.
 
 use std::rc::Rc;
-use std::sync::{Weak as WeakArc};
 #[cfg(feature = "time")]
 use std::time::Duration;
 use crate::core::component::component::VComponent;
 use crate::core::component::path::VComponentPath;
 #[cfg(feature = "input")]
 use crate::core::renderer::input::{KeyEvent, MouseEvent, ResizeEvent};
-use crate::core::misc::notify_flag::NotifyFlag;
 use crate::core::renderer::listeners::{RendererListener, RendererListenerId};
 use crate::core::renderer::stale_data::NeedsUpdateFlag;
 use crate::core::view::view::{VView, VViewData};
@@ -21,7 +19,7 @@ pub(in crate::core) trait VComponentRoot {
     fn invalidate(self: Rc<Self>, path: VComponentPath, view: &Box<VView<Self::ViewData>>);
     /// A flag for a separate thread or time. When set, this marks that the view is stale and the given path
     /// needs to be updated, like `invalidate`
-    fn invalidate_flag_for(self: Rc<Self>, path: VComponentPath, view: &Box<VView<Self::ViewData>>) -> WeakArc<NeedsUpdateFlag>;
+    fn invalidate_flag_for(self: Rc<Self>, path: VComponentPath, view: &Box<VView<Self::ViewData>>) -> NeedsUpdateFlag;
 
     fn _with_component(self: Rc<Self>, path: &VComponentPath) -> Option<*mut Box<VComponent<Self::ViewData>>>;
 

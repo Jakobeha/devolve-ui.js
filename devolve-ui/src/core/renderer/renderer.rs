@@ -22,8 +22,8 @@ use std::borrow::Cow;
 use std::cell::{Cell, RefCell, RefMut};
 use std::collections::HashMap;
 use std::fmt::{Debug, Formatter};
-use std::rc::{Rc, Weak};
-use std::sync::{Arc, Mutex, MutexGuard, PoisonError, Weak as WeakArc};
+use std::rc::Rc;
+use std::sync::{Arc, Weak as WeakArc};
 #[cfg(feature = "time")]
 use std::time::{Duration, Instant};
 #[cfg(feature = "time-blocking")]
@@ -46,7 +46,7 @@ use crate::core::renderer::engine::RenderEngine;
 use crate::core::renderer::engine::InputListeners;
 use crate::core::renderer::listeners::{RendererListener, RendererListenerId, RendererListeners};
 use crate::core::renderer::render::{VRender, VRenderLayer};
-use crate::core::renderer::running::{RcRunning, Running};
+use crate::core::renderer::running::RcRunning;
 use crate::core::renderer::stale_data::{NeedsRerenderFlag, NeedsUpdateFlag, StaleData};
 
 #[derive(Debug)]
@@ -95,7 +95,7 @@ struct RenderBorrows<'a, Engine: RenderEngine> {
     pub engine: RefMut<'a, Engine>
 }
 
-impl <Engine: RenderEngine> Renderer<Engine> where Engine::RenderLayer: VRenderLayer {
+impl <Engine: RenderEngine> Renderer<Engine> {
     #[cfg(feature = "time")]
     pub const DEFAULT_INTERVAL_BETWEEN_FRAMES: Duration = Duration::from_millis(25);
 
@@ -207,28 +207,42 @@ impl <Engine: RenderEngine> Renderer<Engine> where Engine::RenderLayer: VRenderL
         self.is_visible() && self.stale_data.needs_rerender().get()
     }
 
-    /// If any components need to update (that is, run new effects and generate new views)
-    fn needs_updates(self: &Rc<Self>) -> bool {
-        self.stale_data.needs_updates()
+    /// Mark that the component needs to rerender (only applies if it's visible)
+    fn set_needs_rerender(self: &Rc<Self>) {
+        self.stale_data.needs_rerender().set();
     }
 
-    /// Updates components and rerenders if necessary
-    pub fn poll(self: &Rc<Self>) {
-        self.update_components();
-        self.invalidate_views_from_other_threads();
-        if renderer.needs_rerender() {
-            renderer.rerender();
+    /// Mark that the component no longer needs to rerender.
+    /// This is only used in `render`, when the component is actually renderered.
+    fn clear_needs_rerender(self: &Rc<Self>) {
+        self.stale_data.needs_rerender().clear();
+    }
+
+    /// Remove a view and all its parents from the render cache.
+    fn uncache_view(self: &Rc<Self>, mut view_id: NodeId) {
+        let mut cached_renders = self.cached_renders.borrow_mut();
+        while view_id != NodeId::NULL {
+            // This code 1) removes view_id from cached_renders,
+            // 2) sets view_id to the parent (from cached_renders[view_id]),
+            // and 3) if view_id wasn't actually in cached_renders, sets view_id to NULL_ID
+            // so that the loop breaks.
+            view_id = cached_renders.remove(&view_id)
+                .map(|cached_render| cached_render.parent)
+                .unwrap_or(NodeId::NULL);
         }
     }
+
 
     /// Just update components. However, then we are rendering old views.
     /// Idk if this should be public. There may be situations where a component needs to update to run side-effects.
     /// But a) that is bad design unless the side-effects are visual, and b) I don't see why anyone
     /// would need a component to run side-effects but not want to render, especially because of a).
     fn update_components(self: &Rc<Self>) {
-        let result = self.stale_data.apply_updates(&mut self.root_component.borrow_mut());
-        if result.is_err() {
-            eprintln!("Error getting components to update from other threads: {:?}", result.unwrap_err());
+        if let Some(root_component) = self.root_component.borrow_mut().as_mut() {
+            let result = self.stale_data.apply_updates(root_component);
+            if result.is_err() {
+                eprintln!("Error getting components to update from other threads: {:?}", result.unwrap_err());
+            }
         }
     }
 
@@ -239,10 +253,58 @@ impl <Engine: RenderEngine> Renderer<Engine> where Engine::RenderLayer: VRenderL
         }
     }
 
-    /// Mark that the component no longer needs to rerender.
-    /// This is only used in `render`, when the component is actually renderered.
-    fn clear_needs_rerender(self: &Rc<Self>) {
-        self.stale_data.needs_rerender().clear();
+    /// Determine the root dimensions. This calls `engine.get_root_dimensions` and then sets overrides.
+    fn get_root_dimensions(self: &Rc<Self>, engine: &Engine) -> ParentBounds {
+        let mut root_dimensions = engine.get_root_dimensions();
+        if let Some(override_size) = self.overrides.override_size {
+            root_dimensions.bounding_box.width = OptionF32::from(override_size.width);
+            root_dimensions.bounding_box.height = OptionF32::from(override_size.height);
+        }
+        if let Some(override_column_size) = self.overrides.override_column_size {
+            root_dimensions.column_size = Cow::Owned(override_column_size.clone());
+        }
+        root_dimensions.store.append(&mut self.overrides.additional_store.clone());
+        root_dimensions
+    }
+
+    /// Return this as a `dyn VComponentRoot`. Due to a weird thing in Rust's type system, we need this.
+    fn as_vroot(self: Rc<Self>) -> Rc<dyn VComponentRoot<ViewData = Engine::ViewData>> {
+        self
+    }
+
+
+    /// Clear render and make the renderer invisible.
+    /// Panics if already invisible.
+    pub fn hide(self: &Rc<Self>) {
+        assert!(self.is_visible.get(), "already hidden");
+
+        self.clear(true);
+        self.is_visible.set(false);
+    }
+
+    /// Clear render. `is_last` is necessary if the component is about to be hidden / disappear,
+    /// as then we need extra cleanup.
+    fn clear(self: &Rc<Self>, is_last: bool) {
+        // These assertions can't actually happen
+        assert!(self.is_visible.get(), "can't clear render while invisible");
+        assert!(self.root_component.borrow().is_some(), "can't clear render without root component");
+
+        let mut engine = self.engine.borrow_mut();
+        engine.clear();
+        if is_last {
+            engine.stop_rendering();
+        }
+    }
+}
+
+impl <Engine: RenderEngine> Renderer<Engine> where Engine::RenderLayer: VRenderLayer {
+    /// Updates components and rerenders if necessary
+    pub fn poll(self: &Rc<Self>) {
+        self.update_components();
+        self.invalidate_views_from_other_threads();
+        if self.needs_rerender() {
+            self.rerender();
+        }
     }
 
     /// Assign a root component to the renderer.
@@ -296,15 +358,6 @@ impl <Engine: RenderEngine> Renderer<Engine> where Engine::RenderLayer: VRenderL
         self.render(true);
     }
 
-    /// Clear render and make the renderer invisible.
-    /// Panics if already invisible.
-    pub fn hide(self: &Rc<Self>) {
-        assert!(self.is_visible.get(), "already hidden");
-
-        self.clear(true);
-        self.is_visible.set(false);
-    }
-
     /// Clears and rerenders immediately, even if `needs_rerender()` is false.
     /// Panics of not already shown via `show`.
     pub fn rerender(self: &Rc<Self>) {
@@ -349,20 +402,6 @@ impl <Engine: RenderEngine> Renderer<Engine> where Engine::RenderLayer: VRenderL
         engine.write_render(final_render);
     }
 
-    /// Clear render. `is_last` is necessary if the component is about to be hidden / disappear,
-    /// as then we need extra cleanup.
-    fn clear(self: &Rc<Self>, is_last: bool) {
-        // These assertions can't actually happen
-        assert!(self.is_visible.get(), "can't clear render while invisible");
-        assert!(self.root_component.borrow().is_some(), "can't clear render without root component");
-
-        let mut engine = self.engine.borrow_mut();
-        engine.clear();
-        if is_last {
-            engine.stop_rendering();
-        }
-    }
-
     /// Add a view to the render cache.
     fn cache_view(
         self: &Rc<Self>,
@@ -370,9 +409,10 @@ impl <Engine: RenderEngine> Renderer<Engine> where Engine::RenderLayer: VRenderL
         parent_id: NodeId,
         parent_bounds: &ParentBounds,
         prev_sibling: Option<&Rectangle>,
-        render: VRender<Engine::RenderLayer>
+        render: VRender<Engine::RenderLayer>,
+        r: &mut RenderBorrows<'_, Engine>
     ) {
-        let mut cached_renders = self.cached_renders.borrow_mut();
+        let cached_renders = &mut r.cached_renders;
         let old_cached_render = cached_renders.insert(view.id(), CachedRender {
             parent_bounds: parent_bounds.clone(),
             prev_sibling: prev_sibling.cloned(),
@@ -380,20 +420,6 @@ impl <Engine: RenderEngine> Renderer<Engine> where Engine::RenderLayer: VRenderL
             render,
         });
         assert!(old_cached_render.is_none(), "sanity check failed: we cached a view when we already had a cache for its id");
-    }
-
-    /// Remove a view and all its parents from the render cache.
-    fn uncache_view(self: &Rc<Self>, mut view_id: NodeId) {
-        let mut cached_renders = self.cached_renders.borrow_mut();
-        while view_id != VNode::<Engine::ViewData>::NULL_ID {
-            // This code 1) removes view_id from cached_renders,
-            // 2) sets view_id to the parent (from cached_renders[view_id]),
-            // and 3) if view_id wasn't actually in cached_renders, sets view_id to NULL_ID
-            // so that the loop breaks.
-            view_id = cached_renders.remove(&view_id)
-                .map(|cached_render| cached_render.parent)
-                .unwrap_or(VNode::<Engine::ViewData>::NULL_ID);
-        }
     }
 
     /// Render a view. First we try cached, otherwise we actually render.
@@ -463,7 +489,7 @@ impl <Engine: RenderEngine> Renderer<Engine> where Engine::RenderLayer: VRenderL
             r
         );
 
-        self.cache_view(view, parent_id, parent_bounds, prev_sibling, render.clone());
+        self.cache_view(view, parent_id, parent_bounds, prev_sibling, render.clone(), r);
 
         render
     }
@@ -532,25 +558,6 @@ impl <Engine: RenderEngine> Renderer<Engine> where Engine::RenderLayer: VRenderL
             eprintln!("Error rendering view {}: {}", view.id(), error);
             VRender::new()
         })
-    }
-
-    /// Determine the root dimensions. This calls `engine.get_root_dimensions` and then sets overrides.
-    fn get_root_dimensions(self: &Rc<Self>, engine: &Engine) -> ParentBounds {
-        let mut root_dimensions = engine.get_root_dimensions();
-        if let Some(override_size) = self.overrides.override_size {
-            root_dimensions.bounding_box.width = OptionF32::from(override_size.width);
-            root_dimensions.bounding_box.height = OptionF32::from(override_size.height);
-        }
-        if let Some(override_column_size) = self.overrides.override_column_size {
-            root_dimensions.column_size = Cow::Owned(override_column_size.clone());
-        }
-        root_dimensions.store.append(&mut self.overrides.additional_store.clone());
-        root_dimensions
-    }
-
-    /// Return this as a `dyn VComponentRoot`. Due to a weird thing in Rust's type system, we need this.
-    fn as_vroot(self: Rc<Self>) -> Rc<dyn VComponentRoot<ViewData = Engine::ViewData>> {
-        self
     }
 }
 
@@ -757,18 +764,6 @@ impl <Engine: RenderEngine> Renderer<Engine> where Engine::RenderLayer: VRenderL
         let running = self.running.take().expect("not running");
         running.is_done.set();
     }
-
-    /// Will be empty if not running.
-    /// Otherwise you can call `WeakRunning::upgrade` and use `RcRunning`.
-    /// Currently this is `pub(super)` because `RcRunning` doesn't expose anything publicly,
-    /// except `is_done` but that is redundant and worse than just calling `is_running`.
-    #[must_use]
-    pub(super) fn running(self: &Rc<Self>) -> Weak<Running<Engine>> {
-        match self.running.borrow().as_ref() {
-            None => Weak::new(),
-            Some(running) => Rc::downgrade(&running.0),
-        }
-    }
 }
 
 #[cfg(feature = "time-blocking")]
@@ -876,7 +871,6 @@ impl <'a, Engine: RenderEngine + 'static> RendererViewForEngineInTick<'a, Engine
         self.0.set_needs_rerender()
     }
 }
-
 // endregion
 
 // region VComponentRoot impl
@@ -894,7 +888,7 @@ impl <Engine: RenderEngine> VComponentRoot for Renderer<Engine> {
         self.set_needs_rerender();
     }
 
-    fn invalidate_flag_for(self: Rc<Self>, path: VComponentPath, view: &Box<VView<Self::ViewData>>) -> WeakArc<NeedsUpdateFlag> {
+    fn invalidate_flag_for(self: Rc<Self>, path: VComponentPath, view: &Box<VView<Self::ViewData>>) -> NeedsUpdateFlag {
         NeedsUpdateFlag::from(&self.stale_data, path, view.id())
     }
 

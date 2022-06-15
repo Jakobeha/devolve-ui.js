@@ -26,7 +26,6 @@ use std::borrow::Cow;
 use std::collections::HashMap;
 use std::marker::PhantomData;
 use std::rc::{Rc, Weak};
-use std::sync::Weak as WeakArc;
 use std::fmt::{Debug, Formatter};
 use crate::core::component::context::{VComponentContext1, VComponentContext2, VDestructorContext1, VDestructorContext2, VEffectContext1, VEffectContext2};
 use crate::core::component::path::{VComponentKey, VComponentPath, VComponentRef};
@@ -155,7 +154,7 @@ impl <ViewData: VViewData + 'static> VComponent<ViewData> {
     fn create<Props: 'static, F: Fn(VComponentContext2<'_, Props, ViewData>) -> VNode<ViewData> + 'static>(parent: VParent<'_, ViewData>, key: VComponentKey, props: Props, construct: F) -> Box<Self>{
         Box::new(VComponent {
             head: VComponentHead {
-                id: VNode::<ViewData>::next_id(),
+                id: NodeId::next(),
                 key,
                 parent_path: parent.path(),
                 node: None,
@@ -331,9 +330,9 @@ impl <ViewData: VViewData> VComponentHead<ViewData> {
 
     /// A flag for another thread or time which, when set,
     /// marks that this component needs updates and its view is stale (if it still exists).
-    pub(in crate::core) fn invalidate_flag(&self) -> WeakArc<NeedsUpdateFlag> {
+    pub(in crate::core) fn invalidate_flag(&self) -> NeedsUpdateFlag {
         match self.renderer.upgrade() {
-            None => WeakArc::new(),
+            None => NeedsUpdateFlag::empty(self.path(), self.view().id()),
             Some(renderer) => renderer.invalidate_flag_for(self.path(), self.view())
         }
     }
