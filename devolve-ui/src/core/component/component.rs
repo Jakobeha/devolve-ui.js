@@ -22,7 +22,6 @@ use crate::core::component::parent::VParent;
 use crate::core::component::mode::VMode;
 use crate::core::component::node::{NodeId, VComponentAndView, VNode};
 use std::any::Any;
-use std::borrow::Cow;
 use std::collections::HashMap;
 use std::marker::PhantomData;
 use std::rc::{Rc, Weak};
@@ -30,7 +29,8 @@ use std::fmt::{Debug, Formatter};
 use crate::core::component::context::{VComponentContext1, VComponentContext2, VDestructorContext1, VDestructorContext2, VEffectContext1, VEffectContext2};
 use crate::core::component::path::{VComponentKey, VComponentPath, VComponentRef};
 use crate::core::component::root::VComponentRoot;
-use crate::core::component::update_details::RecursiveUpdateStack;
+use crate::core::component::update_details::{UpdateDetails, UpdateStack};
+use crate::core::logging::update_logger::{UpdateLogEntry, UpdateLogger};
 use crate::core::renderer::stale_data::NeedsUpdateFlag;
 use crate::core::view::view::{VView, VViewData};
 
@@ -60,7 +60,7 @@ pub struct VComponentHead<ViewData: VViewData> {
     is_being_updated: bool,
     is_fresh: bool,
     has_pending_updates: bool,
-    recursive_update_stack_trace: RecursiveUpdateStack,
+    recursive_update_stack_trace: UpdateStack,
 }
 
 pub(in crate::core) struct VComponentStateData {
@@ -175,7 +175,7 @@ impl <ViewData: VViewData + 'static> VComponent<ViewData> {
                 is_fresh: true,
                 // Create = needs update
                 has_pending_updates: true,
-                recursive_update_stack_trace: RecursiveUpdateStack::new(),
+                recursive_update_stack_trace: UpdateStack::new(),
             },
 
             construct: Box::new(VComponentConstructImpl {
@@ -194,7 +194,11 @@ impl <ViewData: VViewData> VComponent<ViewData> {
     pub(in crate::core) fn update(mut self: &mut Box<Self>) {
         while self.head.has_pending_updates {
             self.head.has_pending_updates = false;
-            self.head.recursive_update_stack_trace.close_last();
+            self.head.recursive_update_stack_trace.close_last(|details| {
+                self.head.with_update_logger(|logger| {
+                    logger.log(UpdateLogEntry::Update(details.clone()));
+                })
+            });
             let recursive_update_stack_trace = &self.head.recursive_update_stack_trace;
             assert!(recursive_update_stack_trace.len() < VMode::max_recursive_updates_before_loop_detected(), "update loop detected:\n{}", recursive_update_stack_trace);
 
@@ -314,7 +318,7 @@ impl <ViewData: VViewData> VComponent<ViewData> {
 impl <ViewData: VViewData> VComponentHead<ViewData> {
     /// Mark that the component has pending updates if not already marked.
     /// `details` is used for the debug message if we detect an infinite loop.
-    pub(in crate::core) fn update(&mut self, details: Cow<'static, str>) {
+    pub(in crate::core) fn update(&mut self, details: UpdateDetails) {
         self.has_pending_updates = true;
         if VMode::is_debug() {
             self.recursive_update_stack_trace.add_to_last(details);
@@ -401,6 +405,14 @@ impl <ViewData: VViewData> VComponentHead<ViewData> {
     /// Gets the renderer, which has the root component and controls rendering.
     pub(in crate::core) fn renderer(&self) -> Weak<dyn VComponentRoot<ViewData = ViewData>> {
         self.renderer.clone()
+    }
+
+    fn with_update_logger(&self, action: impl FnOnce(&mut UpdateLogger<ViewData>)) {
+        if VMode::is_logging() {
+            if let Some(renderer) = self.renderer.upgrade() {
+                renderer.with_update_logger(action)
+            }
+        }
     }
 }
 

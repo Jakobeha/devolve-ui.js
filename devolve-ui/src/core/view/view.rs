@@ -11,6 +11,7 @@ use crate::core::view::layout::bounds::Bounds;
 use crate::core::view::layout::parent_bounds::SubLayout;
 
 #[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct VView<ViewData: VViewData> {
     id: NodeId,
     pub bounds: Bounds,
@@ -19,6 +20,7 @@ pub struct VView<ViewData: VViewData> {
 }
 
 #[derive(Debug, Clone, Copy, Ord, PartialOrd, Eq, PartialEq, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct VViewType(&'static str);
 
 impl VViewType {

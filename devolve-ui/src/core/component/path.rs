@@ -15,6 +15,7 @@ use crate::core::view::view::VViewData;
 /// Identifies a `VComponent` among its siblings.
 /// Needed because the siblings may change and we need to remember the component and check if it was deleted.
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct VComponentKey(&'static str, usize, Option<String>);
 
 /// The location of a `VNode` in the node tree.
@@ -23,6 +24,7 @@ pub struct VComponentKey(&'static str, usize, Option<String>);
 /// However, we do have a reference to the renderer at any time, which allows us to get the mutable component reference
 /// from its path.
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct VComponentPath(Vec<VComponentKey>);
 
 // region ref

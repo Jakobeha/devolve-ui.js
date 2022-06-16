@@ -26,6 +26,7 @@ use std::rc::Rc;
 use std::sync::{Arc, Weak as WeakArc};
 #[cfg(feature = "time")]
 use std::time::{Duration, Instant};
+use ref_filter_map::ref_mut_filter_map;
 #[cfg(feature = "time-blocking")]
 use tokio::runtime;
 use crate::core::component::component::VComponent;
@@ -34,6 +35,7 @@ use crate::core::component::node::{NodeId, VComponentAndView, VNode};
 use crate::core::component::parent::VParent;
 use crate::core::component::path::VComponentPath;
 use crate::core::component::root::VComponentRoot;
+use crate::core::logging::update_logger::UpdateLogger;
 #[cfg(feature = "input")]
 use crate::core::renderer::input::{KeyEvent, MouseEvent, ResizeEvent};
 use crate::core::misc::notify_flag::NotifyFlag;
@@ -63,6 +65,10 @@ pub struct Renderer<Engine: RenderEngine + 'static> {
     overrides: RendererOverrides,
 
     is_visible: Cell<bool>,
+    root_component: RefCell<Option<Box<VComponent<Engine::ViewData>>>>,
+
+    cached_renders: RefCell<HashMap<NodeId, CachedRender<Engine::RenderLayer>>>,
+    stale_data: Arc<StaleData>,
 
     #[cfg(feature = "time")]
     interval_between_frames: Cell<Duration>,
@@ -74,12 +80,11 @@ pub struct Renderer<Engine: RenderEngine + 'static> {
     last_frame_time: Cell<Option<Instant>>,
 
     listeners: RefCell<RendererListeners>,
+    #[cfg(feature = "input")]
     input_listeners: Cell<InputListeners>,
 
-    cached_renders: RefCell<HashMap<NodeId, CachedRender<Engine::RenderLayer>>>,
-    stale_data: Arc<StaleData>,
-
-    root_component: RefCell<Option<Box<VComponent<Engine::ViewData>>>>,
+    #[cfg(feature = "logging")]
+    update_logger: RefCell<Option<UpdateLogger<Engine::ViewData>>>
 }
 
 #[derive(Debug, Default)]
@@ -95,6 +100,7 @@ struct RenderBorrows<'a, Engine: RenderEngine> {
     pub engine: RefMut<'a, Engine>
 }
 
+// region core impls
 impl <Engine: RenderEngine> Renderer<Engine> {
     #[cfg(feature = "time")]
     pub const DEFAULT_INTERVAL_BETWEEN_FRAMES: Duration = Duration::from_millis(25);
@@ -165,6 +171,9 @@ impl <Engine: RenderEngine> Renderer<Engine> {
             engine: RefCell::new(engine),
             overrides,
             is_visible: Cell::new(false),
+            root_component: RefCell::new(None),
+            cached_renders: RefCell::new(HashMap::new()),
+            stale_data: Arc::new(StaleData::new()),
             #[cfg(feature = "time")]
             interval_between_frames: Cell::new(Self::DEFAULT_INTERVAL_BETWEEN_FRAMES),
             #[cfg(feature = "time")]
@@ -174,10 +183,10 @@ impl <Engine: RenderEngine> Renderer<Engine> {
             #[cfg(feature = "time")]
             last_frame_time: Cell::new(None),
             listeners: RefCell::new(RendererListeners::new()),
+            #[cfg(feature = "input")]
             input_listeners: Cell::new(InputListeners::empty()),
-            cached_renders: RefCell::new(HashMap::new()),
-            stale_data: Arc::new(StaleData::new()),
-            root_component: RefCell::new(None)
+            #[cfg(feature = "logging")]
+            update_logger: RefCell::new(None)
         });
         let needs_rerender_flag = renderer.needs_rerender_flag();
         renderer.engine.borrow_mut().on_resize(Box::new(move || {
@@ -560,6 +569,7 @@ impl <Engine: RenderEngine> Renderer<Engine> where Engine::RenderLayer: VRenderL
         })
     }
 }
+// endregion
 
 // region listener methods - these are almost all boilerplate
 #[cfg(feature = "time")]
@@ -873,6 +883,15 @@ impl <'a, Engine: RenderEngine + 'static> RendererViewForEngineInTick<'a, Engine
 }
 // endregion
 
+// region logging
+#[cfg(feature = "logging")]
+impl <Engine: RenderEngine> Renderer<Engine> {
+    pub fn set_update_logger(self: &Rc<Self>, logger: Option<UpdateLogger<Engine::ViewData>>) {
+        *self.update_logger.borrow_mut() = logger;
+    }
+}
+// endregion
+
 // region VComponentRoot impl
 impl <Engine: RenderEngine> VComponentRoot for Renderer<Engine> {
     type ViewData = Engine::ViewData;
@@ -892,10 +911,11 @@ impl <Engine: RenderEngine> VComponentRoot for Renderer<Engine> {
         NeedsUpdateFlag::from(&self.stale_data, path, view.id())
     }
 
-    fn _with_component(self: Rc<Self>, path: &VComponentPath) -> Option<*mut Box<VComponent<<Engine as RenderEngine>::ViewData>>> {
-        self.root_component.borrow_mut().as_mut()
-            .and_then(|root_component| root_component.down_path_mut(path))
-            .map(|component| component as *mut _)
+    fn _with_component(self: Rc<Self>, path: &VComponentPath) -> Option<RefMut<'_, Box<VComponent<Self::ViewData>>>> {
+        ref_mut_filter_map(
+            self.root_component.borrow_mut(),
+            |root_component| root_component.down_path_mut(path)
+        )
     }
 
     #[cfg(feature = "time")]
@@ -937,6 +957,11 @@ impl <Engine: RenderEngine> VComponentRoot for Renderer<Engine> {
     fn unlisten_for_resize(self: Rc<Self>, listener_id: RendererListenerId<ResizeEvent>) {
         self._unlisten_for_resize(listener_id)
     }
+
+    #[cfg(feature = "logging")]
+    fn _with_update_logger(self: &Rc<Self>) -> RefMut<'_, Option<UpdateLogger<Self::ViewData>>> {
+        self.update_logger.borrow_mut()
+    }
 }
 // endregion
 
@@ -962,3 +987,4 @@ impl <Engine: RenderEngine + Debug> Debug for Renderer<Engine> where Engine::Vie
             .finish_non_exhaustive()
     }
 }
+// endregion

@@ -5,7 +5,9 @@ use std::cell::RefCell;
 
 pub struct VMode {
     is_debug: bool,
-    max_recursive_updates_before_loop_detected: usize
+    max_recursive_updates_before_loop_detected: usize,
+    #[cfg(feature = "logging")]
+    is_logging: bool
 }
 
 impl VMode {
@@ -14,21 +16,31 @@ impl VMode {
     }
 
     pub fn set_is_debug(is_debug: bool) {
-        MODE.with(|mode: &RefCell<VMode>| mode.borrow_mut().is_debug = is_debug)
+        MODE.with(|mode| mode.borrow_mut().is_debug = is_debug)
     }
 
     pub fn max_recursive_updates_before_loop_detected() -> usize {
-        MODE.with(|mode: &RefCell<VMode>| mode.borrow().max_recursive_updates_before_loop_detected)
+        MODE.with(|mode| mode.borrow().max_recursive_updates_before_loop_detected)
     }
 
     pub fn set_max_recursive_updates_before_loop_detected(max_recursive_updates_before_loop_detected: usize) {
-        MODE.with(|mode: &RefCell<VMode>| mode.borrow_mut().max_recursive_updates_before_loop_detected = max_recursive_updates_before_loop_detected)
+        MODE.with(|mode| mode.borrow_mut().max_recursive_updates_before_loop_detected = max_recursive_updates_before_loop_detected)
+    }
+
+    pub fn is_logging() -> bool {
+        MODE.with(|mode| mode.borrow().is_logging)
+    }
+
+    pub fn set_is_logging(is_logging: bool) {
+        MODE.with(|mode| mode.borrow_mut().is_logging = is_logging)
     }
 }
 
 thread_local! {
     static MODE: RefCell<VMode> = RefCell::new(VMode {
         is_debug: true,
-        max_recursive_updates_before_loop_detected: 100
+        max_recursive_updates_before_loop_detected: 100,
+        #[cfg(feature = "logging")]
+        is_logging: true
     });
 }

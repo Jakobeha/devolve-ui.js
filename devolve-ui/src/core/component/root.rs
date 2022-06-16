@@ -1,11 +1,15 @@
 //! Component root which manages the components. In practice this is always a `Renderer`.
 //! This isn't publicly exposed because it's only used internally.
 
+use std::cell::RefMut;
+use std::ops::DerefMut;
 use std::rc::Rc;
 #[cfg(feature = "time")]
 use std::time::Duration;
 use crate::core::component::component::VComponent;
+use crate::core::component::mode::VMode;
 use crate::core::component::path::VComponentPath;
+use crate::core::logging::update_logger::UpdateLogger;
 #[cfg(feature = "input")]
 use crate::core::renderer::input::{KeyEvent, MouseEvent, ResizeEvent};
 use crate::core::renderer::listeners::{RendererListener, RendererListenerId};
@@ -21,7 +25,7 @@ pub(in crate::core) trait VComponentRoot {
     /// needs to be updated, like `invalidate`
     fn invalidate_flag_for(self: Rc<Self>, path: VComponentPath, view: &Box<VView<Self::ViewData>>) -> NeedsUpdateFlag;
 
-    fn _with_component(self: Rc<Self>, path: &VComponentPath) -> Option<*mut Box<VComponent<Self::ViewData>>>;
+    fn _with_component(self: Rc<Self>, path: &VComponentPath) -> Option<RefMut<'_, Box<VComponent<Self::ViewData>>>>;
 
     /// Add a listener for this type of event; used in hooks
     #[cfg(feature = "time")]
@@ -47,13 +51,29 @@ pub(in crate::core) trait VComponentRoot {
     /// Remove a listener for this event; used in hooks.
     #[cfg(feature = "input")]
     fn unlisten_for_resize(self: Rc<Self>, listener_id: RendererListenerId<ResizeEvent>);
+
+    #[cfg(feature = "logging")]
+    fn _with_update_logger(self: Rc<Self>) -> RefMut<'_, Option<UpdateLogger<Self::ViewData>>>;
 }
 
 impl <ViewData: VViewData> dyn VComponentRoot<ViewData = ViewData> {
     /// Do something with the component at the given path. It will be called with `None` if there is
     /// no component at the given path.
     pub fn with_component(self: Rc<Self>, path: &VComponentPath, fun: impl FnOnce(Option<&mut Box<VComponent<ViewData>>>)) {
-        let component = self._with_component(path);
-        fun(component.map(|component| unsafe { component.as_mut().unwrap() }))
+        if let Some(mut component) = self._with_component(path) {
+            fun(Some(component.deref_mut()))
+        } else {
+            fun(None)
+        }
+    }
+
+    /// Do something with the update logger. Logging must be enabled in order for this to be called,
+    /// because otherwise you should fastpath and not access the renderer directly.
+    pub fn with_update_logger(self: Rc<Self>, fun: impl FnOnce(&mut UpdateLogger<ViewData>)) {
+        assert!(VMode::is_logging(), "VMode::is_logging() not set: check this first so you don't have to access the renderer");
+        let mut logger = self._with_update_logger();
+        if let Some(logger) = logger.as_mut() {
+            fun(logger);
+        }
     }
 }

@@ -1,32 +1,74 @@
+#[cfg(feature = "backtrace")]
+use std::backtrace::Backtrace;
 use std::fmt::{Display, Formatter};
-use std::borrow::Cow;
+
+#[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "serde", serde(transparent))]
+pub struct UpdateBacktrace(
+    #[cfg(feature = "backtrace")]
+    Option<String>,
+    #[cfg(not(feature = "backtrace"))]
+    (),
+);
+
+#[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+pub enum UpdateDetails {
+    SetState {
+        index: usize,
+        backtrace: UpdateBacktrace
+    }
+}
+
+impl UpdateBacktrace {
+    #[cfg(feature = "backtrace")]
+    fn from(backtrace: Option<&Backtrace>) -> Self {
+        Self(backtrace.map(|backtrace| backtrace.to_string()))
+    }
+
+    #[cfg(not(feature = "backtrace"))]
+    fn disabled() -> Self {
+        Self(())
+    }
+
+    pub(in crate::core) fn here() -> Self {
+        #[cfg(feature = "backtrace")]
+        {
+            Self::from(Some(&Backtrace::capture()))
+        }
+        #[cfg(not(feature = "backtrace"))]
+        Self::disabled()
+    }
+}
 
 #[derive(Debug)]
-pub struct RecursiveUpdateStack(Vec<RecursiveUpdateFrame>);
+pub(super) struct UpdateStack(Vec<UpdateFrame>);
 
-impl RecursiveUpdateStack {
+impl UpdateStack {
     pub fn new() -> Self {
         Self(Vec::new())
     }
 
-    fn last_open(&mut self) -> Option<&mut RecursiveUpdateFrame> {
+    fn last_open(&mut self) -> Option<&mut UpdateFrame> {
         self.0.last_mut().filter(|frame| frame.is_open)
     }
 
-    fn last_open_or_make(&mut self) -> &mut RecursiveUpdateFrame {
+    fn last_open_or_make(&mut self) -> &mut UpdateFrame {
         if !self.0.last_mut().is_some_and(|frame| frame.is_open) {
-            self.0.push(RecursiveUpdateFrame::new())
+            self.0.push(UpdateFrame::new())
         }
         self.last_open().unwrap()
     }
 
-    pub fn add_to_last(&mut self, name: Cow<'static, str>) {
-        self.last_open_or_make().add(name);
+    pub fn add_to_last(&mut self, details: UpdateDetails) {
+        self.last_open_or_make().add(details);
     }
 
-    pub fn close_last(&mut self) {
+    pub fn close_last(&mut self, log_last: impl FnOnce(&UpdateFrame)) {
         if let Some(last) = self.last_open() {
             last.close();
+            log_last(last);
         }
     }
 
@@ -39,7 +81,39 @@ impl RecursiveUpdateStack {
     }
 }
 
-impl Display for RecursiveUpdateStack {
+#[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "serde", serde(transparent))]
+pub struct UpdateFrame {
+    simultaneous: Vec<UpdateDetails>,
+    #[cfg_attr(feature = "serde", serde(skip))]
+    is_open: bool
+}
+
+impl UpdateFrame {
+    fn new() -> Self {
+        Self {
+            simultaneous: Vec::new(),
+            is_open: true
+        }
+    }
+
+    fn close(&mut self) {
+        assert!(self.is_open, "already closed");
+        self.is_open = false;
+    }
+
+    fn add(&mut self, details: UpdateDetails) {
+        assert!(self.is_open, "closed");
+        self.simultaneous.push(details);
+    }
+
+    pub fn simultaneous(&self) -> &Vec<UpdateDetails> {
+        &self.simultaneous
+    }
+}
+
+impl Display for UpdateStack {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         for frame in self.0.iter() {
             write!(f, "{}\n", frame)?;
@@ -49,33 +123,31 @@ impl Display for RecursiveUpdateStack {
     }
 }
 
-#[derive(Debug)]
-struct RecursiveUpdateFrame {
-    simultaneous: Vec<Cow<'static, str>>,
-    is_open: bool
-}
-
-impl RecursiveUpdateFrame {
-    pub fn new() -> Self {
-        Self {
-            simultaneous: Vec::new(),
-            is_open: true
-        }
-    }
-
-    pub fn close(&mut self) {
-        assert!(self.is_open, "already closed");
-        self.is_open = false;
-    }
-
-    pub fn add(&mut self, name: Cow<'static, str>) {
-        assert!(self.is_open, "closed");
-        self.simultaneous.push(name);
-    }
-}
-
-impl Display for RecursiveUpdateFrame {
+impl Display for UpdateFrame {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", self.simultaneous.join(", "))
+    }
+}
+
+
+impl Display for UpdateDetails {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            UpdateDetails::SetState { index, backtrace } => {
+                write!(f, "set:state:{} {}", index, backtrace)
+            }
+        }
+    }
+}
+
+impl Display for UpdateBacktrace {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        #[cfg(feature = "backtrace")]
+        match &self.0 {
+            None => write!(f, "(backtrace missing)"),
+            Some(backtrace) => write!(f, "(backtrace)\n{}", backtrace)
+        }
+        #[cfg(not(feature = "backtrace"))]
+        write!(f, "(backtrace disabled)")
     }
 }

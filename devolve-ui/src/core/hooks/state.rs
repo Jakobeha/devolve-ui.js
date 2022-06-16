@@ -13,13 +13,12 @@
 //! Be aware that if the underlying type is `Copy`, then you can *can* pass `State::get` and `State::get_mut`
 //! values between closures, but they will be stale.
 
-#[cfg(feature = "backtrace")]
-use backtrace::Backtrace;
 use std::any::Any;
 use std::borrow::Cow;
 use std::ops::{Deref, DerefMut};
 use crate::core::component::component::VComponentHead;
 use crate::core::component::context::{VComponentContext, VContext};
+use crate::core::component::update_details::{UpdateBacktrace, UpdateDetails};
 use crate::core::view::view::VViewData;
 use crate::core::hooks::state_internal::{NonUpdatingState, use_non_updating_state};
 
@@ -30,7 +29,7 @@ pub struct State<T: Any, ViewData: VViewData>(NonUpdatingState<T, ViewData>);
 pub struct StateDeref<'a, T: Any, ViewData: VViewData> {
     // See comment in StateDeref::drop
     component: *mut VComponentHead<ViewData>,
-    update_message: String,
+    update_details: UpdateDetails,
     value: &'a mut T
 }
 
@@ -47,16 +46,15 @@ impl <T: Any, ViewData: VViewData> State<T, ViewData> {
     }
 
     pub fn get_mut<'a: 'b, 'b>(&self, c: &'b mut impl VContext<'a, ViewData=ViewData>) -> StateDeref<'b, T, ViewData> where ViewData: 'b {
-        #[cfg(feature = "backtrace")]
-            let backtrace = Backtrace::new();
-        #[cfg(not(feature = "backtrace"))]
-            let backtrace = "<backtrace not used>";
-        let update_message = format!("set:state{}\n{:?}", self.0.index, backtrace);
+        let update_details = UpdateDetails {
+            index: self.0.index,
+            backtrace: UpdateBacktrace::here()
+        };
         // See comment in StateDeref::drop
         let component = c.component() as *mut _;
         StateDeref {
             component,
-            update_message,
+            update_details,
             value: self.0.get_mut(c)
         }
     }
@@ -83,7 +81,8 @@ impl <'a, T: Any, ViewData: VViewData> Drop for StateDeref<'a, T, ViewData> {
         // value is used in deref and deref_mut. c is not used until drop.
         // deref and deref_mut will never be called in drop and vice versa.
         let component = unsafe { self.component.as_mut().unwrap() };
-        component.update(Cow::Owned(self.update_message.clone()));
+        // Kind of a useless clone but we can't move
+        component.update(self.update_details.clone());
     }
 }
 

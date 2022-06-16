@@ -4,6 +4,8 @@
 pub mod component;
 pub mod data;
 pub mod hooks;
+#[cfg(feature = "logging")]
+pub mod logging;
 pub mod renderer;
 pub mod view;
 pub mod misc;

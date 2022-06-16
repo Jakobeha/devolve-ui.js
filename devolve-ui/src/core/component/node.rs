@@ -8,6 +8,7 @@ use crate::core::component::path::VComponentKey;
 use crate::core::view::view::{VView, VViewData};
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq, Ord, PartialOrd, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct NodeId(usize);
 
 impl Display for NodeId {
@@ -17,6 +18,7 @@ impl Display for NodeId {
 }
 
 #[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum VNode<ViewData: VViewData> {
     Component { id: NodeId, key: VComponentKey },
     View(Box<VView<ViewData>>)
