@@ -4,5 +4,6 @@
 //! though that will limit the functionality (TODO implement this)
 
 mod layer;
+#[cfg(feature = "tui-images")]
 mod terminal_image;
 pub mod tui;

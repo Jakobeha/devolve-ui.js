@@ -1,5 +1,6 @@
 //! Data types for `devolve_ui::engines::tui::terminal_image`.
 
+use std::rc::Rc;
 use std::{env, fmt};
 use std::fmt::{Debug, Display, Formatter};
 use std::fs::File;
@@ -82,10 +83,11 @@ pub enum SourceFormat {
     Png,
 }
 
+#[derive(Clone)]
 pub enum Source {
     Path(PathBuf),
     Data {
-        data: Box<dyn Fn() -> Box<dyn Read>>,
+        data: Rc<dyn Fn() -> Box<dyn Read>>,
         format: SourceFormat,
         size: (u16, u16)
     }

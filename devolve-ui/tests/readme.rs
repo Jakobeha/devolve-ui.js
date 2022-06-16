@@ -16,7 +16,7 @@ use devolve_ui::core::component::node::VNode;
 use devolve_ui::core::hooks::state::use_state;
 use devolve_ui::core::view::color::Color;
 use devolve_ui::core::view::layout::macros::{mt, smt};
-use devolve_ui::view_data::tui::tui::TuiViewData;
+use devolve_ui::view_data::tui::tui::HasTuiViewData;
 use devolve_ui::view_data::tui::terminal_image::{Source, HandleAspectRatio, TuiImageFormat};
 use devolve_ui::view_data::attrs::BorderStyle;
 use devolve_ui::view_data::tui::constr::{border, hbox, source, text, zbox};
@@ -27,7 +27,7 @@ make_component!(pub readme, ReadmeProps {
     name: String = "".to_string()
 } []);
 
-pub fn header((mut c, HeaderProps { name }): VComponentContext2<HeaderProps, TuiViewData>) -> VNode<TuiViewData> {
+pub fn header<ViewData: HasTuiViewData + 'static>((mut c, HeaderProps { name }): VComponentContext2<HeaderProps, ViewData>) -> VNode<ViewData> {
     let counter = use_state(&mut c, || 0);
     use_interval(&mut c, Duration::from_secs(1), CallFirst::AfterTheInterval, move |(mut c, HeaderProps { .. })| {
         *counter.get_mut(&mut c) += 1;
@@ -42,7 +42,7 @@ pub fn header((mut c, HeaderProps { name }): VComponentContext2<HeaderProps, Tui
     ])
 }
 
-pub fn readme((mut c, ReadmeProps { name }): VComponentContext2<ReadmeProps, TuiViewData>) -> VNode<TuiViewData> {
+pub fn readme<ViewData: HasTuiViewData + 'static>((mut c, ReadmeProps { name }): VComponentContext2<ReadmeProps, ViewData>) -> VNode<ViewData> {
     zbox!({ width: smt!(100%) }, {}, vec![
         hbox!({ x: mt!(2), y: mt!(1), width: smt!(100% - 4) }, { gap: mt!(1) }, vec![
             header!(&mut c, "header", {}, name.clone()),

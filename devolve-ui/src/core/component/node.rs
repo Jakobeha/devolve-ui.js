@@ -16,7 +16,7 @@ impl Display for NodeId {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum VNode<ViewData: VViewData> {
     Component { id: NodeId, key: VComponentKey },
     View(Box<VView<ViewData>>)

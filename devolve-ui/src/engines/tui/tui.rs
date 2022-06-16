@@ -19,11 +19,14 @@ use crate::core::view::layout::err::LayoutError;
 use crate::core::view::layout::geom::{BoundingBox, Rectangle, Size};
 use crate::core::view::layout::parent_bounds::{DimsStore, ParentBounds};
 use crate::core::view::view::VView;
-use crate::view_data::tui::tui::TuiViewData;
+use crate::view_data::tui::tui::{TuiBoxAttrs, TuiViewData};
 use crate::engines::tui::layer::{RenderCell, RenderLayer};
+#[cfg(feature = "tui-images")]
 use crate::engines::tui::terminal_image::{Image, ImageRender};
 use crate::view_data::attrs::{BorderStyle, DividerDirection, DividerStyle, TextWrapMode};
+#[cfg(feature = "tui-images")]
 use crate::view_data::tui::terminal_image;
+#[cfg(feature = "tui-images")]
 use crate::view_data::tui::terminal_image::{HandleAspectRatio, Source, TuiImageFormat};
 #[cfg(feature = "input")]
 use crate::core::renderer::engine::InputListeners;
@@ -58,6 +61,7 @@ pub struct TuiConfig<Input: Read, Output: Write> {
     #[cfg(target_family = "unix")]
     pub termios_fd: Option<RawFd>,
     pub raw_mode: bool,
+    #[cfg(feature = "tui-images")]
     pub image_format: TuiImageFormat
 }
 
@@ -88,6 +92,7 @@ impl Default for TuiConfig<Stdin, Stdout> {
             output,
             termios_fd: Some(fd),
             raw_mode: true,
+            #[cfg(feature = "tui-images")]
             image_format: TuiImageFormat::infer_from_env()
         }
     }
@@ -326,6 +331,7 @@ impl <Input: Read, Output: Write> TuiEngine<Input, Output> {
         result
     }
 
+    #[cfg(feature = "tui-images")]
     fn render_source(&self, bounds: &BoundingBox, column_size: &Size, source: &Source, handle_aspect_ratio: HandleAspectRatio) -> Result<(RenderLayer, Size), LayoutError> {
         let width = bounds.width.map_or(terminal_image::Measurement::Auto, |width| {
             terminal_image::Measurement::Pixels((width * column_size.width) as u16)
@@ -447,6 +453,7 @@ impl <Input: Read, Output: Write> RenderEngine for TuiEngine<Input, Output> {
     fn make_render(
         &self,
         bounds: &BoundingBox,
+        #[allow(unused)] // Will be unused unless #[cfg(feature = "tui-images")] is enabled
         column_size: &Size,
         view: &Box<VView<Self::ViewData>>,
         mut render: VRender<RenderLayer>
@@ -454,9 +461,11 @@ impl <Input: Read, Output: Write> RenderEngine for TuiEngine<Input, Output> {
         match &view.d {
             TuiViewData::Box {
                 children: _children,
-                sub_layout: _sub_layout,
-                clip,
-                extend
+                attrs: TuiBoxAttrs {
+                    sub_layout: _sub_layout,
+                    clip,
+                    extend
+                }
             } => {
                 if *clip || *extend {
                     let rect = match bounds.as_rectangle() {
@@ -507,6 +516,7 @@ impl <Input: Read, Output: Write> RenderEngine for TuiEngine<Input, Output> {
                 let layer = self.render_divider(rect.left, rect.top, length, thickness, color, style, direction);
                 render.insert(bounds.z, Some(&rect), layer);
             },
+            #[cfg(feature = "tui-images")]
             TuiViewData::Source { source, handle_aspect_ratio } => {
                 let (layer, size) = self.render_source(bounds, column_size, source, *handle_aspect_ratio)?;
                 let rect = bounds.as_rectangle_with_default_size(&size);

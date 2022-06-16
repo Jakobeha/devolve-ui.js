@@ -10,7 +10,7 @@ use crate::core::component::node::{NodeId, VNode};
 use crate::core::view::layout::bounds::Bounds;
 use crate::core::view::layout::parent_bounds::SubLayout;
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct VView<ViewData: VViewData> {
     id: NodeId,
     pub bounds: Bounds,

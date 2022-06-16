@@ -151,19 +151,19 @@ pub macro _make_view(
         }
     )?
 
-    $vis fn $name(
+    $vis fn $name<ViewData: VViewData + From<$ViewData>>(
         view_args: VViewConstrArgs
         $( ,
             #[allow(unused_variables)]
             data_args: $ConstrArgs
         )?
         $( , $( $required_field : $required_field_ty ),* )?
-    ) -> VNode<$ViewData> {
+    ) -> VNode<ViewData> {
         constr_view(view_args, $ViewData::$ViewDataEnum {
             $( $( $field_id : data_args.$field_id, )* )?
             $( $( $required_field, )* )?
             $( $( $field_id2 : $field_value, )* )?
-        })
+        }.into())
     }
 
     $vis macro $name(

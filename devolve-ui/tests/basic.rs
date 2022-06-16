@@ -19,7 +19,7 @@ use devolve_ui::core::component::node::VNode;
 use devolve_ui::core::renderer::renderer::{Renderer, RendererOverrides};
 use devolve_ui::core::view::layout::geom::Size;
 use devolve_ui::engines::tui::tui::{TuiConfig, TuiEngine};
-use devolve_ui::view_data::tui::tui::TuiViewData;
+use devolve_ui::view_data::tui::tui::HasTuiViewData;
 use devolve_ui::view_data::tui::constr::{vbox, text};
 use devolve_ui::view_data::tui::terminal_image::TuiImageFormat;
 
@@ -37,7 +37,7 @@ impl PartialDefault for BasicProps {
     }
 }
 
-pub fn basic((_c, props): VComponentContext2<BasicProps, TuiViewData>) -> VNode<TuiViewData> {
+pub fn basic<ViewData: HasTuiViewData>((_c, props): VComponentContext2<BasicProps, ViewData>) -> VNode<ViewData> {
     vbox!({}, {}, vec![
         text!({}, {}, "Hello world!".to_string()),
         text!({}, {}, props.text.clone())

@@ -8,7 +8,7 @@ use crate::core::component::parent::VParent;
 use crate::core::component::path::VComponentKey;
 use crate::core::view::view::VViewData;
 
-/// Crates the component and adds it to `c`.
+/// Creates the component and adds it to `c`.
 /// The component can't be returned because it is in `c`.
 /// A reference could be returned, but currently is not because there isn't any clear need for it;
 /// submit an issue if you have a use case.
@@ -133,21 +133,21 @@ pub macro make_component_macro {
 /// use devolve_ui::core::component::context::VComponentContext2;
 /// use devolve_ui::core::component::node::VNode;
 /// use devolve_ui::view_data::tui::constr::{vbox, text};
-/// use devolve_ui::view_data::tui::tui::TuiViewData;
+/// use devolve_ui::view_data::tui::tui::{HasTuiViewData, TuiViewData};
 ///
 /// make_component!(pub basic, BasicProps {
 ///     optional_field: String = "default value".to_string(),
 ///     another_optional: usize = 1
 /// } [ required_field: String ]);
 ///
-/// fn basic((c, BasicProps { optional_field, another_optional, required_field }): VComponentContext2<BasicProps, TuiViewData>) -> VNode<TuiViewData> {
+/// fn basic<ViewData: HasTuiViewData>((c, BasicProps { optional_field, another_optional, required_field }): VComponentContext2<BasicProps, ViewData>) -> VNode<ViewData> {
 ///     vbox!({}, {}, vec![
 ///         text!({}, {}, format!("{} and {}", requireD_field, optional_field)),
 ///         text!({}, {}, "Hello world!".to_string())
 ///     ])
 /// }
 ///
-/// fn somewhere_else((c, ()): VComponentContext2<(), TuiViewData>) {
+/// fn pass_this_to_renderer_construct<ViewData: HasTuiViewData>((c, ()): VComponentContext2<(), ViewData>) -> VNode<ViewData> {
 ///     basic!(&mut c, "key", {
 ///         optional_field: "overridden value".to_string()
 ///     }, "required value".to_string())
@@ -155,16 +155,16 @@ pub macro make_component_macro {
 /// ```
 pub macro make_component(
     $vis:vis $name:ident,
-    $Props:ident
+    $Props:ident $( < $( $T:ident $( : $TTy:ident $( + $TTyRest:ident )* )? ),* > $( where $( $T2:path : $TTy2:ident $( + $TTy2Rest:ident )* ),* )? )?
     { $( $opt_prop_id:ident : $opt_prop_ty:ty = $opt_prop_default:expr ),* }
     [ $( $req_prop_id:ident : $req_prop_ty:ty ),* ]
 ) {
-    $vis struct $Props {
+    $vis struct $Props $( < $( $T $( : $TTy $( + $TTyRest )* )? ),* > $( where $( $T2 : $TTy2 $( + $TTy2Rest )+ ),* )? )? {
         $( pub $opt_prop_id : $opt_prop_ty, )*
         $( pub $req_prop_id : $req_prop_ty, )*
     }
 
-    impl $crate::core::misc::partial_default::PartialDefault for $Props {
+    impl $( < $( $T $( : $TTy $( + $TTyRest )* )? ),* > )? $crate::core::misc::partial_default::PartialDefault for $Props $( < $( $T ),* > $( where $( $T2 : $TTy2 $( + TTy2Rest )* ),* )? )? {
         type RequiredArgs = ( $( $req_prop_ty, )* );
 
         fn partial_default(($( $req_prop_id, )*): Self::RequiredArgs) -> Self {
@@ -186,54 +186,53 @@ pub macro make_component(
 #[cfg(test)]
 #[cfg(feature = "tui")]
 mod tests {
-    use crate::core::component::component::VComponent;
-    use crate::core::component::constr::{make_component, make_component2};
+    use crate::core::component::context::VComponentContext2;
+    #[allow(unused_imports)]
+    use crate::core::component::constr::{_make_component_macro, make_component, make_component_macro};
     use crate::core::component::node::VNode;
     use crate::core::renderer::renderer::Renderer;
     use crate::core::view::layout::macros::smt;
     use crate::engines::tui::tui::{TuiConfig, TuiEngine};
-    use crate::view_data::tui::constr::{text, vbox};
-    use crate::view_data::tui::tui::TuiViewData;
+    use crate::view_data::tui::constr::{vbox, text};
+    use crate::view_data::tui::tui::HasTuiViewData;
 
     #[derive(Default)]
     struct MyComponent2Props {
-        pub children: &'static str,
+        pub text: &'static str,
         #[allow(dead_code)]
         pub settings: &'static str,
     }
 
-    fn my_component2_fn(_c: &mut Box<VComponent<TuiViewData>>, props: &MyComponent2Props) -> VNode<TuiViewData> {
+    fn my_component2_fn<ViewData: HasTuiViewData>((_c, MyComponent2Props { settings: _settings, text }): VComponentContext2<MyComponent2Props, ViewData>) -> VNode<ViewData> {
         vbox!({}, {}, vec![
-            text!({}, {}, "Hello world!".to_owned()),
-            text!({}, {}, props.children.to_owned()),
+            text!({}, {}, "Hello world!".to_string()),
+            text!({}, {}, text.to_string()),
         ])
     }
 
-    make_component2!(pub my_component2, my_component2_fn, MyComponent2Props);
+    make_component_macro!(pub my_component2, my_component2_fn, MyComponent2Props);
 
     #[test]
     fn test_component2() {
         let renderer = Renderer::new(TuiEngine::new(TuiConfig::default()));
-        renderer.root(|c| my_component2!(c, "key", { settings: "Override settings" } "Override text"));
+        renderer.root(|(mut c, ())| my_component2!(&mut c, "key", { text: "Override text" }));
     }
 
-    make_component!(pub my_component, MyComponentProps {
-        title: String,
-        children: Vec<VNode<TuiViewData>>
-    }, {
-        title: String::from("Untitled"),
-        children: Vec::new()
-    }, <TuiViewData>|_c, title, children| {
+    make_component!(pub my_component, MyComponentProps<ViewData: HasTuiViewData + Clone> {
+        title: String = String::from("Untitled")
+    } [children: Vec<VNode<ViewData>>]);
+
+    fn my_component<ViewData: HasTuiViewData + Clone + 'static>((_c, MyComponentProps { title, children }): VComponentContext2<MyComponentProps<ViewData>, ViewData>) -> VNode<ViewData> {
         vbox!({ width: smt!(100%) }, {}, vec![
             text!({}, {}, title.clone()),
-            text!({}, {}, children.len().to_string()),
+            vbox!({}, {}, children.clone())
         ])
-    });
+    }
 
     #[test]
     fn test_component() {
         let renderer = Renderer::new(TuiEngine::new(TuiConfig::default()));
-        renderer.root(|c| my_component!(c, "key", { title: "Override title".to_owned() } vec![
+        renderer.root(|(mut c, ())| my_component!(&mut c, "key", { title: "Override title".to_owned() }, vec![
             text!({}, {}, "Hello world!".to_owned()),
         ]));
     }
