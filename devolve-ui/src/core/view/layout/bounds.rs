@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 use crate::core::view::layout::err::{LayoutError, LayoutResult};
 use crate::core::view::layout::geom::{BoundingBox, Rectangle};
+use crate::core::view::layout::measurement::{Measurement, MeasurementUnit};
 use crate::core::view::layout::parent_bounds::{DimsStore, LayoutDirection, ParentBounds};
 
 #[derive(Debug, Clone, PartialEq)]
@@ -29,24 +30,6 @@ pub enum LayoutPosition1D {
 pub struct LayoutPosition {
     pub x: LayoutPosition1D,
     pub y: LayoutPosition1D,
-}
-
-#[derive(Debug, Clone, PartialEq)]
-pub enum Measurement {
-    Zero,
-    /// To the right of previous node if x, below if y, same as prev's if width or height
-    Prev,
-    Units(f32),
-    Pixels(f32),
-    /// Of parent size (must be known)
-    Fraction(f32),
-    Add(Box<Measurement>, Box<Measurement>),
-    Sub(Box<Measurement>, Box<Measurement>),
-    Mul(Box<Measurement>, f32),
-    Div(Box<Measurement>, f32),
-    /// Can be loaded by children via Load. Must be loaded from the same dimension (e.g. can't load height from width)
-    Store(&'static str, Box<Measurement>),
-    Load(&'static str)
 }
 
 const MAX_CHILDREN_EXPECTED_LOG2: f64 = 8f64;
@@ -82,76 +65,70 @@ impl Bounds {
         Ok((bounding_box, store))
     }
 
-    fn reify_x(parent_bounds: &ParentBounds, prev_sibling: &PrevSiblingDim, mut store: Option<&mut HashMap<&'static str, f32>>, x: &Measurement) -> LayoutResult<f32> {
-        Ok(match x {
-            Measurement::Zero => 0f32,
-            Measurement::Prev => match prev_sibling {
-                PrevSiblingDim::NotApplicable => Err(LayoutError::new("can't use prev for x: not applicable"))?,
-                PrevSiblingDim::FirstChild => 0f32,
-                PrevSiblingDim::Some(prev_sibling_dim) => *prev_sibling_dim
-            },
-            Measurement::Units(x) => *x,
-            Measurement::Pixels(x) => x / parent_bounds.column_size.width,
-            Measurement::Fraction(x) => match parent_bounds.bounding_box.width.into_option() {
-                None => Err(LayoutError::new("can't use fraction for x: parent width not known"))?,
-                Some(width) => x * width,
-            },
-            Measurement::Add(lhs, rhs) => Self::reify_x(parent_bounds, prev_sibling, store.as_deref_mut(), lhs)? + Self::reify_x(parent_bounds, prev_sibling, store, rhs)?,
-            Measurement::Sub(lhs, rhs) => Self::reify_x(parent_bounds, prev_sibling, store.as_deref_mut(), lhs)? - Self::reify_x(parent_bounds, prev_sibling, store, rhs)?,
-            Measurement::Mul(lhs, scale) => Self::reify_x(parent_bounds, prev_sibling, store, lhs)? * scale,
-            Measurement::Div(lhs, scale) => Self::reify_x(parent_bounds, prev_sibling, store, lhs)? / scale,
-            Measurement::Store(name, x) => match store {
-                None => Err(LayoutError::new("can't use store for x: dim-store not applicable"))?,
-                Some(dim_store) => {
-                    let result = Self::reify_x(parent_bounds, prev_sibling, Some(dim_store), x).map_err(|err| err.add_store(name))?;
-                    dim_store.insert(name, result);
-                    result
+    fn reify_x(parent_bounds: &ParentBounds, prev_sibling: &PrevSiblingDim, store: Option<&mut HashMap<&'static str, f32>>, x: &Measurement) -> LayoutResult<f32> {
+        let mut reified = 0f32;
+        for x in x.iter_adds() {
+            reified += x.value.scalar() * match x.unit {
+                MeasurementUnit::Units => 1f32,
+                MeasurementUnit::Pixels => 1f32 / parent_bounds.column_size.width,
+                MeasurementUnit::PercentOfParent => match parent_bounds.bounding_box.width.into_option() {
+                    None => Err(LayoutError::new("can't use fraction for x: parent width not known"))?,
+                    Some(width) => width / 100f32
+                },
+                MeasurementUnit::OfPrev => match prev_sibling {
+                    PrevSiblingDim::NotApplicable => Err(LayoutError::new("can't use prev for x: not applicable"))?,
+                    PrevSiblingDim::FirstChild => 0f32,
+                    PrevSiblingDim::Some(prev_sibling_dim) => *prev_sibling_dim
+                },
+                MeasurementUnit::OfLoad(ident) => match &store {
+                    None => Err(LayoutError::new("can't load y: dim-store not applicable"))?,
+                    Some(store) => match store.get(ident) {
+                        None => Err(LayoutError::new(format!("can't load y: no such dim {}", ident)))?,
+                        Some(result) => *result
+                    }
                 }
-            }
-            Measurement::Load(name) => match store {
-                None => Err(LayoutError::new("can't use load for x: dim-store not applicable"))?,
-                Some(dim_store) => match dim_store.get(name) {
-                    None => Err(LayoutError::new(format!("can't use load for x: no such dim {}", name)))?,
-                    Some(result) => *result
-                }
-            }
-        })
+            };
+        }
+        if let Some(ident) = x.store {
+            match store {
+                None => Err(LayoutError::new("can't store x: dim-store not applicable"))?,
+                Some(store) => store.insert(ident, reified)
+            };
+        }
+        Ok(reified)
     }
 
-    fn reify_y(parent_bounds: &ParentBounds, prev_sibling: &PrevSiblingDim, mut store: Option<&mut HashMap<&'static str, f32>>, y: &Measurement) -> LayoutResult<f32> {
-        Ok(match y {
-            Measurement::Zero => 0f32,
-            Measurement::Prev => match prev_sibling {
-                PrevSiblingDim::NotApplicable => Err(LayoutError::new("can't use prev for y: not applicable"))?,
-                PrevSiblingDim::FirstChild => 0f32,
-                PrevSiblingDim::Some(prev_sibling_dim) => *prev_sibling_dim
-            },
-            Measurement::Units(y) => *y,
-            Measurement::Pixels(y) => y / parent_bounds.column_size.height,
-            Measurement::Fraction(y) => match parent_bounds.bounding_box.height.into_option() {
-                None => Err(LayoutError::new("can't use fraction for y: parent height not known"))?,
-                Some(height) => y * height
-            },
-            Measurement::Add(lhs, rhs) => Self::reify_y(parent_bounds, prev_sibling, store.as_deref_mut(), lhs)? + Self::reify_y(parent_bounds, prev_sibling, store, rhs)?,
-            Measurement::Sub(lhs, rhs) => Self::reify_y(parent_bounds, prev_sibling, store.as_deref_mut(), lhs)? - Self::reify_y(parent_bounds, prev_sibling, store, rhs)?,
-            Measurement::Mul(lhs, scale) => Self::reify_y(parent_bounds, prev_sibling, store, lhs)? * scale,
-            Measurement::Div(lhs, scale) => Self::reify_y(parent_bounds, prev_sibling, store, lhs)? / scale,
-            Measurement::Store(name, y) => match store {
-                None => Err(LayoutError::new("can't use store for y: dim-store not applicable"))?,
-                Some(store) => {
-                    let result = Self::reify_y(parent_bounds, prev_sibling, Some(store), y).map_err(|err| err.add_store(name))?;
-                    store.insert(name, result);
-                    result
+    fn reify_y(parent_bounds: &ParentBounds, prev_sibling: &PrevSiblingDim, store: Option<&mut HashMap<&'static str, f32>>, y: &Measurement) -> LayoutResult<f32> {
+        let mut reified = 0f32;
+        for y in y.iter_adds() {
+            reified += y.value.scalar() * match y.unit {
+                MeasurementUnit::Units => 1f32,
+                MeasurementUnit::Pixels => 1f32 / parent_bounds.column_size.height,
+                MeasurementUnit::PercentOfParent => match parent_bounds.bounding_box.height.into_option() {
+                    None => Err(LayoutError::new("can't use fraction for y: parent height not known"))?,
+                    Some(height) => height / 100f32
+                },
+                MeasurementUnit::OfPrev => match prev_sibling {
+                    PrevSiblingDim::NotApplicable => Err(LayoutError::new("can't use prev for y: not applicable"))?,
+                    PrevSiblingDim::FirstChild => 0f32,
+                    PrevSiblingDim::Some(prev_sibling_dim) => *prev_sibling_dim
+                }
+                MeasurementUnit::OfLoad(ident) => match &store {
+                    None => Err(LayoutError::new("can't load y: dim-store not applicable"))?,
+                    Some(store) => match store.get(ident) {
+                        None => Err(LayoutError::new(format!("can't load y: no such dim {}", ident)))?,
+                        Some(result) => *result
+                    }
                 }
             }
-            Measurement::Load(name) => match store {
-                None => Err(LayoutError::new("can't use load for y: dim-store not applicable"))?,
-                Some(store) => match store.get(name) {
-                    None => Err(LayoutError::new(format!("can't use load for y: no such dim {}", name)))?,
-                    Some(result) => *result
-                }
-            }
-        })
+        }
+        if let Some(ident) = y.store {
+            match store {
+                None => Err(LayoutError::new("can't store y: dim-store not applicable"))?,
+                Some(store) => store.insert(ident, reified)
+            };
+        }
+        Ok(reified)
     }
 
     fn apply_layout_x(parent_bounds: &ParentBounds, prev_sibling: Option<&Rectangle>, layout: LayoutPosition1D, reified: f32) -> LayoutResult<f32> {
@@ -206,8 +183,8 @@ impl Default for Bounds {
     fn default() -> Self {
         Bounds {
             layout: LayoutPosition::xy(LayoutPosition1D::Relative),
-            x: Measurement::Zero,
-            y: Measurement::Zero,
+            x: Measurement::ZERO,
+            y: Measurement::ZERO,
             z: 0,
             anchor_x: 0f32,
             anchor_y: 0f32,
@@ -221,13 +198,5 @@ impl Default for Bounds {
 impl Default for LayoutPosition1D {
     fn default() -> Self {
         LayoutPosition1D::Relative
-    }
-}
-
-
-
-impl Default for Measurement {
-    fn default() -> Self {
-        Measurement::Zero
     }
 }

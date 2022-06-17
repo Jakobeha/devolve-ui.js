@@ -30,6 +30,7 @@ use crate::core::component::context::{VComponentContext1, VComponentContext2, VD
 use crate::core::component::path::{VComponentKey, VComponentPath, VComponentRef};
 use crate::core::component::root::VComponentRoot;
 use crate::core::component::update_details::{UpdateDetails, UpdateStack};
+#[cfg(feature = "logging")]
 use crate::core::logging::update_logger::{UpdateLogEntry, UpdateLogger};
 use crate::core::renderer::stale_data::NeedsUpdateFlag;
 use crate::core::view::view::{VView, VViewData};
@@ -194,7 +195,8 @@ impl <ViewData: VViewData> VComponent<ViewData> {
     pub(in crate::core) fn update(mut self: &mut Box<Self>) {
         while self.head.has_pending_updates {
             self.head.has_pending_updates = false;
-            self.head.recursive_update_stack_trace.close_last(|details| {
+            self.head.recursive_update_stack_trace.close_last(|#[cfg_attr(not(feature = "logging"), allow(unused))] details| {
+                #[cfg(feature = "logging")]
                 self.head.with_update_logger(|logger| {
                     logger.log(UpdateLogEntry::Update(details.clone()));
                 })
@@ -306,7 +308,7 @@ impl <ViewData: VViewData> VComponent<ViewData> {
     }
 
     /// Descendent with the given path.
-    pub(in crate::core) fn down_path_mut<'a>(self: &'a mut Box<Self>, path: &'a VComponentPath) -> Option<&mut Box<VComponent<ViewData>>> {
+    pub(in crate::core) fn down_path_mut<'a>(self: &'a mut Box<Self>, path: &VComponentPath) -> Option<&'a mut Box<VComponent<ViewData>>> {
         let mut current = self;
         for segment in path.iter() {
             current = current.child_mut(segment)?;
@@ -407,6 +409,7 @@ impl <ViewData: VViewData> VComponentHead<ViewData> {
         self.renderer.clone()
     }
 
+    #[cfg(feature = "logging")]
     fn with_update_logger(&self, action: impl FnOnce(&mut UpdateLogger<ViewData>)) {
         if VMode::is_logging() {
             if let Some(renderer) = self.renderer.upgrade() {

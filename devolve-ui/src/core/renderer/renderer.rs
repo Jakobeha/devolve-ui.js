@@ -26,7 +26,6 @@ use std::rc::Rc;
 use std::sync::{Arc, Weak as WeakArc};
 #[cfg(feature = "time")]
 use std::time::{Duration, Instant};
-use ref_filter_map::ref_mut_filter_map;
 #[cfg(feature = "time-blocking")]
 use tokio::runtime;
 use crate::core::component::component::VComponent;
@@ -35,6 +34,7 @@ use crate::core::component::node::{NodeId, VComponentAndView, VNode};
 use crate::core::component::parent::VParent;
 use crate::core::component::path::VComponentPath;
 use crate::core::component::root::VComponentRoot;
+#[cfg(feature = "logging")]
 use crate::core::logging::update_logger::UpdateLogger;
 #[cfg(feature = "input")]
 use crate::core::renderer::input::{KeyEvent, MouseEvent, ResizeEvent};
@@ -911,11 +911,10 @@ impl <Engine: RenderEngine> VComponentRoot for Renderer<Engine> {
         NeedsUpdateFlag::from(&self.stale_data, path, view.id())
     }
 
-    fn _with_component(self: Rc<Self>, path: &VComponentPath) -> Option<RefMut<'_, Box<VComponent<Self::ViewData>>>> {
-        ref_mut_filter_map(
-            self.root_component.borrow_mut(),
-            |root_component| root_component.down_path_mut(path)
-        )
+    fn _with_component(self: Rc<Self>, path: &VComponentPath) -> Option<*mut Box<VComponent<Self::ViewData>>> {
+        self.root_component.borrow_mut().as_mut()
+            .and_then(|root| root.down_path_mut(path))
+            .map(|component| component as *mut _)
     }
 
     #[cfg(feature = "time")]

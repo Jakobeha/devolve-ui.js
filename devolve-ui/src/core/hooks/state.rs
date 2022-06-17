@@ -14,7 +14,6 @@
 //! values between closures, but they will be stale.
 
 use std::any::Any;
-use std::borrow::Cow;
 use std::ops::{Deref, DerefMut};
 use crate::core::component::component::VComponentHead;
 use crate::core::component::context::{VComponentContext, VContext};
@@ -46,7 +45,7 @@ impl <T: Any, ViewData: VViewData> State<T, ViewData> {
     }
 
     pub fn get_mut<'a: 'b, 'b>(&self, c: &'b mut impl VContext<'a, ViewData=ViewData>) -> StateDeref<'b, T, ViewData> where ViewData: 'b {
-        let update_details = UpdateDetails {
+        let update_details = UpdateDetails::SetState {
             index: self.0.index,
             backtrace: UpdateBacktrace::here()
         };

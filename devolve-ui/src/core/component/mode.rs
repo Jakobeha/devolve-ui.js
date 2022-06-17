@@ -27,10 +27,12 @@ impl VMode {
         MODE.with(|mode| mode.borrow_mut().max_recursive_updates_before_loop_detected = max_recursive_updates_before_loop_detected)
     }
 
+    #[cfg(feature = "logging")]
     pub fn is_logging() -> bool {
         MODE.with(|mode| mode.borrow().is_logging)
     }
 
+    #[cfg(feature = "logging")]
     pub fn set_is_logging(is_logging: bool) {
         MODE.with(|mode| mode.borrow_mut().is_logging = is_logging)
     }

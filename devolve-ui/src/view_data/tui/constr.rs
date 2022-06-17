@@ -6,7 +6,7 @@ use crate::core::component::node::VNode;
 use crate::core::view::color::Color;
 #[allow(unused_imports)] // Needed for IntelliJ macro expansion
 use crate::core::view::constr::{_make_view, constr_view, make_view, VViewConstrArgs};
-use crate::core::view::layout::bounds::Measurement;
+use crate::core::view::layout::measurement::Measurement;
 use crate::core::view::layout::parent_bounds::{LayoutDirection, SubLayout};
 use crate::view_data::attrs::{BorderStyle, DividerDirection, DividerStyle, TextWrapMode};
 #[cfg(feature = "tui-images")]

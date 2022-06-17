@@ -29,7 +29,6 @@ cargo-args = ["-Zunstable-options", "-Zrustdoc-scrape-examples=examples"]
 [dependencies]
 devolve-ui-derive = { path = "../devolve-ui-derive" }
 dedup-struct-fields = { path = "../dedup-struct-fields" }
-ref_filter_map = "1.0.1"
 replace_with = "0.1.7"
 palette = "0.6.0"
 float-ord = "0.3.2"

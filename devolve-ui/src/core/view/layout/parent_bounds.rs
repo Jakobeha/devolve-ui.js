@@ -1,7 +1,7 @@
 use std::borrow::Cow;
 use std::collections::HashMap;
 use crate::core::misc::option_f32::OptionF32;
-use crate::core::view::layout::bounds::Measurement;
+use crate::core::view::layout::measurement::Measurement;
 use crate::core::view::layout::geom::{BoundingBox, Size};
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
@@ -83,7 +83,7 @@ impl ParentBounds {
             },
             sub_layout: SubLayout {
                 direction: LayoutDirection::Vertical,
-                gap: Measurement::Zero
+                gap: Measurement::ZERO
             },
             column_size: Cow::Owned(column_size),
             store

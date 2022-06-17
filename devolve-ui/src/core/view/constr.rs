@@ -2,7 +2,8 @@
 //! since creating `VView`s manually is very verbose.
 
 use crate::core::component::node::VNode;
-use crate::core::view::layout::bounds::{Bounds, LayoutPosition, Measurement};
+use crate::core::view::layout::bounds::{Bounds, LayoutPosition};
+use crate::core::view::layout::measurement::Measurement;
 use crate::core::view::view::{VView, VViewData};
 
 /// Arguments for a less verbose constructor

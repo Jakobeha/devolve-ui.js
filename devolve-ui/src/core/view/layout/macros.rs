@@ -1,67 +1,226 @@
+pub macro _mt {
+    ($mt:ident) => {
+        $mt
+    },
+    ($mt:ident $sign:tt $lit:literal u $($rest:tt)*) => {{
+        $mt = ($mt $sign $crate::core::view::layout::measurement::Measurement1 {
+            value: $crate::core::view::layout::measurement::MeasurementValue::new(
+                $lit as f32,
+                $crate::core::view::layout::measurement::MeasurementDebugSymbol::Literal
+            ),
+            unit: $crate::core::view::layout::measurement::MeasurementUnit::Units,
+        }).expect("measurement macro is too large");
+        _mt!($mt $($rest)*)
+    }},
+    ($mt:ident $sign:tt $lit:literal px $($rest:tt)*) => {{
+        $mt = ($mt $sign $crate::core::view::layout::measurement::Measurement1 {
+            value: $crate::core::view::layout::measurement::MeasurementValue::new(
+                $lit as f32,
+                $crate::core::view::layout::measurement::MeasurementDebugSymbol::Literal
+            ),
+            unit: $crate::core::view::layout::measurement::MeasurementUnit::Pixels,
+        }).expect("measurement macro is too large");
+        _mt!($mt $($rest)*)
+    }},
+    ($mt:ident $sign:tt $lit:literal % $($rest:tt)*) => {{
+        $mt = ($mt $sign $crate::core::view::layout::measurement::Measurement1 {
+            value: $crate::core::view::layout::measurement::MeasurementValue::new(
+                $lit as f32,
+                $crate::core::view::layout::measurement::MeasurementDebugSymbol::Literal
+            ),
+            unit: $crate::core::view::layout::measurement::MeasurementUnit::PercentOfParent,
+        }).expect("measurement macro is too large");
+        _mt!($mt $($rest)*)
+    }},
+    ($mt:ident $sign:tt $lit:literal * prev $($rest:tt)*) => {{
+        $mt = ($mt $sign $crate::core::view::layout::measurement::Measurement1 {
+            value: $crate::core::view::layout::measurement::MeasurementValue::new(
+                $lit as f32,
+                $crate::core::view::layout::measurement::MeasurementDebugSymbol::Literal
+            ),
+            unit: $crate::core::view::layout::measurement::MeasurementUnit::OfPrev,
+        }).expect("measurement macro is too large");
+        _mt!($mt $($rest)*)
+    }},
+    ($mt:ident $sign:tt $lit:literal * load($id:ident) $($rest:tt)*) => {{
+        $mt = ($mt $sign $crate::core::view::layout::measurement::Measurement1 {
+            value: $crate::core::view::layout::measurement::MeasurementValue::new(
+                $lit as f32,
+                $crate::core::view::layout::measurement::MeasurementDebugSymbol::Literal
+            ),
+            unit: $crate::core::view::layout::measurement::MeasurementUnit::OfLoad(stringify!($id)),
+        }).expect("measurement macro is too large");
+        _mt!($mt $($rest)*)
+    }},
+    ($mt:ident $sign:tt prev / $lit:literal $($rest:tt)*) => {{
+        $mt = ($mt $sign $crate::core::view::layout::measurement::Measurement1 {
+            value: $crate::core::view::layout::measurement::MeasurementValue::new(
+                1f32 / ($lit as f32),
+                $crate::core::view::layout::measurement::MeasurementDebugSymbol::Literal
+            ),
+            unit: $crate::core::view::layout::measurement::MeasurementUnit::OfPrev,
+        }).expect("measurement macro is too large");
+        _mt!($mt $($rest)*)
+    }},
+    ($mt:ident $sign:tt load($id:ident) / $lit:literal $($rest:tt)*) => {{
+        $mt = ($mt $sign $crate::core::view::layout::measurement::Measurement1 {
+            value: $crate::core::view::layout::measurement::MeasurementValue::new(
+                1f32 / ($lit as f32),
+                $crate::core::view::layout::measurement::MeasurementDebugSymbol::Literal
+            ),
+            unit: $crate::core::view::layout::measurement::MeasurementUnit::OfLoad(stringify!($id)),
+        }).expect("measurement macro is too large");
+        _mt!($mt $($rest)*)
+    }},
+    ($mt:ident $sign:tt {$exp:expr} u $($rest:tt)*) => {{
+        $mt = ($mt $sign $crate::core::view::layout::measurement::Measurement1 {
+            value: $crate::core::view::layout::measurement::MeasurementValue::new(
+                $exp as f32,
+                $crate::core::view::layout::measurement::MeasurementDebugSymbol::Expr(stringify!($exp))
+            ),
+            unit: $crate::core::view::layout::measurement::MeasurementUnit::Units,
+        }).expect("measurement macro is too large");
+        _mt!($mt $($rest)*)
+    }},
+    ($mt:ident $sign:tt {$exp:expr} px $($rest:tt)*) => {{
+        $mt = ($mt $sign $crate::core::view::layout::measurement::Measurement1 {
+            value: $crate::core::view::layout::measurement::MeasurementValue::new(
+                $exp as f32,
+                $crate::core::view::layout::measurement::MeasurementDebugSymbol::Expr(stringify!($exp))
+            ),
+            unit: $crate::core::view::layout::measurement::MeasurementUnit::Pixels,
+        }).expect("measurement macro is too large");
+        _mt!($mt $($rest)*)
+    }},
+    ($mt:ident $sign:tt {$exp:expr} % $($rest:tt)*) => {{
+        $mt = ($mt $sign $crate::core::view::layout::measurement::Measurement1 {
+            value: $crate::core::view::layout::measurement::MeasurementValue::new(
+                $exp as f32,
+                $crate::core::view::layout::measurement::MeasurementDebugSymbol::Expr(stringify!($exp))
+            ),
+            unit: $crate::core::view::layout::measurement::MeasurementUnit::PercentOfParent,
+        }).expect("measurement macro is too large");
+        _mt!($mt $($rest)*)
+    }},
+    ($mt:ident $sign:tt {$exp:expr} * prev $($rest:tt)*) => {{
+        $mt = ($mt $sign $crate::core::view::layout::measurement::Measurement1 {
+            value: $crate::core::view::layout::measurement::MeasurementValue::new(
+                $exp as f32,
+                $crate::core::view::layout::measurement::MeasurementDebugSymbol::Expr(stringify!($exp))
+            ),
+            unit: $crate::core::view::layout::measurement::MeasurementUnit::OfPrev,
+        }).expect("measurement macro is too large");
+        _mt!($mt $($rest)*)
+    }},
+    ($mt:ident $sign:tt {$exp:expr} * load($id:ident) $($rest:tt)*) => {{
+        $mt = ($mt $sign $crate::core::view::layout::measurement::Measurement1 {
+            value: $crate::core::view::layout::measurement::MeasurementValue::new(
+                $exp as f32,
+                $crate::core::view::layout::measurement::MeasurementDebugSymbol::Expr(stringify!($exp))
+            ),
+            unit: $crate::core::view::layout::measurement::MeasurementUnit::OfLoad(stringify!($id)),
+        }).expect("measurement macro is too large");
+        _mt!($mt $($rest)*)
+    }},
+    ($mt:ident $sign:tt prev / {$exp:expr} $($rest:tt)*) => {{
+        $mt = ($mt $sign $crate::core::view::layout::measurement::Measurement1 {
+            value: $crate::core::view::layout::measurement::MeasurementValue::new(
+                1f32 / ($exp as f32),
+                $crate::core::view::layout::measurement::MeasurementDebugSymbol::Expr(stringify!(/ $exp))
+            ),
+            unit: $crate::core::view::layout::measurement::MeasurementUnit::OfPrev,
+        }).expect("measurement macro is too large");
+        _mt!($mt $($rest)*)
+    }},
+    ($mt:ident $sign:tt load($id:ident) / {$exp:expr} $($rest:tt)*) => {{
+        $mt = ($mt $sign $crate::core::view::layout::measurement::Measurement1 {
+            value: $crate::core::view::layout::measurement::MeasurementValue::new(
+                1f32 / ($exp as f32),
+                $crate::core::view::layout::measurement::MeasurementDebugSymbol::Expr(stringify!(/ $exp))
+            ),
+            unit: $crate::core::view::layout::measurement::MeasurementUnit::OfLoad(stringify!($id)),
+        }).expect("measurement macro is too large");
+        _mt!($mt $($rest)*)
+    }},
+    ($mt:ident $sign:tt prev $($rest:tt)*) => {{
+        $mt = ($mt $sign $crate::core::view::layout::measurement::Measurement1 {
+            value: $crate::core::view::layout::measurement::MeasurementValue::new(
+                1f32,
+                $crate::core::view::layout::measurement::MeasurementDebugSymbol::Literal
+            ),
+            unit: $crate::core::view::layout::measurement::MeasurementUnit::OfPrev,
+        }).expect("measurement macro is too large");
+        _mt!($mt $($rest)*)
+    }},
+    ($mt:ident $sign:tt load($id:ident) $($rest:tt)*) => {{
+        $mt = ($mt $sign $crate::core::view::layout::measurement::Measurement1 {
+            value: $crate::core::view::layout::measurement::MeasurementValue::new(
+                1f32,
+                $crate::core::view::layout::measurement::MeasurementDebugSymbol::Literal
+            ),
+            unit: $crate::core::view::layout::measurement::MeasurementUnit::OfLoad(stringify!($id)),
+        }).expect("measurement macro is too large");
+        _mt!($mt $($rest)*)
+    }}
+}
+
 pub macro mt {
-    (0) => {
-        $crate::core::view::layout::bounds::Measurement::Zero
+    ($store:ident = $($rest:tt)*) => {
+        {
+            let mut mt = $crate::core::view::layout::measurement::Measurement::ZERO;
+            mt.store = Some(stringify!($store));
+            _mt!(mt + $($rest)*)
+        }
     },
-    (prev) => {
-        $crate::core::view::layout::bounds::Measurement::Prev
-    },
-    ($lit:literal) => {
-        $crate::core::view::layout::bounds::Measurement::Units($lit as f32)
-    },
-    ($lit:literal px) => {
-        $crate::core::view::layout::bounds::Measurement::Pixels($lit as f32)
-    },
-    ($lit:literal %) => {
-        $crate::core::view::layout::bounds::Measurement::Fraction($lit as f32 / 100f32)
-    },
-    ($store:ident = $expr:tt) => {
-        $crate::core::view::layout::bounds::Measurement::Store(stringify!($store), Box::new(mt!($expr)))
-    },
-    ($lhs:tt * $rhs:literal) => {
-        $crate::core::view::layout::bounds::Measurement::Mul(Box::new(mt!($lhs)), $rhs as f32)
-    },
-    ($lhs:tt / $rhs:literal) => {
-        $crate::core::view::layout::bounds::Measurement::Div(Box::new(mt!($lhs)), $rhs as f32)
-    },
-    ($lhs:tt + $rhs:tt) => {
-        $crate::core::view::layout::bounds::Measurement::Add(Box::new(mt!($lhs)), Box::new(mt!($rhs)))
-    },
-    ($lhs:tt - $rhs:tt) => {
-        $crate::core::view::layout::bounds::Measurement::Sub(Box::new(mt!($lhs)), Box::new(mt!($rhs)))
-    },
-    ($lhs:tt $lhs2:tt * $rhs:literal) => {
-        $crate::core::view::layout::bounds::Measurement::Mul(Box::new(mt!($lhs $lhs2)), $rhs as f32)
-    },
-    ($lhs:tt $lhs2:tt / $rhs:literal) => {
-        $crate::core::view::layout::bounds::Measurement::Div(Box::new(mt!($lhs $lhs2)), $rhs as f32)
-    },
-    ($lhs:tt $lhs2:tt + $rhs:tt) => {
-        $crate::core::view::layout::bounds::Measurement::Add(Box::new(mt!($lhs $lhs2)), Box::new(mt!($rhs)))
-    },
-    ($lhs:tt $lhs2:tt - $rhs:tt) => {
-        $crate::core::view::layout::bounds::Measurement::Sub(Box::new(mt!($lhs $lhs2)), Box::new(mt!($rhs)))
-    },
-    ($lhs:tt + $rhs:tt $rhs2:tt) => {
-        $crate::core::view::layout::bounds::Measurement::Add(Box::new(mt!($lhs)), Box::new(mt!($rhs $rhs2)))
-    },
-    ($lhs:tt - $rhs:tt $rhs2:tt) => {
-        $crate::core::view::layout::bounds::Measurement::Sub(Box::new(mt!($lhs)), Box::new(mt!($rhs $rhs2)))
-    },
-    ($lhs:tt $lhs2:tt + $rhs:tt $rhs2:tt) => {
-        $crate::core::view::layout::bounds::Measurement::Add(Box::new(mt!($lhs $lhs2)), Box::new(mt!($rhs $rhs2)))
-    },
-    ($lhs:tt $lhs2:tt - $rhs:tt $rhs2:tt) => {
-        $crate::core::view::layout::bounds::Measurement::Sub(Box::new(mt!($lhs $lhs2)), Box::new(mt!($rhs $rhs2)))
-    },
-    ($load:ident) => {
-        $crate::core::view::layout::bounds::Measurement::Load(strifify!($load))
-    },
-    (($($expr:tt)+)) => {
-        mt!($($expr)+)
-    },
+    ($($rest:tt)*) => {
+        {
+            let mut mt = $crate::core::view::layout::measurement::Measurement::ZERO;
+            _mt!(mt + $($rest)*)
+        }
+    }
 }
 
 pub macro smt {
-    (auto) => { None },
-    ($($expr:tt)*) => { Some(mt!($($expr)*)) }
+    (auto) => { None as Option<$crate::core::view::layout::measurement::Measurement> },
+    ($($rest:tt)*) => { Some(mt!($($rest)*)) }
+}
+
+#[cfg(test)]
+mod test {
+    #[allow(unused_imports)] // Would be needed by IntelliJ, it's not actually needed because unforunately IntelliJ resolution still doesn't work
+    use crate::core::view::layout::macros::{_mt, mt, smt};
+
+    #[test]
+    fn test_measurements() {
+        let foo = 1;
+        let bar = 5;
+        let baz = 12;
+        assert_eq!(mt!(1 u).to_string(), "1");
+        assert_eq!(mt!(1 px).to_string(), "1px");
+        assert_eq!(mt!(1 %).to_string(), "1%");
+        assert_eq!(mt!(prev).to_string(), "prev");
+        assert_eq!(mt!(2 * prev).to_string(), "2*prev");
+        assert_eq!(mt!(prev / 2).to_string(), "0.5*prev");
+        assert_eq!(mt!(load(ident)).to_string(), "load(ident)");
+        assert_eq!(mt!(2 * load(ident)).to_string(), "2*load(ident)");
+        assert_eq!(mt!(1 px + 5 %).to_string(), "1px + 5%");
+        assert_eq!(mt!(1 px - 5 %).to_string(), "1px - 5%");
+        assert_eq!(mt!(1 px + 5 u + 12 %).to_string(), "1px + 5 + 12%");
+        assert_eq!(mt!(1 px + 5 u - 12 %).to_string(), "1px + 5 - 12%");
+        assert_eq!(mt!({foo} px + {bar} u - {baz} %).to_string(), "1{foo}px + 5{bar} - 12{baz}%");
+        assert_eq!(mt!(1 px - 5 u + 12 %).to_string(), "1px - 5 + 12%");
+        assert_eq!(mt!(1 px - 5 u - 12 %).to_string(), "1px - 5 - 12%");
+        assert_eq!(mt!(1 px - 4 * load(ident) - 12 % + prev).to_string(), "1px - 4*load(ident) - 12% + prev");
+        assert_eq!(mt!(1 px - {foo} * load(ident) - 12 % + prev).to_string(), "1px - 1{foo}*load(ident) - 12% + prev");
+        assert_eq!(mt!(1 px - {bar} * load(ident) - 12 % + prev).to_string(), "1px - 5{bar}*load(ident) - 12% + prev");
+        assert_eq!(mt!(-4 u + 12 px - -12 u + -4 * prev - -8 * prev).to_string(), "-4 + 12px + 12 - 4*prev + 8*prev");
+        assert_eq!(mt!(foo = load(bar)).to_string(), "foo = load(bar)");
+        assert_eq!(mt!(foo = -4 u + 12 px - -12 u + -4 * prev - -8 * prev).to_string(), "foo = -4 + 12px + 12 - 4*prev + 8*prev");
+    }
+
+    #[test]
+    fn test_size_measurements() {
+        assert_eq!(smt!(foo = -4 u + 12 px - -12 u + -4 * prev - -8 * prev).unwrap().to_string(), "foo = -4 + 12px + 12 - 4*prev + 8*prev");
+        assert!(smt!(auto).is_none());
+    }
 }

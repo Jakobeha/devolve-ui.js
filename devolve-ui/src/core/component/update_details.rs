@@ -125,7 +125,16 @@ impl Display for UpdateStack {
 
 impl Display for UpdateFrame {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.simultaneous.join(", "))
+        let mut is_first = true;
+        for detail in self.simultaneous.iter() {
+            if is_first {
+                is_first = false
+            } else {
+                write!(f, ", ")?;
+            }
+            write!(f, "{}", detail)?;
+        }
+        Ok(())
     }
 }
 
