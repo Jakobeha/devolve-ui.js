@@ -6,6 +6,8 @@ use std::fmt::{Display, Formatter};
 use crate::core::component::component::{VComponent, VComponentHead};
 use crate::core::component::path::VComponentKey;
 use crate::core::view::view::{VView, VViewData};
+#[cfg(feature = "logging")]
+use serde::{Serialize, Deserialize};
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq, Ord, PartialOrd, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]

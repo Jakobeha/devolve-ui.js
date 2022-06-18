@@ -6,11 +6,11 @@ use std::io::Write;
 use std::marker::PhantomData;
 use std::path::{Path, PathBuf};
 use std::rc::Rc;
-use std::time::{Duration, Instant, SystemTime};
+use std::time::{Duration, Instant};
 use chrono::{DateTime, Utc};
-use serde::Serialize;
+use serde::{Serialize, Deserialize};
 
-//! Constructor passed to both loggers, so they can share the same start-time and file.
+/// Constructor passed to both loggers, so they can share the same start-time and file.
 #[derive(Debug, Clone)]
 pub struct LogStart {
     monotonic_time: Instant,
@@ -54,12 +54,12 @@ impl From<serde_json::Error> for LogError {
 }
 
 impl LogStart {
-    pub fn new(dir: &Path) -> LogStart {
+    pub fn try_new(dir: &Path) -> io::Result<LogStart> {
         let dir = dir.to_path_buf();
         let monotonic_time = Instant::now();
         let user_time: DateTime<Utc> = Utc::now();
-        let shared_file = Rc::new(RefCell::new(Self::open_log(&dir, user_time, "all")));
-        LogStart { monotonic_time, user_time, dir, shared_file }
+        let shared_file = Rc::new(RefCell::new(Self::create_log(&dir, &user_time, "all")?));
+        Ok(LogStart { dir, monotonic_time, user_time, shared_file })
     }
 
     pub fn create_log(dir: &Path, user_time: &DateTime<Utc>, name: &str) -> io::Result<File> {
@@ -104,7 +104,7 @@ impl <T: Serialize + Debug> GenericLogger<T> {
     pub fn log(&mut self, data: T) {
         let result = self.do_log(data);
         if let Err(err) = result {
-            eprintln!("Error logging: data={:?}, error={:?}", data, err);
+            eprintln!("Error logging: {:?}", err);
         }
     }
 }

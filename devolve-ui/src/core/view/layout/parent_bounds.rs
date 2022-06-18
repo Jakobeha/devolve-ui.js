@@ -1,5 +1,6 @@
 use std::borrow::Cow;
 use std::collections::HashMap;
+use crate::core::misc::ident::Ident;
 use crate::core::misc::option_f32::OptionF32;
 use crate::core::view::layout::measurement::Measurement;
 use crate::core::view::layout::geom::{BoundingBox, Size};
@@ -42,7 +43,7 @@ impl Default for LayoutDirection {
     }
 }
 
-pub type DimsStore = DimMap<HashMap<&'static str, f32>>;
+pub type DimsStore = DimMap<HashMap<Ident, f32>>;
 
 impl DimsStore {
     pub fn append(&mut self, other: &mut DimsStore) {

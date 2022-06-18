@@ -1,5 +1,6 @@
 //! Logs views and renders. Wraps a `RenderEngine` to intercept `render` calls and do logging then.
 
+use std::fmt::Debug;
 use crate::core::logging::common::GenericLogger;
 use crate::core::renderer::engine::{InputListeners, RenderEngine};
 use crate::core::renderer::render::VRender;
@@ -8,12 +9,15 @@ use crate::core::view::layout::err::LayoutError;
 use crate::core::view::layout::geom::{BoundingBox, Size};
 use crate::core::view::layout::parent_bounds::ParentBounds;
 use crate::core::view::view::{VView, VViewData};
+#[cfg(feature = "logging")]
+use serde::{Serialize, Deserialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum RenderLogEntry<ViewData: VViewData, RenderLayer> {
     StartRendering,
     StopRendering,
-    WriteRender(VRender<Self::RenderLayer>),
+    WriteRender(VRender<RenderLayer>),
+    TODO(ViewData),
     Clear,
 }
 
@@ -22,13 +26,13 @@ pub struct RenderLogger<Engine: RenderEngine> {
     logger: GenericLogger<RenderLogEntry<Engine::ViewData, Engine::RenderLayer>>
 }
 
-impl <Engine: RenderEngine> RenderLogger<Engine> {
+impl <Engine: RenderEngine> RenderLogger<Engine> where Engine::ViewData: Serialize + Debug, Engine::RenderLayer: Serialize + Debug {
     fn log(&mut self, entry: RenderLogEntry<Engine::ViewData, Engine::RenderLayer>) {
         self.logger.log(entry)
     }
 }
 
-impl <Engine: RenderEngine> RenderEngine for RenderLogger<Engine> where Engine::RenderLayer: Clone {
+impl <Engine: RenderEngine> RenderEngine for RenderLogger<Engine> where Engine::ViewData: Serialize + Debug, Engine::RenderLayer: Clone + Serialize + Debug {
     type ViewData = Engine::ViewData;
     // TODO: change RenderLayer?
     type RenderLayer = Engine::RenderLayer;
@@ -67,7 +71,7 @@ impl <Engine: RenderEngine> RenderEngine for RenderLogger<Engine> where Engine::
     }
 
     fn tick(&mut self, engine: RendererViewForEngineInTick<'_, Self>) where Self: Sized {
-        self.engine.tick(engine)
+        todo!()
     }
 
     fn update_input_listeners(&mut self, input_listeners: InputListeners) {

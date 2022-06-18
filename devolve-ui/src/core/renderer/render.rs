@@ -1,7 +1,9 @@
 //! Data which represents a final render, which will be drawn to screen.
 use std::collections::{btree_map, BTreeMap};
-use float_ord::FloatOrd;
 use crate::core::view::layout::geom::Rectangle;
+#[cfg(feature = "serde")]
+use serde::{Serialize, Deserialize};
+use crate::core::misc::float_ord::FloatOrd;
 
 /// An individual render layer: what gets rendered from a view.
 /// But actually a view renders into a `VRender` which is a stack of these layers with different
@@ -16,6 +18,7 @@ pub trait VRenderLayer : Clone {
 /// An ordered stack of render layers each with a z-position.
 /// It also has `rect` as a fast-access to the bounds of all of these renders.
 #[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct VRender<Layer> {
     layers: BTreeMap<FloatOrd<f64>, Layer>,
     rect: Option<Rectangle>

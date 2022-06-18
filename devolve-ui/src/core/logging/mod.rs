@@ -5,7 +5,7 @@
 //! The logs are combined using timestamps as devolve-ui runs on a single thread.
 
 pub mod common;
-//! Logs component updates
+/// Logs component updates
 pub mod update_logger;
-//! Logs rerenders
+/// Logs rerenders
 pub mod render_logger;

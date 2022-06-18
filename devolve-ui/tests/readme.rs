@@ -33,8 +33,8 @@ pub fn header<ViewData: HasTuiViewData + 'static>((mut c, HeaderProps { name }):
         *counter.get_mut(&mut c) += 1;
     });
 
-    zbox!({ width: smt!(34) }, {}, vec![
-        zbox!({ x: mt!(2), y: mt!(1), width: smt!(100% - 4) }, {}, vec![
+    zbox!({ width: smt!(34 u) }, {}, vec![
+        zbox!({ x: mt!(2 u), y: mt!(1 u), width: smt!(100% - 4 u) }, {}, vec![
             text!({}, { color: Some(Color::yellow()) }, format!("Hello {}", name)),
             text!({ x: mt!(100%), anchor_x: 1f32 }, { color: Some(Color::yellow()) }, format!("{} seconds", counter.get(&mut c)))
         ]),
@@ -44,9 +44,9 @@ pub fn header<ViewData: HasTuiViewData + 'static>((mut c, HeaderProps { name }):
 
 pub fn readme<ViewData: HasTuiViewData + 'static>((mut c, ReadmeProps { name }): VComponentContext2<ReadmeProps, ViewData>) -> VNode<ViewData> {
     zbox!({ width: smt!(100%) }, {}, vec![
-        hbox!({ x: mt!(2), y: mt!(1), width: smt!(100% - 4) }, { gap: mt!(1) }, vec![
+        hbox!({ x: mt!(2 u), y: mt!(1 u), width: smt!(100% - 4 u) }, { gap: mt!(1 u) }, vec![
             header!(&mut c, "header", {}, name.clone()),
-            source!({ width: smt!(34) }, { handle_aspect_ratio: HandleAspectRatio::Stretch }, Source::Path(PathBuf::from(format!("{}/test-resources/assets/dog.png", env!("CARGO_MANIFEST_DIR")))))
+            source!({ width: smt!(34 u) }, { handle_aspect_ratio: HandleAspectRatio::Stretch }, Source::Path(PathBuf::from(format!("{}/test-resources/assets/dog.png", env!("CARGO_MANIFEST_DIR")))))
         ]),
         border!({ width: smt!(100%), height: smt!(prev) }, { color: Some(Color::blue()) }, BorderStyle::Rounded)
     ])

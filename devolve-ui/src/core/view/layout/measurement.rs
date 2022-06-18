@@ -1,11 +1,14 @@
 use std::fmt::{Display, Formatter};
 use std::ops::{Add, Div, DivAssign, Mul, MulAssign, Neg, Sub};
+#[cfg(feature = "serde")]
+use serde::{Serialize, Deserialize, Deserializer};
+use crate::core::misc::ident::Ident;
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct Measurement {
     adds: [Measurement1; Measurement::MAX_NUM_ADDS],
-    pub store: Option<&'static str>
+    pub store: Option<Ident>
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -19,6 +22,7 @@ pub struct Measurement1 {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct MeasurementValue {
     scalar: f32,
+    #[cfg_attr(feature = "serde", serde(deserialize_with = "MeasurementDebugSymbol::deserialize"))]
     debug_symbol: MeasurementDebugSymbol,
     debug_is_neg: bool
 }
@@ -28,7 +32,29 @@ pub struct MeasurementValue {
 pub enum MeasurementDebugSymbol {
     Empty,
     Literal,
+    #[cfg_attr(feature = "serde", serde(skip_deserializing))]
     Expr(&'static str),
+    #[cfg_attr(feature = "serde", serde(alias = "Expr"))]
+    Lost
+}
+
+#[cfg(feature = "serde")]
+impl MeasurementDebugSymbol {
+    fn deserialize<'de, D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        Ok(match MeasurementDebugSymbolDeserialize::deserialize(deserializer)? {
+            MeasurementDebugSymbolDeserialize::Empty => Self::Empty,
+            MeasurementDebugSymbolDeserialize::Literal => Self::Literal,
+            MeasurementDebugSymbolDeserialize::Expr => Self::Lost,
+            MeasurementDebugSymbolDeserialize::Lost => Self::Lost
+        })
+    }
+}
+
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+pub enum MeasurementDebugSymbolDeserialize {
+    Empty,
+    Literal,
+    Expr,
     Lost
 }
 
@@ -39,7 +65,7 @@ pub enum MeasurementUnit {
     Pixels,
     PercentOfParent,
     OfPrev,
-    OfLoad(&'static str)
+    OfLoad(Ident)
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

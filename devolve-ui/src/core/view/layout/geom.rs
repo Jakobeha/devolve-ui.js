@@ -1,7 +1,10 @@
 use crate::core::misc::option_f32::OptionF32;
 use crate::core::view::layout::err::{LayoutError, LayoutResult};
+#[cfg(feature = "serde")]
+use serde::{Serialize, Deserialize};
 
 #[derive(Debug, Clone, PartialEq)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct BoundingBox {
     pub x: f32,
     pub y: f32,
@@ -14,18 +17,21 @@ pub struct BoundingBox {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct Pos {
     pub x: f32,
     pub y: f32,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct Size {
     pub width: f32,
     pub height: f32,
 }
 
 #[derive(Debug, Clone, PartialEq)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct Rectangle {
     pub left: f32,
     pub top: f32,

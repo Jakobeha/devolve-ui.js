@@ -1,6 +1,8 @@
 #[cfg(feature = "backtrace")]
 use std::backtrace::Backtrace;
 use std::fmt::{Display, Formatter};
+#[cfg(feature = "logging")]
+use serde::{Serialize, Deserialize};
 
 #[derive(Debug, Clone)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]

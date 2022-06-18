@@ -1,5 +1,11 @@
+#[cfg(feature = "serde")]
+use serde::{Serialize, Deserialize};
+
 /// f32 with required checks for NaN
 #[derive(Debug, Clone, Copy, PartialEq, PartialOrd)]
+#[repr(transparent)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "serde", serde(transparent))]
 pub struct OptionF32(f32);
 
 impl OptionF32 {

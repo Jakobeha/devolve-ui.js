@@ -22,6 +22,7 @@ use std::borrow::Cow;
 use std::cell::{Cell, RefCell, RefMut};
 use std::collections::HashMap;
 use std::fmt::{Debug, Formatter};
+use std::ops::DerefMut;
 use std::rc::Rc;
 use std::sync::{Arc, Weak as WeakArc};
 #[cfg(feature = "time")]
@@ -958,8 +959,8 @@ impl <Engine: RenderEngine> VComponentRoot for Renderer<Engine> {
     }
 
     #[cfg(feature = "logging")]
-    fn _with_update_logger(self: &Rc<Self>) -> RefMut<'_, Option<UpdateLogger<Self::ViewData>>> {
-        self.update_logger.borrow_mut()
+    fn _with_update_logger(self: Rc<Self>) -> *mut Option<UpdateLogger<Self::ViewData>> {
+        self.update_logger.borrow_mut().deref_mut() as *mut _
     }
 }
 // endregion

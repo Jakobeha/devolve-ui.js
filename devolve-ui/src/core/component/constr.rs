@@ -1,6 +1,7 @@
 //! Utilities to create terse constructors for your custom components,
 //! since creating `VComponent`s manually is very verbose.
 
+use std::fmt::Debug;
 use crate::core::component::component::{VComponent};
 use crate::core::component::context::{VComponentContext, VComponentContext2};
 use crate::core::component::node::VNode;
@@ -16,7 +17,7 @@ use crate::core::view::view::VViewData;
 pub fn make_component<
     'a,
     ViewData: VViewData + 'static,
-    Str: Into<VComponentKey>,
+    Str: TryInto<VComponentKey>,
     Props: 'static,
     F: Fn(VComponentContext2<'_, Props, ViewData>) -> VNode<ViewData> + 'static
 >(
@@ -24,9 +25,10 @@ pub fn make_component<
     key: Str,
     props: Props,
     construct: F
-) -> VNode<ViewData> {
+) -> VNode<ViewData> where Str::Error: Debug {
+    let key = key.try_into().expect("key couldn't be converted into VComponentKey");
     let parent = c.component();
-    let component = VComponent::new(VParent::Component(parent), key.into(), props, construct);
+    let component = VComponent::new(VParent::Component(parent), key, props, construct);
     let component = parent.add_child(component);
     VNode::Component {
         id: component.head.id(),

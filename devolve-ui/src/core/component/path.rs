@@ -3,20 +3,28 @@
 //! component with `Renderer::with_component`. The component may not exist in which case
 //! `with_component` returns `None`.
 
-use std::fmt::{Debug, Display, Formatter};
+use std::fmt::{Debug, Display, Formatter, Write};
 use std::ops::Add;
 use std::ops::AddAssign;
 use std::rc::Weak;
 use std::mem::MaybeUninit;
+use arrayvec::{ArrayString, CapacityError};
 use crate::core::component::component::VComponent;
 use crate::core::component::root::VComponentRoot;
 use crate::core::view::view::VViewData;
+#[cfg(feature = "serde")]
+use serde::{Serialize, Deserialize};
 
 /// Identifies a `VComponent` among its siblings.
 /// Needed because the siblings may change and we need to remember the component and check if it was deleted.
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Hash)]
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-pub struct VComponentKey(&'static str, usize, Option<String>);
+#[cfg_attr(feature = "serde", repr(transparent))]
+pub struct VComponentKey(ArrayString<{ VComponentKey::SIZE }>);
+
+impl VComponentKey {
+    pub const SIZE: usize = 16;
+}
 
 /// The location of a `VNode` in the node tree.
 /// Primarily used to let components listen to events emitted by the root:
@@ -83,16 +91,7 @@ impl IntoIterator for VComponentPath {
 
 impl Display for VComponentKey {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        let VComponentKey(static_, index, arbitrary) = self;
-        // if !static_.is_empty()
-        write!(f, "{}", static_)?;
-        if *index > 0 {
-            write!(f, "{}", index - 1)?;
-        }
-        if let Some(arbitrary) = arbitrary.as_ref() {
-            write!(f, "{}", arbitrary)?;
-        }
-        Ok(())
+        write!(f, "{}", self.0)
     }
 }
 
@@ -128,44 +127,49 @@ impl AddAssign<VComponentKey> for VComponentPath {
 }
 
 impl VComponentKey {
-    pub fn new(static_: &'static str, index: usize, arbitrary: Option<String>) -> Self {
-        VComponentKey(static_, index, arbitrary)
-    }
-}
-
-impl Default for VComponentKey {
-    fn default() -> Self {
-        VComponentKey("", 0, None)
+    pub fn new(data: ArrayString<{ VComponentKey::SIZE }>) -> Self {
+        VComponentKey(data)
     }
 }
 
 impl From<()> for VComponentKey {
     fn from((): ()) -> Self {
-        VComponentKey("", 0, None)
+        VComponentKey(ArrayString::new())
     }
 }
 
-impl From<&'static str> for VComponentKey {
-    fn from(str: &'static str) -> Self {
-        VComponentKey(str, 0, None)
+impl <'a> TryFrom<&'a str> for VComponentKey {
+    type Error = CapacityError<&'a str>;
+
+    fn try_from(str: &'a str) -> Result<Self, Self::Error> {
+        Ok(VComponentKey(ArrayString::try_from(str)?))
     }
 }
 
 impl From<usize> for VComponentKey {
     fn from(index: usize) -> Self {
-        VComponentKey("", index + 1, None)
+        let mut str = ArrayString::new();
+        write!(str, "{}", index).expect("didn't expect usize not to fit in VComponentKey");
+        VComponentKey(str)
     }
 }
 
-impl From<(&'static str, usize)> for VComponentKey {
-    fn from((str, index): (&'static str, usize)) -> Self {
-        VComponentKey(str, index, None)
+impl <'a> TryFrom<(&'a str, usize)> for VComponentKey {
+    type Error = CapacityError<(&'a str, usize)>;
+
+    fn try_from((key, index): (&'a str, usize)) -> Result<Self, Self::Error> {
+        let mut str = ArrayString::new();
+        write!(str, "{}{}", key, index).map_err(|_err| CapacityError::new((key, index)))?;
+        Ok(VComponentKey(str))
     }
 }
 
-impl From<String> for VComponentKey {
-    fn from(string: String) -> Self {
-        VComponentKey("", 0, Some(string))
+impl TryFrom<String> for VComponentKey {
+    type Error = CapacityError<String>;
+
+    fn try_from(string: String) -> Result<Self, Self::Error> {
+        let str = ArrayString::from(&string).map_err(|_err| ());
+        Ok(VComponentKey(str.map_err(|()| CapacityError::new(string))?))
     }
 }
 

@@ -197,7 +197,7 @@ impl <ViewData: VViewData> VComponent<ViewData> {
             self.head.has_pending_updates = false;
             self.head.recursive_update_stack_trace.close_last(|#[cfg_attr(not(feature = "logging"), allow(unused))] details| {
                 #[cfg(feature = "logging")]
-                self.head.with_update_logger(|logger| {
+                VComponentHead::with_update_logger(&self.head.renderer, |logger| {
                     logger.log(UpdateLogEntry::Update(details.clone()));
                 })
             });
@@ -410,9 +410,10 @@ impl <ViewData: VViewData> VComponentHead<ViewData> {
     }
 
     #[cfg(feature = "logging")]
-    fn with_update_logger(&self, action: impl FnOnce(&mut UpdateLogger<ViewData>)) {
+    // Would use self and self.renderer instead, but we need to simultanoeusly borrow recursive_update_stack_trace
+    fn with_update_logger(renderer: &Weak<dyn VComponentRoot<ViewData=ViewData>>, action: impl FnOnce(&mut UpdateLogger<ViewData>)) {
         if VMode::is_logging() {
-            if let Some(renderer) = self.renderer.upgrade() {
+            if let Some(renderer) = renderer.upgrade() {
                 renderer.with_update_logger(action)
             }
         }

@@ -9,6 +9,8 @@ use std::fmt::{Display, Formatter};
 use crate::core::component::node::{NodeId, VNode};
 use crate::core::view::layout::bounds::Bounds;
 use crate::core::view::layout::parent_bounds::SubLayout;
+#[cfg(feature = "logging")]
+use serde::{Serialize, Deserialize};
 
 #[derive(Debug, Clone)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
@@ -20,7 +22,6 @@ pub struct VView<ViewData: VViewData> {
 }
 
 #[derive(Debug, Clone, Copy, Ord, PartialOrd, Eq, PartialEq, Hash)]
-#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct VViewType(&'static str);
 
 impl VViewType {

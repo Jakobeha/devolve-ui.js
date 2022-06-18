@@ -1,8 +1,6 @@
 //! Component root which manages the components. In practice this is always a `Renderer`.
 //! This isn't publicly exposed because it's only used internally.
 
-#[cfg(feature = "logging")]
-use std::cell::RefMut;
 use std::rc::Rc;
 #[cfg(feature = "time")]
 use std::time::Duration;
@@ -55,7 +53,7 @@ pub(in crate::core) trait VComponentRoot {
     fn unlisten_for_resize(self: Rc<Self>, listener_id: RendererListenerId<ResizeEvent>);
 
     #[cfg(feature = "logging")]
-    fn _with_update_logger(self: Rc<Self>) -> RefMut<'_, Option<UpdateLogger<Self::ViewData>>>;
+    fn _with_update_logger(self: Rc<Self>) -> *mut Option<UpdateLogger<Self::ViewData>>;
 }
 
 impl <ViewData: VViewData> dyn VComponentRoot<ViewData = ViewData> {
@@ -74,7 +72,7 @@ impl <ViewData: VViewData> dyn VComponentRoot<ViewData = ViewData> {
     #[cfg(feature = "logging")]
     pub fn with_update_logger(self: Rc<Self>, fun: impl FnOnce(&mut UpdateLogger<ViewData>)) {
         assert!(VMode::is_logging(), "VMode::is_logging() not set: check this first so you don't have to access the renderer");
-        let mut logger = self._with_update_logger();
+        let logger = unsafe { self._with_update_logger().as_mut().unwrap() };
         if let Some(logger) = logger.as_mut() {
             fun(logger);
         }

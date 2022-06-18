@@ -3,8 +3,12 @@ use crate::core::view::layout::err::{LayoutError, LayoutResult};
 use crate::core::view::layout::geom::{BoundingBox, Rectangle};
 use crate::core::view::layout::measurement::{Measurement, MeasurementUnit};
 use crate::core::view::layout::parent_bounds::{DimsStore, LayoutDirection, ParentBounds};
+#[cfg(feature = "serde")]
+use serde::{Serialize, Deserialize};
+use crate::core::misc::ident::Ident;
 
 #[derive(Debug, Clone, PartialEq)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct Bounds {
     pub layout: LayoutPosition,
     pub x: Measurement,
@@ -20,13 +24,15 @@ pub struct Bounds {
 }
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum LayoutPosition1D {
     Relative,
     GlobalAbsolute,
     LocalAbsolute
 }
 
-#[derive(Debug, Clone, Default, Eq, PartialEq)]
+#[derive(Debug, Clone, Copy, Eq, PartialEq)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct LayoutPosition {
     pub x: LayoutPosition1D,
     pub y: LayoutPosition1D,
@@ -65,7 +71,7 @@ impl Bounds {
         Ok((bounding_box, store))
     }
 
-    fn reify_x(parent_bounds: &ParentBounds, prev_sibling: &PrevSiblingDim, store: Option<&mut HashMap<&'static str, f32>>, x: &Measurement) -> LayoutResult<f32> {
+    fn reify_x(parent_bounds: &ParentBounds, prev_sibling: &PrevSiblingDim, store: Option<&mut HashMap<Ident, f32>>, x: &Measurement) -> LayoutResult<f32> {
         let mut reified = 0f32;
         for x in x.iter_adds() {
             reified += x.value.scalar() * match x.unit {
@@ -82,7 +88,7 @@ impl Bounds {
                 },
                 MeasurementUnit::OfLoad(ident) => match &store {
                     None => Err(LayoutError::new("can't load y: dim-store not applicable"))?,
-                    Some(store) => match store.get(ident) {
+                    Some(store) => match store.get(&ident) {
                         None => Err(LayoutError::new(format!("can't load y: no such dim {}", ident)))?,
                         Some(result) => *result
                     }
@@ -98,7 +104,7 @@ impl Bounds {
         Ok(reified)
     }
 
-    fn reify_y(parent_bounds: &ParentBounds, prev_sibling: &PrevSiblingDim, store: Option<&mut HashMap<&'static str, f32>>, y: &Measurement) -> LayoutResult<f32> {
+    fn reify_y(parent_bounds: &ParentBounds, prev_sibling: &PrevSiblingDim, store: Option<&mut HashMap<Ident, f32>>, y: &Measurement) -> LayoutResult<f32> {
         let mut reified = 0f32;
         for y in y.iter_adds() {
             reified += y.value.scalar() * match y.unit {
@@ -115,7 +121,7 @@ impl Bounds {
                 }
                 MeasurementUnit::OfLoad(ident) => match &store {
                     None => Err(LayoutError::new("can't load y: dim-store not applicable"))?,
-                    Some(store) => match store.get(ident) {
+                    Some(store) => match store.get(&ident) {
                         None => Err(LayoutError::new(format!("can't load y: no such dim {}", ident)))?,
                         Some(result) => *result
                     }
