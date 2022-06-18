@@ -69,7 +69,7 @@ pub trait RenderEngine {
     /// However, don't send any inputs unless `update_input_listeners` was called with corresponding
     /// listeners set.
     #[cfg(feature = "time")]
-    fn tick(&mut self, engine: RendererViewForEngineInTick<'_, Self>) where Self: Sized;
+    fn tick<Root: RenderEngine>(&mut self, engine: RendererViewForEngineInTick<'_, Root>) where Self: Sized;
 
     /// Called each time the renderer registers or unregisters input listeners.
     /// You should not be sending inputs to the renderer except those where `input_listeners` is set.

@@ -1,80 +1,166 @@
 //! Logs views and renders. Wraps a `RenderEngine` to intercept `render` calls and do logging then.
 
+use std::collections::HashMap;
 use std::fmt::Debug;
-use crate::core::logging::common::GenericLogger;
-use crate::core::renderer::engine::{InputListeners, RenderEngine};
-use crate::core::renderer::render::VRender;
-use crate::core::renderer::renderer::RendererViewForEngineInTick;
-use crate::core::view::layout::err::LayoutError;
-use crate::core::view::layout::geom::{BoundingBox, Size};
+use std::io;
+use crate::core::logging::common::{GenericLogger, LogStart};
+use crate::core::renderer::render::{VRender, VRenderLayer};
+use crate::core::view::layout::geom::Rectangle;
 use crate::core::view::layout::parent_bounds::ParentBounds;
 use crate::core::view::view::{VView, VViewData};
 #[cfg(feature = "logging")]
 use serde::{Serialize, Deserialize};
+use crate::core::component::node::{NodeId, VComponentAndView, VNode};
+use crate::core::component::path::VComponentKey;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum RenderLogEntry<ViewData: VViewData, RenderLayer> {
     StartRendering,
     StopRendering,
-    WriteRender(VRender<RenderLayer>),
-    TODO(ViewData),
+    WriteRender(LoggedRenderTree<ViewData, RenderLayer>),
     Clear,
 }
 
-pub struct RenderLogger<Engine: RenderEngine> {
-    engine: Engine,
-    logger: GenericLogger<RenderLogEntry<Engine::ViewData, Engine::RenderLayer>>
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct LoggedRender<RenderLayer> {
+    parent_bounds: ParentBounds,
+    prev_sibling_rect: Option<Rectangle>,
+    render: VRender<RenderLayer>,
+    was_cached: bool
 }
 
-impl <Engine: RenderEngine> RenderLogger<Engine> where Engine::ViewData: Serialize + Debug, Engine::RenderLayer: Serialize + Debug {
-    fn log(&mut self, entry: RenderLogEntry<Engine::ViewData, Engine::RenderLayer>) {
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct LoggedRenderView<ViewData: VViewData, RenderLayer> {
+    pub view: Box<VView<ViewData>>,
+
+    pub component_key: VComponentKey,
+    pub parent_id: NodeId,
+    pub prev_sibling_id: NodeId,
+
+    pub render: LoggedRender<RenderLayer>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum LoggedRenderTreeChild<ViewData: VViewData, RenderLayer> {
+    Found(LoggedRenderTree<ViewData, RenderLayer>),
+    Lost
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct LoggedRenderTree<ViewData: VViewData, RenderLayer> {
+    pub view: LoggedRenderView<ViewData, RenderLayer>,
+    pub children: Vec<LoggedRenderTreeChild<ViewData, RenderLayer>>
+}
+
+pub struct RenderLogger<ViewData: VViewData, RenderLayer> {
+    logger: GenericLogger<RenderLogEntry<ViewData, RenderLayer>>,
+
+    view_map: HashMap<NodeId, LoggedRenderView<ViewData, RenderLayer>>,
+    component_id_2_last_view_id: HashMap<NodeId, NodeId>,
+    prev_sibling_id_map: HashMap<NodeId, NodeId>,
+    last_id: NodeId
+}
+
+impl <ViewData: VViewData + Serialize + Debug + Clone, RenderLayer: Serialize + Debug> RenderLogger<ViewData, RenderLayer> {
+    pub(in crate::core) fn try_new(args: &LogStart) -> io::Result<Self> {
+        Ok(RenderLogger {
+            logger: GenericLogger::new(args, "renders")?,
+
+            view_map: HashMap::new(),
+            component_id_2_last_view_id: HashMap::new(),
+            prev_sibling_id_map: HashMap::new(),
+            last_id: NodeId::NULL
+        })
+    }
+
+    fn log(&mut self, entry: RenderLogEntry<ViewData, RenderLayer>) {
         self.logger.log(entry)
     }
-}
 
-impl <Engine: RenderEngine> RenderEngine for RenderLogger<Engine> where Engine::ViewData: Serialize + Debug, Engine::RenderLayer: Clone + Serialize + Debug {
-    type ViewData = Engine::ViewData;
-    // TODO: change RenderLayer?
-    type RenderLayer = Engine::RenderLayer;
-
-    fn get_root_dimensions(&self) -> ParentBounds {
-        self.engine.get_root_dimensions()
+    fn last_view_of_component_id(&self, id: &NodeId) -> NodeId {
+        self.component_id_2_last_view_id.get(id).copied().unwrap_or(NodeId::NULL)
     }
 
-    fn on_resize(&mut self, callback: Box<dyn Fn() + Send + Sync>) {
-        self.engine.on_resize(callback)
+    fn drain_and_collapse_renders(&mut self, id: &NodeId) -> Option<LoggedRenderTree<ViewData, RenderLayer>> {
+        let view = self.view_map.remove(id)?;
+        let mut children = Vec::new();
+
+        if let Some((view_children, _)) = view.view.d.children() {
+            for view_child in view_children {
+                let view_id = match view_child {
+                    // Last id = root when we are done rendering (may be null if cached, that's ok, we'll fallthrough to LoggedRenderTreeChild::Lost)
+                    VNode::Component { id, .. } => self.last_view_of_component_id(&id),
+                    VNode::View(view_child) => view_child.id()
+                };
+                if let Some(child) = self.drain_and_collapse_renders(&view_id) {
+                    children.push(LoggedRenderTreeChild::Found(child))
+                } else {
+                    children.push(LoggedRenderTreeChild::Lost)
+                }
+            }
+        }
+
+        Some(LoggedRenderTree {
+            view,
+            children
+        })
     }
 
-    fn start_rendering(&mut self) {
+    pub fn log_start_rendering(&mut self) {
         self.log(RenderLogEntry::StartRendering);
-        self.engine.start_rendering()
     }
 
-    fn stop_rendering(&mut self) {
-        self.engine.stop_rendering();
+    pub fn log_stop_rendering(&mut self) {
         self.log(RenderLogEntry::StopRendering);
     }
 
-    fn write_render(&mut self, batch: VRender<Self::RenderLayer>) {
-        self.log(RenderLogEntry::WriteRender(batch.clone()));
-        self.engine.write_render(batch);
+    pub fn log_write_render(&mut self) where RenderLayer: VRenderLayer {
+        // Last id = root when we are done rendering
+        assert_ne!(self.last_id, NodeId::NULL, "no views rendered in one render, didn't expect that, need to handle");
+        let logged_render = self.drain_and_collapse_renders(&self.last_id).expect("no view for last_id, how?");
+
+        self.view_map.clear();
+        self.prev_sibling_id_map.clear();
+        self.component_id_2_last_view_id.clear();
+        self.last_id = NodeId::NULL;
+
+        self.log(RenderLogEntry::WriteRender(logged_render));
     }
 
-    fn clear(&mut self) {
+    pub fn log_clear(&mut self) {
         self.log(RenderLogEntry::Clear);
-        self.engine.clear()
     }
 
-    fn make_render(&self, bounds: &BoundingBox, column_size: &Size, view: &Box<VView<Self::ViewData>>, rendered_children: VRender<Self::RenderLayer>) -> Result<VRender<Self::RenderLayer>, LayoutError> {
-        // TODO
-        self.engine.make_render(bounds, column_size, view, rendered_children)
-    }
+    pub fn log_render_view(
+        &mut self,
+        (c, view): VComponentAndView<'_, ViewData>,
+        parent_id: NodeId,
+        parent_bounds: &ParentBounds,
+        prev_sibling_rect: Option<&Rectangle>,
+        render: &VRender<RenderLayer>,
+        is_cached: bool
+    ) where RenderLayer: VRenderLayer {
+        let prev_sibling_id = self.prev_sibling_id_map.insert(parent_id, view.id()).unwrap_or(NodeId::NULL);
+        let should_be_none = self.view_map.insert(view.id(), LoggedRenderView {
+            view: view.clone(),
 
-    fn tick(&mut self, engine: RendererViewForEngineInTick<'_, Self>) where Self: Sized {
-        todo!()
-    }
+            component_key: c.key(),
+            parent_id,
+            prev_sibling_id,
 
-    fn update_input_listeners(&mut self, input_listeners: InputListeners) {
-        self.engine.update_input_listeners(input_listeners)
+            render: LoggedRender {
+                parent_bounds: parent_bounds.clone(),
+                prev_sibling_rect: prev_sibling_rect.cloned(),
+
+                render: render.clone(),
+                was_cached: is_cached
+            }
+        });
+        assert!(should_be_none.is_none(), "view with same id logged twice in one render: {}", view.id());
+        // May get overwritten, that's ok and we discard old value...
+        self.component_id_2_last_view_id.insert(c.id(), view.id());
+        assert!(should_be_none.is_none(), "view with same id logged twice in one render: {}", view.id());
+        // ...it's the exact same for replacing this
+        self.last_id = view.id();
     }
 }

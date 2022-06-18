@@ -367,7 +367,7 @@ impl <Input: Read, Output: Write> TuiEngine<Input, Output> {
 
 #[cfg(all(feature = "time", feature = "input"))]
 impl <Input: Read, Output: Write> TuiEngine<Input, Output> {
-    fn process_event(&mut self, engine: RendererViewForEngineInTick<'_, Self>, event: Event) {
+    fn process_event<Root: RenderEngine>(&mut self, engine: RendererViewForEngineInTick<'_, Root>, event: Event) {
         match event {
             Event::Key(key) => engine.send_key_event(&key),
             Event::Mouse(mouse) => engine.send_mouse_event(&mouse),
@@ -527,7 +527,7 @@ impl <Input: Read, Output: Write> RenderEngine for TuiEngine<Input, Output> {
     }
 
     #[cfg(feature = "time")]
-    fn tick(&mut self, engine: RendererViewForEngineInTick<'_, Self>) {
+    fn tick<Root: RenderEngine>(&mut self, engine: RendererViewForEngineInTick<'_, Root>) {
         #[cfg(feature = "input")]
         if self.is_listening_for_input {
             match crossterm::event::poll(Duration::from_secs(0)) {

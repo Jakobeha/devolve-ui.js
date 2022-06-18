@@ -22,19 +22,26 @@ use std::borrow::Cow;
 use std::cell::{Cell, RefCell, RefMut};
 use std::collections::HashMap;
 use std::fmt::{Debug, Formatter};
+use std::io;
 use std::ops::DerefMut;
+use std::path::Path;
 use std::rc::Rc;
 use std::sync::{Arc, Weak as WeakArc};
 #[cfg(feature = "time")]
 use std::time::{Duration, Instant};
+#[cfg(feature = "logging")]
+use serde::Serialize;
 #[cfg(feature = "time-blocking")]
 use tokio::runtime;
 use crate::core::component::component::VComponent;
 use crate::core::component::context::VComponentContext2;
+use crate::core::component::mode::VMode;
 use crate::core::component::node::{NodeId, VComponentAndView, VNode};
 use crate::core::component::parent::VParent;
 use crate::core::component::path::VComponentPath;
 use crate::core::component::root::VComponentRoot;
+use crate::core::logging::common::LogStart;
+use crate::core::logging::render_logger::RenderLogger;
 #[cfg(feature = "logging")]
 use crate::core::logging::update_logger::UpdateLogger;
 #[cfg(feature = "input")]
@@ -85,7 +92,9 @@ pub struct Renderer<Engine: RenderEngine + 'static> {
     input_listeners: Cell<InputListeners>,
 
     #[cfg(feature = "logging")]
-    update_logger: RefCell<Option<UpdateLogger<Engine::ViewData>>>
+    update_logger: RefCell<Option<UpdateLogger<Engine::ViewData>>>,
+    #[cfg(feature = "logging")]
+    render_logger: RefCell<Option<RenderLogger<Engine::ViewData, Engine::RenderLayer>>>
 }
 
 #[derive(Debug, Default)]
@@ -187,7 +196,9 @@ impl <Engine: RenderEngine> Renderer<Engine> {
             #[cfg(feature = "input")]
             input_listeners: Cell::new(InputListeners::empty()),
             #[cfg(feature = "logging")]
-            update_logger: RefCell::new(None)
+            update_logger: RefCell::new(None),
+            #[cfg(feature = "logging")]
+            render_logger: RefCell::new(None)
         });
         let needs_rerender_flag = renderer.needs_rerender_flag();
         renderer.engine.borrow_mut().on_resize(Box::new(move || {
@@ -294,15 +305,24 @@ impl <Engine: RenderEngine> Renderer<Engine> {
 
     /// Clear render. `is_last` is necessary if the component is about to be hidden / disappear,
     /// as then we need extra cleanup.
-    fn clear(self: &Rc<Self>, is_last: bool) {
+    fn clear(&self, is_last: bool) {
         // These assertions can't actually happen
         assert!(self.is_visible.get(), "can't clear render while invisible");
         assert!(self.root_component.borrow().is_some(), "can't clear render without root component");
 
         let mut engine = self.engine.borrow_mut();
         engine.clear();
+        #[cfg(feature = "logging")]
+        if let Some(render_logger) = self.render_logger.borrow_mut().as_mut() {
+            render_logger.log_clear();
+        }
+
         if is_last {
             engine.stop_rendering();
+            #[cfg(feature = "logging")]
+            if let Some(render_logger) = self.render_logger.borrow_mut().as_mut() {
+                render_logger.log_stop_rendering();
+            }
         }
     }
 }
@@ -391,6 +411,10 @@ impl <Engine: RenderEngine> Renderer<Engine> where Engine::RenderLayer: VRenderL
         let mut engine = self.engine.borrow_mut();
         if is_first {
             engine.start_rendering();
+            #[cfg(feature = "logging")]
+            if let Some(render_logger) = self.render_logger.borrow_mut().as_mut() {
+                render_logger.log_start_rendering();
+            }
         }
 
         let root_dimensions = self.get_root_dimensions(&engine);
@@ -408,8 +432,13 @@ impl <Engine: RenderEngine> Renderer<Engine> where Engine::RenderLayer: VRenderL
             0,
             &mut render_borrows
         );
+
         let mut engine = render_borrows.engine;
         engine.write_render(final_render);
+        #[cfg(feature = "logging")]
+        if let Some(render_logger) = self.render_logger.borrow_mut().as_mut() {
+            render_logger.log_write_render();
+        }
     }
 
     /// Add a view to the render cache.
@@ -486,7 +515,21 @@ impl <Engine: RenderEngine> Renderer<Engine> where Engine::RenderLayer: VRenderL
         // Try cached
         if let Some(cached_render) = r.cached_renders.get(&view.id()) {
             if &cached_render.parent_bounds == parent_bounds && cached_render.prev_sibling.as_ref() == prev_sibling {
-                return cached_render.render.clone();
+                let render = cached_render.render.clone();
+
+                #[cfg(feature = "logging")]
+                if let Some(render_logger) = self.render_logger.borrow_mut().as_mut() {
+                    render_logger.log_render_view(
+                        (c, view),
+                        parent_id,
+                        parent_bounds,
+                        prev_sibling,
+                        &render,
+                        true
+                    );
+                }
+
+                return render;
             } else {
                 r.cached_renders.remove(&view.id()).unwrap();
             }
@@ -500,6 +543,18 @@ impl <Engine: RenderEngine> Renderer<Engine> where Engine::RenderLayer: VRenderL
         );
 
         self.cache_view(view, parent_id, parent_bounds, prev_sibling, render.clone(), r);
+
+        #[cfg(feature = "logging")]
+        if let Some(render_logger) = self.render_logger.borrow_mut().as_mut() {
+            render_logger.log_render_view(
+                (c, view),
+                parent_id,
+                parent_bounds,
+                prev_sibling,
+                &render,
+                false
+            );
+        }
 
         render
     }
@@ -860,7 +915,7 @@ impl <Engine: RenderEngine> Renderer<Engine> where Engine::RenderLayer: VRenderL
 pub struct RendererViewForEngineInTick<'a, Engine: RenderEngine + 'static>(&'a Rc<Renderer<Engine>>);
 
 #[cfg(feature = "time")]
-impl <'a, Engine: RenderEngine + 'static> RendererViewForEngineInTick<'a, Engine> where Engine::RenderLayer: VRenderLayer {
+impl <'a, Engine: RenderEngine + 'static> RendererViewForEngineInTick<'a, Engine> {
     /// Send a key event to listeners.
     pub fn send_key_event(&self, event: &KeyEvent) {
         self.0.send_key_event(event)
@@ -886,9 +941,30 @@ impl <'a, Engine: RenderEngine + 'static> RendererViewForEngineInTick<'a, Engine
 
 // region logging
 #[cfg(feature = "logging")]
-impl <Engine: RenderEngine> Renderer<Engine> {
-    pub fn set_update_logger(self: &Rc<Self>, logger: Option<UpdateLogger<Engine::ViewData>>) {
+impl <Engine: RenderEngine> Renderer<Engine> where Engine::ViewData: Serialize + Debug + Clone, Engine::RenderLayer: Serialize + Debug {
+    fn set_update_logger(self: &Rc<Self>, logger: Option<UpdateLogger<Engine::ViewData>>) {
         *self.update_logger.borrow_mut() = logger;
+    }
+
+    fn set_render_logger(self: &Rc<Self>, logger: Option<RenderLogger<Engine::ViewData, Engine::RenderLayer>>) {
+        *self.render_logger.borrow_mut() = logger;
+    }
+
+    pub fn enable_logging(self: &Rc<Self>, dir: &Path) -> io::Result<()> {
+        assert!(self.update_logger.borrow().is_none(), "already logging");
+        VMode::set_is_logging(true);
+        let log_start = LogStart::try_new(dir)?;
+        let update_logger = UpdateLogger::try_new(&log_start)?;
+        let render_logger = RenderLogger::try_new(&log_start)?;
+        self.set_update_logger(Some(update_logger));
+        self.set_render_logger(Some(render_logger));
+        Ok(())
+    }
+
+    pub fn disable_logging(self: &Rc<Self>) {
+        assert!(self.update_logger.borrow().is_some(), "not logging");
+        self.set_update_logger(None);
+        self.set_render_logger(None);
     }
 }
 // endregion
@@ -969,7 +1045,7 @@ impl <Engine: RenderEngine> VComponentRoot for Renderer<Engine> {
 impl <Engine: RenderEngine> Drop for Renderer<Engine> {
     fn drop(&mut self) {
         if self.is_visible.get() {
-            self.engine.get_mut().stop_rendering();
+            self.clear(true);
         }
     }
 }
