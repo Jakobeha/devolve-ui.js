@@ -33,7 +33,7 @@ use std::time::{Duration, Instant};
 use serde::Serialize;
 #[cfg(feature = "time-blocking")]
 use tokio::runtime;
-use crate::core::component::component::VComponent;
+use crate::core::component::component::{VComponent, VComponentContexts};
 use crate::core::component::context::VComponentContext2;
 use crate::core::component::mode::VMode;
 use crate::core::component::node::{NodeId, VComponentAndView, VNode};
@@ -341,7 +341,7 @@ impl <Engine: RenderEngine> Renderer<Engine> where Engine::RenderLayer: VRenderL
     /// Before a root component is assigned, the renderer is empty and trying to show will panic.
     /// You can assign another root component after and it will be replaced and re-render.
     pub fn root(self: &Rc<Self>, construct: impl Fn(VComponentContext2<'_, (), Engine::ViewData>) -> VNode<Engine::ViewData> + 'static) {
-        self._root(|parent| VComponent::new(parent, ().into(), (), construct))
+        self._root(|parent| VComponent::new(parent, &mut VComponentContexts::new(), ().into(), (), construct))
     }
 
     /// Actually root. When the user calls `root`, we actually assign another root component under.
@@ -369,7 +369,7 @@ impl <Engine: RenderEngine> Renderer<Engine> where Engine::RenderLayer: VRenderL
 
         // Update
         if let Some(self_root_component) = self_root_component.as_mut() {
-            self_root_component.update();
+            self_root_component.update(&mut VComponentContexts::new())
         }
 
         // Rerender
@@ -990,8 +990,8 @@ impl <Engine: RenderEngine> VComponentRoot for Renderer<Engine> {
 
     fn _with_component(self: Rc<Self>, path: &VComponentPath) -> Option<*mut Box<VComponent<Self::ViewData>>> {
         self.root_component.borrow_mut().as_mut()
-            .and_then(|root| root.down_path_mut(path))
-            .map(|component| component as *mut _)
+            .and_then(|root| root.down_path_mut(path, Vec::new()))
+            .map(|component| component.into_ptr())
     }
 
     #[cfg(feature = "time")]

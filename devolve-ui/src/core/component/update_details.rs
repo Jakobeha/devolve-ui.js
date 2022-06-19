@@ -20,6 +20,10 @@ pub enum UpdateDetails {
     SetState {
         index: usize,
         backtrace: UpdateBacktrace
+    },
+    SetContextState {
+        index: usize,
+        backtrace: UpdateBacktrace
     }
 }
 
@@ -146,6 +150,9 @@ impl Display for UpdateDetails {
         match self {
             UpdateDetails::SetState { index, backtrace } => {
                 write!(f, "set:state:{} {}", index, backtrace)
+            }
+            UpdateDetails::SetContextState { index, backtrace } => {
+                write!(f, "set:context-state:{} {}", index, backtrace)
             }
         }
     }

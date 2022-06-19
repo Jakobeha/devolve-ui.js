@@ -28,7 +28,7 @@ use std::rc::{Rc, Weak};
 use std::fmt::{Debug, Formatter};
 use std::mem;
 use crate::core::component::context::{VComponentContext1, VComponentContext2, VDestructorContext1, VDestructorContext2, VEffectContext1, VEffectContext2};
-use crate::core::component::path::{VComponentKey, VComponentPath, VComponentRef};
+use crate::core::component::path::{VComponentKey, VComponentPath, VComponentRef, VComponentRefResolved};
 use crate::core::component::root::VComponentRoot;
 use crate::core::component::update_details::{UpdateDetails, UpdateStack};
 use crate::core::hooks::context::{AnonContextId, ContextId};
@@ -74,6 +74,9 @@ pub(in crate::core) struct VComponentStateData {
     // pub(in crate::core) consumed_contexts: HashMap<Context, Box<dyn Any>>
 }
 
+pub type VComponentLocalContexts = HashMap<AnonContextId, Box<dyn Any>>;
+pub type VComponentContexts<'a> = HashMapMutStack<'a, AnonContextId, Box<dyn Any>>;
+
 /// Part of the component with data whose size depends on `Props`, so it's a runtime-sized trait object.
 pub(super) trait VComponentConstruct: Debug {
     type ViewData: VViewData;
@@ -81,17 +84,18 @@ pub(super) trait VComponentConstruct: Debug {
     fn reuse(self, reconstruct: Box<dyn VComponentReconstruct<ViewData=Self::ViewData>>) -> Box<dyn VComponentConstruct>;
 
     fn props(&self) -> &dyn Any;
-    fn construct(&mut self, component: &mut VComponentHead<Self::ViewData>, contexts: &mut HashMapMutStack<'_, AnonContextId, Box<dyn Any>>) -> VNode<Self::ViewData>;
+    fn construct(&mut self, component: &mut VComponentHead<Self::ViewData>, contexts: &mut VComponentContexts<'_>) -> VNode<Self::ViewData>;
 
-    fn run_effects(&mut self, component: &mut VComponentHead<Self::ViewData>);
-    fn run_update_destructors(&mut self, component: &mut VComponentHead<Self::ViewData>);
-    fn run_permanent_destructors(&mut self, component: &mut VComponentHead<Self::ViewData>);
+    fn local_contexts(&mut self) -> &mut VComponentLocalContexts;
+    fn run_effects(&mut self, component: &mut VComponentHead<Self::ViewData>, contexts: &mut VComponentContexts<'_>);
+    fn run_update_destructors(&mut self, component: &mut VComponentHead<Self::ViewData>, contexts: &mut VComponentContexts<'_>);
+    fn run_permanent_destructors(&mut self, component: &mut VComponentHead<Self::ViewData>, contexts: &mut VComponentContexts<'_>);
 }
 
 trait VComponentReconstruct {
     type ViewData: VViewData;
 
-    fn _check_downcast(&self, id: TypeId) -> bool;
+    fn check_downcast(&self, id: TypeId) -> bool;
 }
 
 trait VComponentReconstruct2: VComponentReconstruct<ViewData=Self::ViewData> {
@@ -113,7 +117,7 @@ struct VComponentConstructImpl<Props: Any, ViewData: VViewData, F: Fn(VComponent
 }
 
 struct VComponentConstructState<Props: Any, ViewData: VViewData> {
-    pub contexts: HashMap<AnonContextId, Box<dyn Any>>,
+    pub local_contexts: VComponentLocalContexts,
     pub effects: VComponentEffects<Props, ViewData>,
     pub destructors: VComponentDestructors<Props, ViewData>
 }
@@ -138,7 +142,13 @@ pub(in crate::core) struct VComponentDestructors<Props: Any, ViewData: VViewData
 // region impls
 impl <ViewData: VViewData + 'static> VComponent<ViewData> {
     /// Create a new component *or* update and reuse the existing component, if it has the same parent or key.
-    pub(in crate::core) fn new<Props: 'static, F: Fn(VComponentContext2<'_, Props, ViewData>) -> VNode<ViewData> + 'static>(parent: VParent<'_, ViewData>, key: VComponentKey, props: Props, construct: F) -> Box<VComponent<ViewData>> {
+    pub(in crate::core) fn new<Props: 'static, F: Fn(VComponentContext2<'_, Props, ViewData>) -> VNode<ViewData> + 'static>(
+        parent: VParent<'_, ViewData>,
+        contexts: &mut VComponentContexts<'_>,
+        key: VComponentKey,
+        props: Props,
+        construct: F
+    ) -> Box<VComponent<ViewData>> {
         enum Action<'a, ViewData_: VViewData, Props_, F_> {
             Reuse(Box<VComponent<ViewData_>>),
             Create(VParent<'a, ViewData_>, Props_, F_)
@@ -161,7 +171,7 @@ impl <ViewData: VViewData + 'static> VComponent<ViewData> {
                                 phantom: PhantomData
                             }));
                             found_child.head.is_fresh = true;
-                            found_child.update();
+                            found_child.update(contexts);
                             // When we return this it will be added back to parent.children
                             return Action::Reuse(found_child)
                         }
@@ -218,7 +228,7 @@ impl <ViewData: VViewData + 'static> VComponent<ViewData> {
 
 impl <ViewData: VViewData> VComponent<ViewData> {
     /// Run pending updates on this component.
-    pub(in crate::core) fn update(mut self: &mut Box<Self>) {
+    pub(in crate::core) fn update(mut self: &mut Box<Self>, contexts: &mut VComponentContexts<'_>) {
         while self.head.has_pending_updates {
             self.head.has_pending_updates = false;
             self.head.recursive_update_stack_trace.close_last(|#[cfg_attr(not(feature = "logging"), allow(unused))] details| {
@@ -232,33 +242,39 @@ impl <ViewData: VViewData> VComponent<ViewData> {
 
             if self.head.node.is_none() {
                 // Do construct
-                self.do_update(|self_| {
+                self.do_update(contexts, |self_, contexts| {
                     // Actually do construct and set node
-                    let mut node = self_.construct.construct(&mut self_.head);
+                    let mut node = self_.construct.construct(&mut self_.head, contexts);
 
                     // from devolve-ui.js: "Create pixi if pixi component and on web"
                     // should have a hook in view trait we can call through node.view().hook(...)
 
                     // Update children (if box or another component)
-                    node.update(self_);
+                    // We push contexts in self_.construct.construct but then pop them and we have to push again,
+                    // which is redundant :(. It already happens a lot anyways.
+                    contexts.push(self.construct.local_contexts());
+                    node.update(self_, contexts);
+                    contexts.pop();
 
                     self_.head.node = Some(node)
                 })
             } else {
                 // Reset
-                self.run_update_destructors();
+                self.run_update_destructors(contexts);
                 self.head.h.next_state_index = 0;
                 // self.head.h.provided_contexts.clear();
 
                 // Do construct
-                self.do_update(|self_| {
-                    let mut node = self_.construct.construct(&mut self_.head);
+                self.do_update(contexts, |self_, contexts| {
+                    let mut node = self_.construct.construct(&mut self_.head, contexts);
 
                     // from devolve-ui.js: "Update pixi if pixi component and on web"
                     // should have a hook in view trait we can call through node.view().hook(...)
 
                     // Update children (if box or another component)
-                    node.update(self_);
+                    contexts.push(self.construct.local_contexts());
+                    node.update(self_, contexts);
+                    contexts.pop();
 
                     self_.head.invalidate();
                     self_.head.node = Some(node)
@@ -270,37 +286,43 @@ impl <ViewData: VViewData> VComponent<ViewData> {
     }
 
     /// Destroy the component: run destructors and invalidate + children
-    fn destroy(mut self: Box<Self>) {
+    fn destroy(mut self: Box<Self>, contexts: &mut VComponentContexts<'_>) {
         assert!(self.head.node.is_some(), "tried to destroy uninitialized component");
 
-        self.run_update_destructors();
-        self.run_permanent_destructors();
+        self.run_update_destructors(contexts);
+        self.run_permanent_destructors(contexts);
 
         // from devolve-ui.js: "Destroy pixi if pixi component and on web"
         // should have a hook in view trait we can call through node.view().hook(...)
 
         self.head.invalidate();
 
+        contexts.push(self.construct.local_contexts());
         for child in self.head.children.into_values() {
-            child.destroy()
+            child.destroy(contexts)
         }
+        contexts.pop();
     }
 
     /// `body` will change the component's `node`, and this does other necessary changes.
-    fn do_update(mut self: &mut Box<Self>, body: impl FnOnce(&mut Box<Self>) -> ()) {
+    fn do_update(
+        mut self: &mut Box<Self>,
+        contexts: &mut VComponentContexts<'_>,
+        body: impl FnOnce(&mut Box<Self, &mut VComponentContexts<'_>>) -> ()
+    ) {
         self.head.is_being_updated = true;
 
-        body(self);
+        body(self, contexts);
 
-        self.clear_fresh_and_remove_stale_children();
+        self.clear_fresh_and_remove_stale_children(contexts);
         self.head.is_being_updated = false;
-        self.run_effects();
+        self.run_effects(contexts);
     }
 
     /// Remove children who weren't re-used in the update.
     /// For children that were reused, `is_fresh` will be true, and then this sets it to `false`
     /// so in the next update if they aren't re-used they will be removed.
-    fn clear_fresh_and_remove_stale_children(self: &mut Box<Self>) {
+    fn clear_fresh_and_remove_stale_children(self: &mut Box<Self>, contexts: &mut VComponentContexts<'_>) {
         let child_keys: Vec<VComponentKey> = self.head.children.keys().cloned().collect();
         for child_key in child_keys {
             let child = self.head.children.get_mut(&child_key).unwrap();
@@ -308,24 +330,30 @@ impl <ViewData: VViewData> VComponent<ViewData> {
                 child.head.is_fresh = false
             } else {
                 let child = self.head.children.remove(&child_key).unwrap();
-                child.destroy();
+                child.destroy(contexts);
             }
         }
     }
 
     /// Runs effects: forwards to `construct`.
-    fn run_effects(self: &mut Box<Self>) {
-        self.construct.run_effects(&mut self.head);
+    fn run_effects(self: &mut Box<Self>, contexts: &mut VComponentContexts<'_>) {
+        self.construct.run_effects(&mut self.head, contexts);
     }
 
     /// Runs update destructors: forwards to `construct`.
-    fn run_update_destructors(self: &mut Box<Self>) {
-        self.construct.run_update_destructors(&mut self.head);
+    fn run_update_destructors(self: &mut Box<Self>, contexts: &mut VComponentContexts<'_>) {
+        self.construct.run_update_destructors(&mut self.head, contexts);
     }
 
     /// Runs permanent destructors: forwards to `construct`.
-    fn run_permanent_destructors(self: &mut Box<Self>) {
-        self.construct.run_permanent_destructors(&mut self.head);
+    /// Runs permanent destructors: forwards to `construct`.
+    fn run_permanent_destructors(self: &mut Box<Self>, contexts: &mut VComponentContexts<'_>) {
+        self.construct.run_permanent_destructors(&mut self.head, contexts);
+    }
+
+    /// Contexts
+    pub(super) fn local_contexts(self: &mut Box<Self>) -> &mut VComponentLocalContexts {
+        &mut self.construct.local_contexts()
     }
 
     /// Child component with the given key
@@ -333,13 +361,24 @@ impl <ViewData: VViewData> VComponent<ViewData> {
         self.head.children.get_mut(key)
     }
 
+    /// Child component with the given key
+    fn local_contexts_and_child_mut<'a>(self: &'a mut Box<Self>, key: &VComponentKey) -> (&'a mut VComponentLocalContexts, Option<&'a mut Box<VComponent<ViewData>>>) {
+        (&mut self.construct.local_contexts(), self.head.children.get_mut(key))
+    }
+
     /// Descendent with the given path.
-    pub(in crate::core) fn down_path_mut<'a>(self: &'a mut Box<Self>, path: &VComponentPath) -> Option<&'a mut Box<VComponent<ViewData>>> {
+    pub(in crate::core) fn down_path_mut<'a>(self: &'a mut Box<Self>, path: &VComponentPath, mut parents: Vec<&mut VComponentLocalContexts>) -> Option<VComponentRefResolved<'a, ViewData>> {
         let mut current = self;
         for segment in path.iter() {
-            current = current.child_mut(segment)?;
+            let (local_contexts, child) = current.local_contexts_and_child_mut(segment);
+            parents.push(local_contexts);
+            current = child?;
         }
-        Some(current)
+        let result = VComponentRefResolved {
+            parent_contexts: parents,
+            component: current
+        };
+        Some(result)
     }
 }
 
@@ -456,7 +495,7 @@ impl <ViewData: VViewData> dyn VComponentConstruct<ViewData=ViewData> {
 
 impl <ViewData: VViewData> dyn VComponentReconstruct<ViewData=ViewData> {
     fn force_downcast<Props: Any>(self: Box<Self>) -> Box<dyn VComponentReconstruct2<Props=Props, ViewData=ViewData>> {
-        assert!(self._check_downcast(), "component reused with different type of props");
+        assert!(self.check_downcast(), "component reused with different type of props");
         unsafe { mem::transmute(self) }
     }
 }
@@ -473,55 +512,70 @@ impl <Props: Any, ViewData: VViewData, F: Fn(VComponentContext2<'_, Props, ViewD
         &self.props
     }
 
-    fn construct(&mut self, component: &mut VComponentHead<Self::ViewData>, contexts: &mut HashMapMutStack<'_, AnonContextId, Box<dyn Any>>) -> VNode<Self::ViewData> {
+    fn construct(&mut self, component: &mut VComponentHead<Self::ViewData>, contexts: &mut VComponentContexts<'_>) -> VNode<Self::ViewData> {
         let construct = &self.construct;
-        contexts.push(self.contexts);
-        construct((VComponentContext1 {
+        contexts.push(&mut self.s.local_contexts);
+        let node = construct((VComponentContext1 {
             component,
             contexts,
-            effects: &mut self.effects,
+            effects: &mut self.s.effects,
             phantom: PhantomData
-        }, &self.props))
+        }, &self.props));
+        contexts.pop();
+        node
     }
 
-    fn run_effects(&mut self, component: &mut VComponentHead<Self::ViewData>) {
-        while let Some(effect) = self.effects.effects.pop() {
+    fn local_contexts(&mut self) -> &mut VComponentLocalContexts {
+        &mut self.s.local_contexts
+    }
+
+    fn run_effects(&mut self, component: &mut VComponentHead<Self::ViewData>, contexts: &mut VComponentContexts<'_>) {
+        contexts.push(&mut self.s.local_contexts);
+        while let Some(effect) = self.s.effects.effects.pop() {
             if component.has_pending_updates {
                 break
             }
 
             effect((VEffectContext1 {
                 component,
-                destructors: &mut self.destructors,
+                contexts,
+                destructors: &mut self.s.destructors,
                 phantom: PhantomData
             }, &self.props));
         }
+        contexts.pop();
     }
 
-    fn run_update_destructors(&mut self, component: &mut VComponentHead<Self::ViewData>) {
-        while let Some(update_destructor) = self.destructors.update_destructors.pop() {
+    fn run_update_destructors(&mut self, component: &mut VComponentHead<Self::ViewData>, contexts: &mut HashMapMutStack<'_, AnonContextId, Box<dyn Any>>) {
+        contexts.push(&mut self.s.local_contexts);
+        while let Some(update_destructor) = self.s.destructors.update_destructors.pop() {
             update_destructor((VDestructorContext1 {
                 component,
+                contexts,
                 phantom: PhantomData
-            }, &self.props))
+            }, &self.props));
         }
-        self.destructors.update_destructors.append(&mut self.destructors.next_update_destructors);
+        self.s.destructors.update_destructors.append(&mut self.s.destructors.next_update_destructors);
+        contexts.pop();
     }
 
-    fn run_permanent_destructors(&mut self, component: &mut VComponentHead<Self::ViewData>) {
-        while let Some(permanent_destructor) = self.destructors.permanent_destructors.pop() {
+    fn run_permanent_destructors(&mut self, component: &mut VComponentHead<Self::ViewData>, contexts: &mut HashMapMutStack<'_, AnonContextId, Box<dyn Any>>) {
+        contexts.push(&mut self.s.local_contexts);
+        while let Some(permanent_destructor) = self.s.destructors.permanent_destructors.pop() {
             permanent_destructor((VDestructorContext1 {
                 component,
+                contexts,
                 phantom: PhantomData
-            }, &self.props))
+            }, &self.props));
         }
+        contexts.pop();
     }
 }
 
 impl <Props: Any, ViewData: VViewData, F: Fn(VComponentContext2<'_, Props, ViewData>) -> VNode<ViewData> + 'static> VComponentReconstruct for VComponentReconstructImpl<Props, ViewData, F> {
     type ViewData = ViewData;
 
-    fn _check_downcast(&self, id: TypeId) -> bool {
+    fn check_downcast(&self, id: TypeId) -> bool {
         id == TypeId::of::<Props>()
     }
 }
@@ -545,7 +599,7 @@ impl <Props: Any, ViewData: VViewData, F: Fn(VComponentContext2<'_, Props, ViewD
 impl <Props: Any, ViewData: VViewData> VComponentConstructState<Props, ViewData> {
     pub fn new() -> Self {
         VComponentConstructState {
-            contexts: HashMap::new(),
+            local_contexts: HashMap::new(),
             effects: VComponentEffects::new(),
             destructors: VComponentDestructors::new()
         }
@@ -602,7 +656,17 @@ impl <ViewData: VViewData + Debug> Debug for VComponentHead<ViewData> {
 impl <Props: Any, ViewData: VViewData, F: Fn(VComponentContext2<'_, Props, ViewData>) -> VNode<ViewData> + 'static> Debug for VComponentConstructImpl<Props, ViewData, F> {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("VComponentConstructImpl")
+            .field("s", &self.s)
+            .finish_non_exhaustive()
+    }
+}
+
+impl <Props: Any, ViewData: VViewData> Debug for VComponentConstructState<Props, ViewData> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("VComponentConstructImpl")
+            .field("#contexts", &self.local_contexts.len())
             .field("effects", &self.effects)
+            .field("destructors", &self.destructors)
             .finish_non_exhaustive()
     }
 }

@@ -3,7 +3,7 @@
 
 use std::fmt;
 use std::fmt::{Display, Formatter};
-use crate::core::component::component::{VComponent, VComponentHead};
+use crate::core::component::component::{VComponent, VComponentContexts, VComponentHead};
 use crate::core::component::path::VComponentKey;
 use crate::core::view::view::{VView, VViewData};
 #[cfg(feature = "logging")]
@@ -87,15 +87,15 @@ impl <ViewData: VViewData> VNode<ViewData> {
 
     // Lifetimes must be different here because we borrow parent in resolve_mut and in the VNodeResolvedMut::View case.
     // This is OK because the lifetime in VNodeResolvedMut::View's view is different than that in parent
-    pub fn update(&mut self, parent: &mut Box<VComponent<ViewData>>) {
+    pub fn update(&mut self, parent: &mut Box<VComponent<ViewData>>, contexts: &mut VComponentContexts<'_>) {
         match self.resolve_mut(parent) {
             VNodeResolvedMut::Component(component) => {
-                component.update();
+                component.update(contexts);
             },
             VNodeResolvedMut::View(view) => {
                 if let Some((children, _)) = view.d.children_mut() {
                     for child in children {
-                        child.update(parent);
+                        child.update(parent, contexts);
                     }
                 }
             }

@@ -27,9 +27,9 @@ pub struct State<T: Any, ViewData: VViewData>(NonUpdatingState<T, ViewData>);
 /// Smart pointer which allows access to the state, and calls `update` when it gets dropped.
 pub struct StateDeref<'a, T: Any, ViewData: VViewData> {
     // See comment in StateDeref::drop
-    component: *mut VComponentHead<ViewData>,
-    update_details: UpdateDetails,
-    value: &'a mut T
+    pub(super) component: *mut VComponentHead<ViewData>,
+    pub(super) update_details: UpdateDetails,
+    pub(super) value: &'a mut T
 }
 
 pub fn use_state<'a, T: Any, ViewData: VViewData + 'a, F: FnOnce() -> T>(

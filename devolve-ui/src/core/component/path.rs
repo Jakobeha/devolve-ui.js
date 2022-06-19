@@ -4,16 +4,18 @@
 //! `with_component` returns `None`.
 
 use std::fmt::{Debug, Display, Formatter, Write};
+use std::mem;
 use std::ops::Add;
 use std::ops::AddAssign;
 use std::rc::Weak;
 use std::mem::MaybeUninit;
 use arrayvec::{ArrayString, CapacityError};
-use crate::core::component::component::VComponent;
+use crate::core::component::component::{VComponent, VComponentLocalContexts};
 use crate::core::component::root::VComponentRoot;
 use crate::core::view::view::VViewData;
 #[cfg(feature = "serde")]
 use serde::{Serialize, Deserialize};
+use crate::core::hooks::context::AnonContextId;
 
 /// Identifies a `VComponent` among its siblings.
 /// Needed because the siblings may change and we need to remember the component and check if it was deleted.
@@ -42,8 +44,19 @@ pub struct VComponentRef<ViewData: VViewData> {
     pub(super) path: VComponentPath
 }
 
+#[derive(Debug)]
+pub struct VComponentRefResolved<'a, ViewData: VViewData> {
+    pub parent_contexts: Vec<&'a mut VComponentLocalContexts>,
+    pub component: &'a mut Box<VComponent<ViewData>>
+}
+
+pub(in crate::core) struct VComponentRefResolvedPtr<ViewData: VViewData> {
+    pub parent_contexts: Vec<*mut Box<VComponent<ViewData>>>,
+    pub component: *mut Box<VComponent<ViewData>>
+}
+
 impl <ViewData: VViewData> VComponentRef<ViewData> {
-    pub fn with<R>(&self, fun: impl FnOnce(Option<&mut Box<VComponent<ViewData>>>) -> R) -> R {
+    pub fn with<R>(&self, fun: impl FnOnce(Option<VComponentRefResolved<'_, ViewData>>) -> R) -> R {
         match self.renderer.upgrade() {
             None => fun(None),
             Some(renderer) => {
@@ -57,10 +70,19 @@ impl <ViewData: VViewData> VComponentRef<ViewData> {
         }
     }
 
-    pub fn try_with<R>(&self, fun: impl FnOnce(&mut Box<VComponent<ViewData>>) -> R) -> Option<R> {
+    pub fn try_with<R>(&self, fun: impl FnOnce(VComponentRefResolved<'_, ViewData>) -> R) -> Option<R> {
         self.with(|component| {
             component.map(fun)
         })
+    }
+}
+
+impl <ViewData: VViewData> VComponentRefResolvedPtr<ViewData> {
+    pub(super) unsafe fn into_mut(self) -> VComponentRefResolved<'_, ViewData> {
+        VComponentRefResolved {
+            parent_contexts: mem::transmute(self.parent_contexts),
+            component: self.component.as_mut().unwrap()
+        }
     }
 }
 // endregion
