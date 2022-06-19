@@ -4,8 +4,11 @@ use crate::core::misc::ident::Ident;
 use crate::core::misc::option_f32::OptionF32;
 use crate::core::view::layout::measurement::Measurement;
 use crate::core::view::layout::geom::{BoundingBox, Size};
+#[cfg(feature = "serde")]
+use serde::{Serialize, Deserialize};
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum LayoutDirection {
     Overlap,
     Horizontal,
@@ -13,12 +16,14 @@ pub enum LayoutDirection {
 }
 
 #[derive(Debug, Clone, Default, PartialEq)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct SubLayout {
     pub direction: LayoutDirection,
     pub gap: Measurement
 }
 
 #[derive(Debug, Clone, Default, PartialEq)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct DimMap<T> {
     pub x: T,
     pub y: T,
@@ -63,6 +68,7 @@ impl DimsStore {
 }
 
 #[derive(Debug, Clone, PartialEq)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct ParentBounds {
     pub bounding_box: BoundingBox,
     pub sub_layout: SubLayout,

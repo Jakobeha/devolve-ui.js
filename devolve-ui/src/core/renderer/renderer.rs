@@ -41,7 +41,7 @@ use crate::core::component::parent::VParent;
 use crate::core::component::path::VComponentPath;
 use crate::core::component::root::VComponentRoot;
 use crate::core::logging::common::LogStart;
-use crate::core::logging::render_logger::RenderLogger;
+use crate::core::logging::render_logger::{RenderLogger, RenderLoggerImpl};
 #[cfg(feature = "logging")]
 use crate::core::logging::update_logger::UpdateLogger;
 #[cfg(feature = "input")]
@@ -94,7 +94,7 @@ pub struct Renderer<Engine: RenderEngine + 'static> {
     #[cfg(feature = "logging")]
     update_logger: RefCell<Option<UpdateLogger<Engine::ViewData>>>,
     #[cfg(feature = "logging")]
-    render_logger: RefCell<Option<RenderLogger<Engine::ViewData, Engine::RenderLayer>>>
+    render_logger: RefCell<Option<Box<dyn RenderLogger<ViewData=Engine::ViewData, RenderLayer=Engine::RenderLayer>>>>
 }
 
 #[derive(Debug, Default)]
@@ -946,7 +946,7 @@ impl <Engine: RenderEngine> Renderer<Engine> where Engine::ViewData: Serialize +
         *self.update_logger.borrow_mut() = logger;
     }
 
-    fn set_render_logger(self: &Rc<Self>, logger: Option<RenderLogger<Engine::ViewData, Engine::RenderLayer>>) {
+    fn set_render_logger(self: &Rc<Self>, logger: Option<Box<dyn RenderLogger<ViewData=Engine::ViewData, RenderLayer=Engine::RenderLayer>>>) {
         *self.render_logger.borrow_mut() = logger;
     }
 
@@ -955,9 +955,9 @@ impl <Engine: RenderEngine> Renderer<Engine> where Engine::ViewData: Serialize +
         VMode::set_is_logging(true);
         let log_start = LogStart::try_new(dir)?;
         let update_logger = UpdateLogger::try_new(&log_start)?;
-        let render_logger = RenderLogger::try_new(&log_start)?;
+        let render_logger = RenderLoggerImpl::try_new(&log_start)?;
         self.set_update_logger(Some(update_logger));
-        self.set_render_logger(Some(render_logger));
+        self.set_render_logger(Some(Box::new(render_logger)));
         Ok(())
     }
 

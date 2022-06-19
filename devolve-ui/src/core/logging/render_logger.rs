@@ -52,7 +52,7 @@ pub struct LoggedRenderTree<ViewData: VViewData, RenderLayer> {
     pub children: Vec<LoggedRenderTreeChild<ViewData, RenderLayer>>
 }
 
-pub struct RenderLogger<ViewData: VViewData, RenderLayer> {
+pub struct RenderLoggerImpl<ViewData: VViewData, RenderLayer> {
     logger: GenericLogger<RenderLogEntry<ViewData, RenderLayer>>,
 
     view_map: HashMap<NodeId, LoggedRenderView<ViewData, RenderLayer>>,
@@ -61,9 +61,30 @@ pub struct RenderLogger<ViewData: VViewData, RenderLayer> {
     last_id: NodeId
 }
 
-impl <ViewData: VViewData + Serialize + Debug + Clone, RenderLayer: Serialize + Debug> RenderLogger<ViewData, RenderLayer> {
+pub trait RenderLogger {
+    type ViewData: VViewData;
+    type RenderLayer;
+
+    fn log_start_rendering(&mut self);
+    fn log_stop_rendering(&mut self);
+
+    fn log_write_render(&mut self) where Self::RenderLayer: VRenderLayer;
+    fn log_clear(&mut self);
+    fn log_render_view(
+        &mut self,
+        c_and_view: VComponentAndView<'_, Self::ViewData>,
+        parent_id: NodeId,
+        parent_bounds: &ParentBounds,
+        prev_sibling_rect: Option<&Rectangle>,
+        render: &VRender<Self::RenderLayer>,
+        is_cached: bool
+    ) where Self::RenderLayer: VRenderLayer;
+}
+
+
+impl <ViewData: VViewData + Serialize + Debug + Clone, RenderLayer: Serialize + Debug> RenderLoggerImpl<ViewData, RenderLayer> {
     pub(in crate::core) fn try_new(args: &LogStart) -> io::Result<Self> {
-        Ok(RenderLogger {
+        Ok(RenderLoggerImpl {
             logger: GenericLogger::new(args, "renders")?,
 
             view_map: HashMap::new(),
@@ -105,19 +126,25 @@ impl <ViewData: VViewData + Serialize + Debug + Clone, RenderLayer: Serialize + 
             children
         })
     }
+}
 
-    pub fn log_start_rendering(&mut self) {
+impl <ViewData: VViewData + Serialize + Debug + Clone, RenderLayer: Serialize + Debug> RenderLogger for RenderLoggerImpl<ViewData, RenderLayer> {
+    type ViewData = ViewData;
+    type RenderLayer = RenderLayer;
+
+    fn log_start_rendering(&mut self) {
         self.log(RenderLogEntry::StartRendering);
     }
 
-    pub fn log_stop_rendering(&mut self) {
+    fn log_stop_rendering(&mut self) {
         self.log(RenderLogEntry::StopRendering);
     }
 
-    pub fn log_write_render(&mut self) where RenderLayer: VRenderLayer {
+    fn log_write_render(&mut self) where RenderLayer: VRenderLayer {
         // Last id = root when we are done rendering
         assert_ne!(self.last_id, NodeId::NULL, "no views rendered in one render, didn't expect that, need to handle");
-        let logged_render = self.drain_and_collapse_renders(&self.last_id).expect("no view for last_id, how?");
+        let last_id = self.last_id;
+        let logged_render = self.drain_and_collapse_renders(&last_id).expect("no view for last_id, how?");
 
         self.view_map.clear();
         self.prev_sibling_id_map.clear();
@@ -127,11 +154,11 @@ impl <ViewData: VViewData + Serialize + Debug + Clone, RenderLayer: Serialize + 
         self.log(RenderLogEntry::WriteRender(logged_render));
     }
 
-    pub fn log_clear(&mut self) {
+    fn log_clear(&mut self) {
         self.log(RenderLogEntry::Clear);
     }
 
-    pub fn log_render_view(
+    fn log_render_view(
         &mut self,
         (c, view): VComponentAndView<'_, ViewData>,
         parent_id: NodeId,
