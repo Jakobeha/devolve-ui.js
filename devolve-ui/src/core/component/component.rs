@@ -21,17 +21,20 @@
 use crate::core::component::parent::VParent;
 use crate::core::component::mode::VMode;
 use crate::core::component::node::{NodeId, VComponentAndView, VNode};
-use std::any::Any;
+use std::any::{Any, TypeId};
 use std::collections::HashMap;
 use std::marker::PhantomData;
 use std::rc::{Rc, Weak};
 use std::fmt::{Debug, Formatter};
+use std::mem;
 use crate::core::component::context::{VComponentContext1, VComponentContext2, VDestructorContext1, VDestructorContext2, VEffectContext1, VEffectContext2};
 use crate::core::component::path::{VComponentKey, VComponentPath, VComponentRef};
 use crate::core::component::root::VComponentRoot;
 use crate::core::component::update_details::{UpdateDetails, UpdateStack};
+use crate::core::hooks::context::{AnonContextId, ContextId};
 #[cfg(feature = "logging")]
 use crate::core::logging::update_logger::{UpdateLogEntry, UpdateLogger};
+use crate::core::misc::hash_map_ref_stack::HashMapMutStack;
 use crate::core::renderer::stale_data::NeedsUpdateFlag;
 use crate::core::view::view::{VView, VViewData};
 
@@ -75,12 +78,30 @@ pub(in crate::core) struct VComponentStateData {
 pub(super) trait VComponentConstruct: Debug {
     type ViewData: VViewData;
 
+    fn reuse(self, reconstruct: Box<dyn VComponentReconstruct<ViewData=Self::ViewData>>) -> Box<dyn VComponentConstruct>;
+
     fn props(&self) -> &dyn Any;
-    fn construct(&mut self, component: &mut VComponentHead<Self::ViewData>) -> VNode<Self::ViewData>;
+    fn construct(&mut self, component: &mut VComponentHead<Self::ViewData>, contexts: &mut HashMapMutStack<'_, AnonContextId, Box<dyn Any>>) -> VNode<Self::ViewData>;
 
     fn run_effects(&mut self, component: &mut VComponentHead<Self::ViewData>);
     fn run_update_destructors(&mut self, component: &mut VComponentHead<Self::ViewData>);
     fn run_permanent_destructors(&mut self, component: &mut VComponentHead<Self::ViewData>);
+}
+
+trait VComponentReconstruct {
+    type ViewData: VViewData;
+
+    fn _check_downcast(&self, id: TypeId) -> bool;
+}
+
+trait VComponentReconstruct2: VComponentReconstruct<ViewData=Self::ViewData> {
+    type ViewData: VViewData;
+    type Props: Any;
+
+    fn complete(
+        self,
+        s: VComponentConstructState<Self::Props, Self::ViewData>
+    ) -> Box<dyn VComponentConstruct<ViewData=Self::ViewData>>;
 }
 
 /// Part of the component with data whose size depends on `Props`. This is the compile-time sized implementation
@@ -88,9 +109,19 @@ pub(super) trait VComponentConstruct: Debug {
 struct VComponentConstructImpl<Props: Any, ViewData: VViewData, F: Fn(VComponentContext2<'_, Props, ViewData>) -> VNode<ViewData> + 'static> {
     props: Props,
     construct: F,
-    effects: VComponentEffects<Props, ViewData>,
-    destructors: VComponentDestructors<Props, ViewData>,
-    view_data_type: PhantomData<ViewData>
+    s: VComponentConstructState<Props, ViewData>
+}
+
+struct VComponentConstructState<Props: Any, ViewData: VViewData> {
+    pub contexts: HashMap<AnonContextId, Box<dyn Any>>,
+    pub effects: VComponentEffects<Props, ViewData>,
+    pub destructors: VComponentDestructors<Props, ViewData>
+}
+
+struct VComponentReconstructImpl<Props: Any, ViewData: VViewData, F: Fn(VComponentContext2<'_, Props, ViewData>) -> VNode<ViewData> + 'static> {
+    props: Props,
+    construct: F,
+    phantom: PhantomData<ViewData>
 }
 
 pub(in crate::core) struct VComponentEffects<Props: Any, ViewData: VViewData> {
@@ -124,13 +155,11 @@ impl <ViewData: VViewData + 'static> VComponent<ViewData> {
                             parent.children.insert(key.clone(), found_child);
                         } else {
                             // Reuse child
-                            found_child.construct = Box::new(VComponentConstructImpl {
+                            found_child.construct = found_child.construct.reuse(Box::new(VComponentReconstructImpl {
                                 props,
                                 construct,
-                                effects: VComponentEffects::new(),
-                                destructors: VComponentDestructors::new(),
-                                view_data_type: PhantomData,
-                            });
+                                phantom: PhantomData
+                            }));
                             found_child.head.is_fresh = true;
                             found_child.update();
                             // When we return this it will be added back to parent.children
@@ -178,14 +207,11 @@ impl <ViewData: VViewData + 'static> VComponent<ViewData> {
                 has_pending_updates: true,
                 recursive_update_stack_trace: UpdateStack::new(),
             },
-
             construct: Box::new(VComponentConstructImpl {
                 props,
                 construct,
-                effects: VComponentEffects::new(),
-                destructors: VComponentDestructors::new(),
-                view_data_type: PhantomData
-            }),
+                s: VComponentConstructState::new()
+            })
         })
     }
 }
@@ -428,17 +454,31 @@ impl <ViewData: VViewData> dyn VComponentConstruct<ViewData=ViewData> {
     }
 }
 
+impl <ViewData: VViewData> dyn VComponentReconstruct<ViewData=ViewData> {
+    fn force_downcast<Props: Any>(self: Box<Self>) -> Box<dyn VComponentReconstruct2<Props=Props, ViewData=ViewData>> {
+        assert!(self._check_downcast(), "component reused with different type of props");
+        unsafe { mem::transmute(self) }
+    }
+}
+
 impl <Props: Any, ViewData: VViewData, F: Fn(VComponentContext2<'_, Props, ViewData>) -> VNode<ViewData> + 'static> VComponentConstruct for VComponentConstructImpl<Props, ViewData, F> {
     type ViewData = ViewData;
+
+    fn reuse(self, reconstruct: Box<dyn VComponentReconstruct<ViewData=ViewData>>) -> Box<dyn VComponentReconstruct> {
+        let reconstruct = reconstruct.force_downcast::<Props>();
+        reconstruct.complete()
+    }
 
     fn props(&self) -> &dyn Any {
         &self.props
     }
 
-    fn construct(&mut self, component: &mut VComponentHead<Self::ViewData>) -> VNode<Self::ViewData> {
+    fn construct(&mut self, component: &mut VComponentHead<Self::ViewData>, contexts: &mut HashMapMutStack<'_, AnonContextId, Box<dyn Any>>) -> VNode<Self::ViewData> {
         let construct = &self.construct;
+        contexts.push(self.contexts);
         construct((VComponentContext1 {
             component,
+            contexts,
             effects: &mut self.effects,
             phantom: PhantomData
         }, &self.props))
@@ -478,6 +518,39 @@ impl <Props: Any, ViewData: VViewData, F: Fn(VComponentContext2<'_, Props, ViewD
     }
 }
 
+impl <Props: Any, ViewData: VViewData, F: Fn(VComponentContext2<'_, Props, ViewData>) -> VNode<ViewData> + 'static> VComponentReconstruct for VComponentReconstructImpl<Props, ViewData, F> {
+    type ViewData = ViewData;
+
+    fn _check_downcast(&self, id: TypeId) -> bool {
+        id == TypeId::of::<Props>()
+    }
+}
+
+impl <Props: Any, ViewData: VViewData, F: Fn(VComponentContext2<'_, Props, ViewData>) -> VNode<ViewData> + 'static> VComponentReconstruct2 for VComponentReconstructImpl<Props, ViewData, F> {
+    type ViewData = ViewData;
+    type Props = Props;
+
+    fn complete(
+        self,
+        s: VComponentConstructState<Props, ViewData>
+    ) -> Box<dyn VComponentConstruct<ViewData=ViewData>> {
+        Box::new(VComponentConstructImpl {
+            props,
+            construct,
+            s
+        })
+    }
+}
+
+impl <Props: Any, ViewData: VViewData> VComponentConstructState<Props, ViewData> {
+    pub fn new() -> Self {
+        VComponentConstructState {
+            contexts: HashMap::new(),
+            effects: VComponentEffects::new(),
+            destructors: VComponentDestructors::new()
+        }
+    }
+}
 
 impl <Props: Any, ViewData: VViewData> VComponentEffects<Props, ViewData> {
     pub fn new() -> Self {

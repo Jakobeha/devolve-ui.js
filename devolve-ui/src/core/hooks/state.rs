@@ -1,4 +1,4 @@
-//! Persistent state which a component retains from when it's created to when its destroyed
+//! Persistent state which a component retains from when it's created to when it's destroyed
 //! (a component is destroyed when its parent re-renders and the component is no longer in the parent's render.
 //! Afterwards if it appears again it will be a new component with a reset state)
 //!

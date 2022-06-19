@@ -9,8 +9,8 @@ use crate::core::view::view::VViewData;
 
 #[derive(Debug)]
 pub struct NonUpdatingState<T: Any, ViewData: VViewData> {
-    pub index: usize,
-    pub phantom_view_data: PhantomData<(T, ViewData)>
+    pub(super) index: usize,
+    phantom: PhantomData<(T, ViewData)>
 }
 
 pub fn use_non_updating_state<'a, T: Any, ViewData: VViewData + 'a>(c: &mut impl VComponentContext<'a, ViewData=ViewData>, initial_state: impl FnOnce() -> T) -> NonUpdatingState<T, ViewData> {
@@ -26,7 +26,7 @@ pub fn use_non_updating_state<'a, T: Any, ViewData: VViewData + 'a>(c: &mut impl
 
     NonUpdatingState {
         index,
-        phantom_view_data: PhantomData
+        phantom: PhantomData
     }
 }
 
@@ -52,7 +52,7 @@ impl <T: Any, ViewData: VViewData> Clone for NonUpdatingState<T, ViewData> {
     fn clone(&self) -> Self {
         Self {
             index: self.index,
-            phantom_view_data: self.phantom_view_data
+            phantom: self.phantom
         }
     }
 }
