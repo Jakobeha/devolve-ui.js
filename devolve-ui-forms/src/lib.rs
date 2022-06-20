@@ -87,6 +87,7 @@ pub fn focus_provider<ViewData: VViewData + Clone>((mut c, FocusProviderProps {
                     focus_context.focused_id = focus_context.focusable_ids.iter().next_back().copied();
                 }
             }
+            _ => {}
         }
     });
 
