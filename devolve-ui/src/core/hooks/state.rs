@@ -24,14 +24,6 @@ use crate::core::hooks::state_internal::{NonUpdatingState, use_non_updating_stat
 #[derive(Debug)]
 pub struct State<T: Any, ViewData: VViewData>(NonUpdatingState<T, ViewData>);
 
-/// Smart pointer which allows access to the state, and calls `update` when it gets dropped.
-pub struct StateDeref<'a, T: Any, ViewData: VViewData> {
-    // See comment in StateDeref::drop
-    pub(super) component: *mut VComponentHead<ViewData>,
-    pub(super) update_details: UpdateDetails,
-    pub(super) value: &'a mut T
-}
-
 pub fn use_state<'a, 'a0: 'a, T: Any, ViewData: VViewData + 'a, F: FnOnce() -> T>(
     c: &mut impl VComponentContext<'a, 'a0, ViewData=ViewData>,
     initial_state: F
@@ -44,50 +36,23 @@ impl <T: Any, ViewData: VViewData> State<T, ViewData> {
         self.0.get(c)
     }
 
-    pub fn get_mut<'a: 'b, 'b>(&self, c: &'b mut impl VContext<'a, ViewData=ViewData>) -> StateDeref<'b, T, ViewData> where ViewData: 'b {
+    pub fn get_mut<'a: 'b, 'b>(&self, c: &'b mut impl VContext<'a, ViewData=ViewData>) -> &'b mut T where ViewData: 'b {
         let update_details = UpdateDetails::SetState {
             index: self.0.index,
             backtrace: UpdateBacktrace::here()
         };
-        // See comment in StateDeref::drop
-        let component = c.component() as *mut _;
-        StateDeref {
-            component,
-            update_details,
-            value: self.0.get_mut(c)
-        }
-    }
-}
-
-impl <'a, T: Any, ViewData: VViewData> Deref for StateDeref<'a, T, ViewData> {
-    type Target = T;
-
-    fn deref(&self) -> &T {
-        self.value
-    }
-}
-
-impl <'a, T: Any, ViewData: VViewData> DerefMut for StateDeref<'a, T, ViewData> {
-    fn deref_mut(&mut self) -> &mut T {
-        self.value
-    }
-}
-
-impl <'a, T: Any, ViewData: VViewData> Drop for StateDeref<'a, T, ViewData> {
-    fn drop(&mut self) {
-        // We must "borrow c mutably twice", in c and self.0.get_mut(c).
-        // However, this is sound because we never use both of these simultaneously.
-        // value is used in deref and deref_mut. c is not used until drop.
-        // deref and deref_mut will never be called in drop and vice versa.
-        let component = unsafe { self.component.as_mut().unwrap() };
-        // Kind of a useless clone but we can't move
-        component.update(self.update_details.clone());
+        c.component().update(update_details);
+        self.0.get_mut(c)
     }
 }
 
 impl <T: Any, ViewData: VViewData> Clone for State<T, ViewData> {
     fn clone(&self) -> Self {
         Self(self.0.clone())
+    }
+
+    fn clone_from(&mut self, source: &Self) {
+        self.0.clone_from(&source.0)
     }
 }
 

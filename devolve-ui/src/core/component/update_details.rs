@@ -25,6 +25,9 @@ pub enum UpdateDetails {
     SetContextState {
         id: AnonContextId,
         backtrace: UpdateBacktrace
+    },
+    SetTreeState {
+        origin: String
     }
 }
 
@@ -72,6 +75,12 @@ impl UpdateStack {
         self.last_open_or_make().add(details);
     }
 
+    pub fn append_to_last(&mut self, details: &mut Vec<UpdateDetails>) {
+        if !details.is_empty() {
+            self.last_open_or_make().append(details);
+        }
+    }
+
     pub fn close_last(&mut self, log_last: impl FnOnce(&UpdateFrame)) {
         if let Some(last) = self.last_open() {
             last.close();
@@ -85,6 +94,10 @@ impl UpdateStack {
 
     pub fn len(&self) -> usize {
         self.0.len()
+    }
+
+    pub fn has_pending(&self) -> bool {
+        self.0.last().is_some_and(|frame| frame.is_open)
     }
 }
 
@@ -154,6 +167,9 @@ impl Display for UpdateDetails {
             }
             UpdateDetails::SetContextState { id, backtrace } => {
                 write!(f, "set:context-state:{:?} {}", id, backtrace)
+            }
+            UpdateDetails::SetTreeState { origin } => {
+                write!(f, "set:tree-state {}", origin)
             }
         }
     }

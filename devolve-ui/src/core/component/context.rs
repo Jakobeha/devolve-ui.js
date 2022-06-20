@@ -17,6 +17,7 @@ use std::iter::once;
 use std::marker::PhantomData;
 use crate::core::component::component::{VComponentContexts, VComponentDestructors, VComponentEffects, VComponentHead, VComponentLocalContexts};
 use crate::core::component::path::{VComponentRef, VComponentRefResolved};
+use crate::core::component::update_details::UpdateDetails;
 use crate::core::hooks::context::AnonContextId;
 use crate::core::view::view::VViewData;
 
@@ -73,7 +74,7 @@ pub trait VContext<'a> {
     fn component_imm<'b>(&'b self) -> &'b VComponentHead<Self::ViewData> where 'a: 'b;
     fn component<'b>(&'b mut self) -> &'b mut VComponentHead<Self::ViewData> where 'a: 'b;
     fn get_context<'b>(&'b self, id: &AnonContextId) -> Option<&'b Box<dyn Any>> where 'a: 'b;
-    fn get_mut_context<'b>(&'b mut self, id: &AnonContextId) -> Option<&'b mut Box<dyn Any>> where 'a: 'b;
+    fn get_mut_context<'b>(&'b mut self, id: &AnonContextId) -> Option<(&'b mut Box<dyn Any>, &'b mut Vec<UpdateDetails>)> where 'a: 'b;
 }
 
 pub trait VComponentContext<'a, 'a0> : VContext<'a> {
@@ -93,10 +94,10 @@ impl <'a, 'a0: 'a, Props: Any, ViewData: VViewData> VContext<'a> for VComponentC
     }
 
     fn get_context<'b>(&'b self, id: &AnonContextId) -> Option<&'b Box<dyn Any>> where 'a: 'b {
-        self.contexts.get(id)
+        self.contexts.get(id).map(|(context, _path)| context)
     }
 
-    fn get_mut_context<'b>(&'b mut self, id: &AnonContextId) -> Option<&'b mut Box<dyn Any>> where 'a: 'b {
+    fn get_mut_context<'b>(&'b mut self, id: &AnonContextId) -> Option<(&'b mut Box<dyn Any>, &'b mut Vec<UpdateDetails>)> where 'a: 'b {
         self.contexts.get_mut(id)
     }
 }
@@ -107,7 +108,7 @@ impl <'a, 'a0: 'a, Props: Any, ViewData: VViewData> VComponentContext<'a, 'a0> f
     }
 
     fn local_contexts<'b>(&'b mut self) -> &'b mut &'a0 mut VComponentLocalContexts where 'a: 'b {
-        self.contexts.top_mut().expect("empty context stack in hook")
+        self.contexts.top_mut().expect("empty context stack in hook").0
     }
 }
 
@@ -123,10 +124,10 @@ impl <'a, 'a0: 'a, Props: Any, ViewData: VViewData> VContext<'a> for VEffectCont
     }
 
     fn get_context<'b>(&'b self, id: &AnonContextId) -> Option<&'b Box<dyn Any>> where 'a: 'b {
-        self.contexts.get(id)
+        self.contexts.get(id).map(|(context, _path)| context)
     }
 
-    fn get_mut_context<'b>(&'b mut self, id: &AnonContextId) -> Option<&'b mut Box<dyn Any>> where 'a: 'b {
+    fn get_mut_context<'b>(&'b mut self, id: &AnonContextId) -> Option<(&'b mut Box<dyn Any>, &'b mut Vec<UpdateDetails>)> where 'a: 'b {
         self.contexts.get_mut(id)
     }
 }
@@ -203,10 +204,10 @@ impl <'a, 'a0: 'a, Props: Any, ViewData: VViewData> VContext<'a> for VDestructor
     }
 
     fn get_context<'b>(&'b self, id: &AnonContextId) -> Option<&'b Box<dyn Any>> where 'a: 'b {
-        self.contexts.get(id)
+        self.contexts.get(id).map(|(context, _path)| context)
     }
 
-    fn get_mut_context<'b>(&'b mut self, id: &AnonContextId) -> Option<&'b mut Box<dyn Any>> where 'a: 'b {
+    fn get_mut_context<'b>(&'b mut self, id: &AnonContextId) -> Option<(&'b mut Box<dyn Any>, &'b mut Vec<UpdateDetails>)> where 'a: 'b {
         self.contexts.get_mut(id)
     }
 }
@@ -233,10 +234,10 @@ impl <'a, 'a0: 'a, Props: Any, ViewData: VViewData> VContext<'a> for VPlainConte
     }
 
     fn get_context<'b>(&'b self, id: &AnonContextId) -> Option<&'b Box<dyn Any>> where 'a: 'b {
-        self.contexts.get(id)
+        self.contexts.get(id).map(|(context, _path)| context)
     }
 
-    fn get_mut_context<'b>(&'b mut self, id: &AnonContextId) -> Option<&'b mut Box<dyn Any>> where 'a: 'b {
+    fn get_mut_context<'b>(&'b mut self, id: &AnonContextId) -> Option<(&'b mut Box<dyn Any>, &'b mut Vec<UpdateDetails>)> where 'a: 'b {
         self.contexts.get_mut(id)
     }
 }

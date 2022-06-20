@@ -30,7 +30,7 @@ fn _use_event_listener<'a, 'a0: 'a, Props: Any, Event: 'static, ViewData: VViewD
 ) {
     let unregister_listener = Rc::new(unregister_listener);
     use_effect(c, rerun, move |(mut c, props)| {
-        let weak_renderer = c.component().renderer();
+        let weak_renderer = c.component_imm().renderer();
         let renderer = weak_renderer.upgrade();
 
         if renderer.is_none() {

@@ -1,8 +1,11 @@
-//! A state which can be shared across threads and outlive the current scope.
+//! A state which can be shared across threads and outlive the current scope and is mutable outside the component.
 //! Unlike `State`, this actually contains a reference to the state itself and not just an index
 //! into the component, which is `Send`. Like `State`, getting a mutable reference
 //! via `AtomicRefState::get_mut` (or `AtomicRefState::try_get_mut`) will cause the state to update
-//! the next time it's rendered. Internally this uses a mutex, so `get_mut` can block and returns a `LockResult`.
+//! the next time it's rendered.
+//!
+//! Internally this uses a mutex, so accessing the state can block and returns a `LockResult`.
+//! You can use `try_get` methods to avoid blocking.
 //!
 //! This type is particularly useful when you want the component to trigger an effect on another thread or async context
 //! (e.g. file read), then get back to the main context with the result.
@@ -106,5 +109,12 @@ impl <'a, T: Any, ViewData: VViewData> Drop for AtomicAccessMut<'a, T, ViewData>
 impl <T: Any, ViewData: VViewData> Clone for AtomicRefState<T, ViewData> {
     fn clone(&self) -> Self {
         Self(self.0.clone(), self.1.clone(), self.2)
+    }
+
+    fn clone_from(&mut self, source: &Self) {
+        self.0.clone_from(&source.0);
+        self.1.clone_from(&source.1);
+        // No-op
+        self.2.clone_from(&source.2)
     }
 }

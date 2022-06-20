@@ -79,25 +79,20 @@ impl <T: Any, ViewData: VViewData> ContextState<T, ViewData> {
         unsafe { value_any.downcast_ref_unchecked::<T>() }
     }
 
-    pub fn get_mut<'a: 'b, 'b>(&self, c: &'b mut impl VContext<'a, ViewData=ViewData>) -> StateDeref<'b, T, ViewData> where ViewData: 'b {
+    pub fn get_mut<'a: 'b, 'b>(&self, c: &'b mut impl VContext<'a, ViewData=ViewData>) -> &'b mut T where ViewData: 'b {
         let update_details = UpdateDetails::SetContextState {
             id: self.id.into(),
             backtrace: UpdateBacktrace::here()
         };
-        // See comment in StateDeref::drop
-        let component = c.component() as *mut _;
 
-        let value_any = c
+        let (value_any, context_changes) = c
             .get_mut_context(&self.id.into())
             .unwrap_or_else(|| panic!("context with id ({:?}) not found in parent", self.id));
         assert!(value_any.is::<T>(), "context with id ({:?}) has wrong type: expected {:?}, got {:?}", self.id, TypeId::of::<T>(), (*value_any).type_id());
         let value = unsafe { value_any.downcast_mut_unchecked() };
 
-        StateDeref {
-            component,
-            update_details,
-            value
-        }
+        context_changes.push(update_details);
+        value
     }
 }
 

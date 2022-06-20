@@ -34,7 +34,7 @@ use crate::core::component::update_details::{UpdateDetails, UpdateStack};
 use crate::core::hooks::context::AnonContextId;
 #[cfg(feature = "logging")]
 use crate::core::logging::update_logger::{UpdateLogEntry, UpdateLogger};
-use crate::core::misc::hash_map_ref_stack::HashMapMutStack;
+use crate::core::misc::hash_map_ref_stack::{HashMapMutStack, HashMapWithAssocMutStack};
 use crate::core::renderer::stale_data::NeedsUpdateFlag;
 use crate::core::view::view::{VView, VViewData};
 
@@ -63,7 +63,6 @@ pub struct VComponentHead<ViewData: VViewData> {
 
     is_being_updated: bool,
     is_fresh: bool,
-    has_pending_updates: bool,
     recursive_update_stack_trace: UpdateStack,
 }
 
@@ -75,7 +74,7 @@ pub(in crate::core) struct VComponentStateData {
 }
 
 pub type VComponentLocalContexts = HashMap<AnonContextId, Box<dyn Any>>;
-pub type VComponentContexts<'a> = HashMapMutStack<'a, AnonContextId, Box<dyn Any>>;
+pub type VComponentContexts<'a> = HashMapWithAssocMutStack<'a, AnonContextId, Box<dyn Any>, Vec<UpdateDetails>>;
 
 /// Part of the component with data whose size depends on `Props`, so it's a runtime-sized trait object.
 pub(super) trait VComponentConstruct: Debug {
@@ -86,8 +85,10 @@ pub(super) trait VComponentConstruct: Debug {
     fn props(&self) -> &dyn Any;
     fn construct(&mut self, component: &mut VComponentHead<Self::ViewData>, contexts: &mut VComponentContexts<'_>) -> VNode<Self::ViewData>;
 
-    fn local_contexts(&mut self) -> &mut VComponentLocalContexts;
+    fn local_contexts_and_changes(&mut self) -> (&mut VComponentLocalContexts, &mut Vec<UpdateDetails>);
+    fn local_context_changes(&mut self) -> &mut Vec<UpdateDetails>;
     fn local_contexts_and_props(&mut self) -> (&mut VComponentLocalContexts, &dyn Any);
+
     fn run_effects(&mut self, component: &mut VComponentHead<Self::ViewData>, contexts: &mut VComponentContexts<'_>);
     fn run_update_destructors(&mut self, component: &mut VComponentHead<Self::ViewData>, contexts: &mut VComponentContexts<'_>);
     fn run_permanent_destructors(&mut self, component: &mut VComponentHead<Self::ViewData>, contexts: &mut VComponentContexts<'_>);
@@ -118,6 +119,7 @@ struct VComponentConstructImpl<Props: Any, ViewData: VViewData, F: Fn(VComponent
 
 struct VComponentConstructState<Props: Any, ViewData: VViewData> {
     pub local_contexts: VComponentLocalContexts,
+    pub local_context_changes: Vec<UpdateDetails>,
     pub effects: VComponentEffects<Props, ViewData>,
     pub destructors: VComponentDestructors<Props, ViewData>
 }
@@ -214,8 +216,11 @@ impl <ViewData: VViewData + 'static> VComponent<ViewData> {
                 is_being_updated: false,
                 is_fresh: true,
                 // Create = needs update
-                has_pending_updates: true,
-                recursive_update_stack_trace: UpdateStack::new(),
+                recursive_update_stack_trace: {
+                    let mut stack = UpdateStack::new();
+                    stack.add_to_last(UpdateDetails::Create(key));
+                    stack
+                }
             },
             construct: Box::new(VComponentConstructImpl {
                 props,
@@ -229,8 +234,12 @@ impl <ViewData: VViewData + 'static> VComponent<ViewData> {
 impl <ViewData: VViewData> VComponent<ViewData> {
     /// Run pending updates on this component.
     pub(in crate::core) fn update(mut self: &mut Box<Self>, contexts: &mut VComponentContexts<'_>) {
-        while self.head.has_pending_updates {
-            self.head.has_pending_updates = false;
+        loop {
+            self.head.recursive_update_stack_trace.append_to_last(self.construct.local_context_changes());
+            if !self.head.recursive_update_stack_trace.has_pending() {
+                break
+            }
+
             self.head.recursive_update_stack_trace.close_last(|#[cfg_attr(not(feature = "logging"), allow(unused))] details| {
                 #[cfg(feature = "logging")]
                 VComponentHead::with_update_logger(&self.head.renderer, |logger| {
@@ -252,7 +261,8 @@ impl <ViewData: VViewData> VComponent<ViewData> {
                     // Update children (if box or another component)
                     // We push contexts in self_.construct.construct but then pop them and we have to push again,
                     // which is redundant :(. It already happens a lot anyways.
-                    contexts.with_push(self_.construct.local_contexts(), |contexts| {
+                    let (local_contexts, local_context_changes) = self_.construct.local_contexts_and_changes();
+                    contexts.with_push(local_contexts, local_context_changes, |contexts| {
                         node.update(&mut self_.head, contexts);
                     });
 
@@ -272,7 +282,8 @@ impl <ViewData: VViewData> VComponent<ViewData> {
                     // should have a hook in view trait we can call through node.view().hook(...)
 
                     // Update children (if box or another component)
-                    contexts.with_push(self_.construct.local_contexts(), |contexts| {
+                    let (local_contexts, local_context_changes) = self_.construct.local_contexts_and_changes();
+                    contexts.with_push(local_contexts, local_context_changes, |contexts| {
                         node.update(&mut self_.head, contexts);
                     });
 
@@ -298,7 +309,8 @@ impl <ViewData: VViewData> VComponent<ViewData> {
         self.head.invalidate();
 
         for child in self.head.children.into_values() {
-            contexts.with_push(self.construct.local_contexts(), |contexts| {
+            let (local_contexts, local_context_changes) = self.construct.local_contexts_and_changes();
+            contexts.with_push(local_contexts, local_context_changes, |contexts| {
                 child.destroy(contexts)
             });
         }
@@ -376,10 +388,7 @@ impl <ViewData: VViewData> VComponentHead<ViewData> {
     /// Mark that the component has pending updates if not already marked.
     /// `details` is used for the debug message if we detect an infinite loop.
     pub(in crate::core) fn update(&mut self, details: UpdateDetails) {
-        self.has_pending_updates = true;
-        if VMode::is_debug() {
-            self.recursive_update_stack_trace.add_to_last(details);
-        }
+        self.recursive_update_stack_trace.add_to_last(details);
     }
 
     /// Mark that this component needs updates and its view is stale.
@@ -512,7 +521,7 @@ impl <Props: Any, ViewData: VViewData, F: Fn(VComponentContext2<'_, '_, Props, V
 
     fn construct(&mut self, component: &mut VComponentHead<Self::ViewData>, contexts: &mut VComponentContexts<'_>) -> VNode<Self::ViewData> {
         let construct = &self.construct;
-        contexts.with_push(&mut self.s.local_contexts, |contexts| {
+        contexts.with_push(&mut self.s.local_contexts, &mut self.s.local_context_changes, |contexts| {
             construct((VComponentContext1 {
                 component,
                 contexts,
@@ -522,8 +531,12 @@ impl <Props: Any, ViewData: VViewData, F: Fn(VComponentContext2<'_, '_, Props, V
         })
     }
 
-    fn local_contexts(&mut self) -> &mut VComponentLocalContexts {
-        &mut self.s.local_contexts
+    fn local_contexts_and_changes(&mut self) -> (&mut VComponentLocalContexts, &mut Vec<UpdateDetails>) {
+        (&mut self.s.local_contexts, &mut self.s.local_context_changes)
+    }
+
+    fn local_context_changes(&mut self) -> &mut Vec<UpdateDetails> {
+        &mut self.s.local_context_changes
     }
 
     fn local_contexts_and_props(&mut self) -> (&mut VComponentLocalContexts, &dyn Any) {
@@ -531,9 +544,9 @@ impl <Props: Any, ViewData: VViewData, F: Fn(VComponentContext2<'_, '_, Props, V
     }
 
     fn run_effects(&mut self, component: &mut VComponentHead<Self::ViewData>, contexts: &mut VComponentContexts<'_>) {
-        contexts.with_push(&mut self.s.local_contexts, |contexts| {
+        contexts.with_push(&mut self.s.local_contexts, &mut self.s.local_context_changes, |contexts| {
             while let Some(effect) = self.s.effects.effects.pop() {
-                if component.has_pending_updates {
+                if component.recursive_update_stack_trace.has_pending() || !self.s.local_context_changes.is_empty() {
                     break
                 }
 
@@ -548,7 +561,7 @@ impl <Props: Any, ViewData: VViewData, F: Fn(VComponentContext2<'_, '_, Props, V
     }
 
     fn run_update_destructors(&mut self, component: &mut VComponentHead<Self::ViewData>, contexts: &mut VComponentContexts) {
-        contexts.with_push(&mut self.s.local_contexts, |contexts| {
+        contexts.with_push(&mut self.s.local_contexts, &mut self.s.local_context_changes, |contexts| {
             while let Some(update_destructor) = self.s.destructors.update_destructors.pop() {
                 update_destructor((VDestructorContext1 {
                     component,
@@ -561,7 +574,7 @@ impl <Props: Any, ViewData: VViewData, F: Fn(VComponentContext2<'_, '_, Props, V
     }
 
     fn run_permanent_destructors(&mut self, component: &mut VComponentHead<Self::ViewData>, contexts: &mut VComponentContexts) {
-        contexts.with_push(&mut self.s.local_contexts, |contexts| {
+        contexts.with_push(&mut self.s.local_contexts, &mut self.s.local_context_changes, |contexts| {
             while let Some(permanent_destructor) = self.s.destructors.permanent_destructors.pop() {
                 permanent_destructor((VDestructorContext1 {
                     component,
@@ -600,6 +613,7 @@ impl <Props: Any, ViewData: VViewData> VComponentConstructState<Props, ViewData>
     pub fn new() -> Self {
         VComponentConstructState {
             local_contexts: HashMap::new(),
+            local_context_changes: Vec::new(),
             effects: VComponentEffects::new(),
             destructors: VComponentDestructors::new()
         }
@@ -644,10 +658,9 @@ impl <ViewData: VViewData + Debug> Debug for VComponentHead<ViewData> {
             .field("is_fresh", &self.is_fresh)
             .field("is_being_created", &self.is_being_created())
             .field("is_being_updated", &self.is_being_updated)
-            .field("has_pending_updates", &self.has_pending_updates)
+            .field("recursive_update_stack_trace", &self.recursive_update_stack_trace)
             .field("#h.state", &self.h.state.len())
             .field("h.next_state_index", &self.h.next_state_index)
-            .field("recursive_update_stack_trace", &self.recursive_update_stack_trace)
             .field("node", &self.node)
             .finish_non_exhaustive()
     }

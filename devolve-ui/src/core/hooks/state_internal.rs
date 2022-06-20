@@ -58,6 +58,12 @@ impl <T: Any, ViewData: VViewData> Clone for NonUpdatingState<T, ViewData> {
             phantom: self.phantom
         }
     }
+
+    fn clone_from(&mut self, source: &Self) {
+        self.index = source.index;
+        // No-op
+        self.phantom = source.phantom;
+    }
 }
 
 impl <T: Any, ViewData: VViewData> Copy for NonUpdatingState<T, ViewData> {}
