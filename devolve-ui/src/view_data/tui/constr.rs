@@ -13,18 +13,26 @@ use crate::view_data::attrs::{BorderStyle, DividerDirection, DividerStyle, TextW
 use crate::view_data::tui::terminal_image::{HandleAspectRatio, Source};
 use crate::view_data::tui::tui::{HasTuiViewData, TuiViewData};
 
-pub struct BoxConstrArgs<ViewData: HasTuiViewData> {
+pub struct BoxConstrArgs {
     pub gap: Measurement,
-    pub children: Vec<VNode<ViewData>>,
     pub clip: bool,
     pub extend: bool
 }
 
-impl <ViewData: HasTuiViewData> Default for BoxConstrArgs<ViewData> {
+pub type Vi1 = VViewConstrArgs;
+pub type HBo1 = BoxConstrArgs;
+pub type VBo1 = BoxConstrArgs;
+pub type ZBo1 = BoxConstrArgs;
+pub type Te1 = TextConstrArgs;
+pub type Bo2 = BorderConstrArgs;
+pub type HDi1 = HDividerConstrArgs;
+pub type VDi1 = VDividerConstrArgs;
+pub type So1 = SourceConstrArgs;
+
+impl Default for BoxConstrArgs {
     fn default() -> Self {
         BoxConstrArgs {
             gap: Measurement::default(),
-            children: Vec::new(),
             clip: false,
             extend: false
         }
@@ -32,9 +40,9 @@ impl <ViewData: HasTuiViewData> Default for BoxConstrArgs<ViewData> {
 }
 
 macro _box2(($d:tt) @ $name:ident, $layout_direction: expr) {
-    pub fn $name<ViewData: HasTuiViewData>(view_args: VViewConstrArgs, data_args: BoxConstrArgs<ViewData>) -> VNode<ViewData> {
+    pub fn $name<ViewData: HasTuiViewData>(view_args: VViewConstrArgs, data_args: BoxConstrArgs<ViewData>, children: Vec<VNode<ViewData>>) -> VNode<ViewData> {
         constr_view(view_args, ViewData::tui_box(
-            data_args.children,
+            children,
             $crate::view_data::tui::tui::TuiBoxAttrs {
                 sub_layout: SubLayout {
                     direction: $layout_direction,
@@ -46,15 +54,14 @@ macro _box2(($d:tt) @ $name:ident, $layout_direction: expr) {
         ))
     }
 
-    pub macro $name({ $d( $d view_field:ident : $d view_value:expr ),* }, { $d( $d data_field:ident: $d data_value:expr ),* } $d( , $d children:expr )?) {
+    pub macro $name({ $d( $d view_field:ident : $d view_value:expr ),* }, { $d( $d data_field:ident: $d data_value:expr ),* }, $d children:expr) {
         $name(VViewConstrArgs {
             $d( $d view_field : $d view_value, )*
             ..VViewConstrArgs::default()
         }, BoxConstrArgs {
             $d( $d data_field : $d data_value, )*
-            $d( children: $d children, )?
             ..BoxConstrArgs::default()
-        })
+        }, $d children)
     }
 }
 
@@ -68,11 +75,10 @@ _box!(zbox, LayoutDirection::Overlap);
 
 pub fn ce_zbox<ViewData: HasTuiViewData>(view_args: VViewConstrArgs, children: Vec<VNode<ViewData>>) -> VNode<ViewData> {
     zbox(view_args, BoxConstrArgs {
-        children,
         clip: true,
         extend: true,
         ..BoxConstrArgs::default()
-    })
+    }, children)
 }
 
 pub macro ce_zbox({ $( $view_field:ident: $view_value:expr ),* }, $children:expr) {

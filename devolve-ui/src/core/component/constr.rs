@@ -158,16 +158,16 @@ pub macro make_component_macro {
 /// ```
 pub macro make_component(
     $vis:vis $name:ident,
-    $Props:ident $( < $( $T:ident $( : $TTy:ident $( + $TTyRest:ident )* )? ),* > $( where $( $T2:path : $TTy2:ident $( + $TTy2Rest:ident )* ),* )? )?
-    { $( $opt_prop_id:ident : $opt_prop_ty:ty = $opt_prop_default:expr ),* }
-    [ $( $req_prop_id:ident : $req_prop_ty:ty ),* ]
+    $Props:ident $( < $( $T:ident $( : $TTy:ident $( + $TTyRest:ident )* )? ),* > )? $( where [ $( $more_bounds:tt )* ] )?
+    { $( $opt_prop_id:ident : $opt_prop_ty:ty = $opt_prop_default:expr ),* $( , )? }
+    [ $( $req_prop_id:ident : $req_prop_ty:ty ),* $( , )? ]
 ) {
-    $vis struct $Props $( < $( $T $( : $TTy $( + $TTyRest )* )? ),* > $( where $( $T2 : $TTy2 $( + $TTy2Rest )+ ),* )? )? {
+    $vis struct $Props $( < $( $T $( : $TTy $( + $TTyRest )* )? ),* > )? $( where $( $more_bounds )* )? {
         $( pub $opt_prop_id : $opt_prop_ty, )*
         $( pub $req_prop_id : $req_prop_ty, )*
     }
 
-    impl $( < $( $T $( : $TTy $( + $TTyRest )* )? ),* > )? $crate::core::misc::partial_default::PartialDefault for $Props $( < $( $T ),* > $( where $( $T2 : $TTy2 $( + TTy2Rest )* ),* )? )? {
+    impl $( < $( $T $( : $TTy $( + $TTyRest )* )? ),* > )? $crate::core::misc::partial_default::PartialDefault for $Props $( < $( $T ),* > )? $( where $( $more_bounds )* )? {
         type RequiredArgs = ( $( $req_prop_ty, )* );
 
         fn partial_default(($( $req_prop_id, )*): Self::RequiredArgs) -> Self {

@@ -2,8 +2,10 @@
 members = [
     "devolve-ui",
     "devolve-ui-derive",
+    "devolve-ui-forms",
 ]
 default-members = [
     "devolve-ui",
     "devolve-ui-derive",
+    "devolve-ui-forms",
 ]

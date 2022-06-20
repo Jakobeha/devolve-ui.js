@@ -1,0 +1,11 @@
+[package]
+name = "devolve-ui-forms"
+version = "0.1.0"
+authors = ["jakobeha"]
+description = "basic form controls for devolve-ui"
+repository = "https://github.com/jakobeha/devolve-ui-forms.rs"
+license = "Apache-2.0"
+edition = "2021"
+
+[dependencies]
+devolve-ui = { path = "../devolve-ui" }

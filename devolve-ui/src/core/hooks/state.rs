@@ -40,7 +40,7 @@ pub fn use_state<'a, 'a0: 'a, T: Any, ViewData: VViewData + 'a, F: FnOnce() -> T
 }
 
 impl <T: Any, ViewData: VViewData> State<T, ViewData> {
-    pub fn get<'a: 'b, 'b>(&self, c: &'b mut impl VContext<'a, ViewData=ViewData>) -> &'b T where ViewData: 'b {
+    pub fn get<'a: 'b, 'b>(&self, c: &'b impl VContext<'a, ViewData=ViewData>) -> &'b T where ViewData: 'b {
         self.0.get(c)
     }
 

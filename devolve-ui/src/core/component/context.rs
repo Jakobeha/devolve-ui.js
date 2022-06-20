@@ -70,6 +70,7 @@ pub type VPlainContext2<'a, 'a0, Props, ViewData> = (VPlainContext1<'a, 'a0, Pro
 pub trait VContext<'a> {
     type ViewData: VViewData;
 
+    fn component_imm<'b>(&'b self) -> &'b VComponentHead<Self::ViewData> where 'a: 'b;
     fn component<'b>(&'b mut self) -> &'b mut VComponentHead<Self::ViewData> where 'a: 'b;
     fn get_context<'b>(&'b self, id: &AnonContextId) -> Option<&'b Box<dyn Any>> where 'a: 'b;
     fn get_mut_context<'b>(&'b mut self, id: &AnonContextId) -> Option<&'b mut Box<dyn Any>> where 'a: 'b;
@@ -82,6 +83,10 @@ pub trait VComponentContext<'a, 'a0> : VContext<'a> {
 
 impl <'a, 'a0: 'a, Props: Any, ViewData: VViewData> VContext<'a> for VComponentContext1<'a, 'a0, Props, ViewData> {
     type ViewData = ViewData;
+
+    fn component_imm<'b>(&'b self) -> &'b VComponentHead<Self::ViewData> where 'a: 'b {
+        self.component
+    }
 
     fn component<'b>(&'b mut self) -> &'b mut VComponentHead<Self::ViewData> where 'a: 'b {
         self.component
@@ -108,6 +113,10 @@ impl <'a, 'a0: 'a, Props: Any, ViewData: VViewData> VComponentContext<'a, 'a0> f
 
 impl <'a, 'a0: 'a, Props: Any, ViewData: VViewData> VContext<'a> for VEffectContext1<'a, 'a0, Props, ViewData> {
     type ViewData = ViewData;
+
+    fn component_imm<'b>(&'b self) -> &'b VComponentHead<Self::ViewData> where 'a: 'b {
+        self.component
+    }
 
     fn component<'b>(&'b mut self) -> &'b mut VComponentHead<Self::ViewData> where 'a: 'b {
         self.component
@@ -185,6 +194,10 @@ impl <Props: Any, ViewData: VViewData + 'static> VEffectContextRef<Props, ViewDa
 impl <'a, 'a0: 'a, Props: Any, ViewData: VViewData> VContext<'a> for VDestructorContext1<'a, 'a0, Props, ViewData> {
     type ViewData = ViewData;
 
+    fn component_imm<'b>(&'b self) -> &'b VComponentHead<Self::ViewData> where 'a: 'b {
+        self.component
+    }
+
     fn component<'b>(&'b mut self) -> &'b mut VComponentHead<Self::ViewData> where 'a: 'b {
         self.component
     }
@@ -210,6 +223,10 @@ impl <'a, 'a0: 'a, Props: Any, ViewData: VViewData> VDestructorContext1<'a, 'a0,
 
 impl <'a, 'a0: 'a, Props: Any, ViewData: VViewData> VContext<'a> for VPlainContext1<'a, 'a0, Props, ViewData> {
     type ViewData = ViewData;
+
+    fn component_imm<'b>(&'b self) -> &'b VComponentHead<Self::ViewData> where 'a: 'b {
+        self.component
+    }
 
     fn component<'b>(&'b mut self) -> &'b mut VComponentHead<Self::ViewData> where 'a: 'b {
         self.component
