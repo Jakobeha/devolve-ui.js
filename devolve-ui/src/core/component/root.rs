@@ -4,7 +4,6 @@
 use std::rc::Rc;
 #[cfg(feature = "time")]
 use std::time::Duration;
-use crate::core::component::component::VComponent;
 #[cfg(feature = "logging")]
 use crate::core::component::mode::VMode;
 use crate::core::component::path::{VComponentPath, VComponentRefResolved, VComponentRefResolvedPtr};
@@ -25,7 +24,7 @@ pub(in crate::core) trait VComponentRoot {
     /// needs to be updated, like `invalidate`
     fn invalidate_flag_for(self: Rc<Self>, path: VComponentPath, view: &Box<VView<Self::ViewData>>) -> NeedsUpdateFlag;
 
-    fn _with_component(self: Rc<Self>, path: &VComponentPath) -> Option<VComponentRefResolvedPtr<ViewData>>;
+    fn _with_component(self: Rc<Self>, path: &VComponentPath) -> Option<VComponentRefResolvedPtr<Self::ViewData>>;
 
     /// Add a listener for this type of event; used in hooks
     #[cfg(feature = "time")]
@@ -61,7 +60,7 @@ impl <ViewData: VViewData> dyn VComponentRoot<ViewData = ViewData> {
     /// no component at the given path.
     pub fn with_component(self: Rc<Self>, path: &VComponentPath, fun: impl FnOnce(Option<VComponentRefResolved<'_, ViewData>>)) {
         if let Some(component) = self._with_component(path) {
-            fun(Some(unsafe { component.into_mut() }))
+            unsafe { component.with_into_mut(|component| fun(Some(component))) }
         } else {
             fun(None)
         }
@@ -72,7 +71,7 @@ impl <ViewData: VViewData> dyn VComponentRoot<ViewData = ViewData> {
     #[cfg(feature = "logging")]
     pub fn with_update_logger(self: Rc<Self>, fun: impl FnOnce(&mut UpdateLogger<ViewData>)) {
         assert!(VMode::is_logging(), "VMode::is_logging() not set: check this first so you don't have to access the renderer");
-        let logger = unsafe { self._with_update_logger().as_mut().unwrap() };
+        let logger = unsafe { &mut *self._with_update_logger() };
         if let Some(logger) = logger.as_mut() {
             fun(logger);
         }

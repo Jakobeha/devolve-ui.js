@@ -73,12 +73,12 @@ impl <ViewData: VViewData> VNode<ViewData> {
 
     fn resolve<'c, 'v>(&'v self, parent: &'c VComponentHead<ViewData>) -> VNodeResolvedHead<'c, 'v, ViewData> {
         match self {
-            VNode::Component { id: _id, key } => VNodeResolvedHead::Component(parent.child(key).expect("VNode::resolve failed: component not in parent")),
+            VNode::Component { id: _id, key } => VNodeResolvedHead::Component(parent.child_head(key).expect("VNode::resolve failed: component not in parent")),
             VNode::View(view) => VNodeResolvedHead::View(view)
         }
     }
 
-    fn resolve_mut<'c, 'v>(&'v mut self, parent: &'c mut Box<VComponent<ViewData>>) -> VNodeResolvedMut<'c, 'v, ViewData> {
+    fn resolve_mut<'c, 'v>(&'v mut self, parent: &'c mut VComponentHead<ViewData>) -> VNodeResolvedMut<'c, 'v, ViewData> {
         match self {
             VNode::Component { id: _id, key } => VNodeResolvedMut::Component(parent.child_mut(key).expect("VNode::resolve failed: component not in parent")),
             VNode::View(view) => VNodeResolvedMut::View(view)
@@ -87,7 +87,7 @@ impl <ViewData: VViewData> VNode<ViewData> {
 
     // Lifetimes must be different here because we borrow parent in resolve_mut and in the VNodeResolvedMut::View case.
     // This is OK because the lifetime in VNodeResolvedMut::View's view is different than that in parent
-    pub fn update(&mut self, parent: &mut Box<VComponent<ViewData>>, contexts: &mut VComponentContexts<'_>) {
+    pub fn update(&mut self, parent: &mut VComponentHead<ViewData>, contexts: &mut VComponentContexts<'_>) {
         match self.resolve_mut(parent) {
             VNodeResolvedMut::Component(component) => {
                 component.update(contexts);

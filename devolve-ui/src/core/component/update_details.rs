@@ -3,6 +3,7 @@ use std::backtrace::Backtrace;
 use std::fmt::{Display, Formatter};
 #[cfg(feature = "logging")]
 use serde::{Serialize, Deserialize};
+use crate::core::hooks::context::AnonContextId;
 
 #[derive(Debug, Clone)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
@@ -22,7 +23,7 @@ pub enum UpdateDetails {
         backtrace: UpdateBacktrace
     },
     SetContextState {
-        index: usize,
+        id: AnonContextId,
         backtrace: UpdateBacktrace
     }
 }
@@ -151,8 +152,8 @@ impl Display for UpdateDetails {
             UpdateDetails::SetState { index, backtrace } => {
                 write!(f, "set:state:{} {}", index, backtrace)
             }
-            UpdateDetails::SetContextState { index, backtrace } => {
-                write!(f, "set:context-state:{} {}", index, backtrace)
+            UpdateDetails::SetContextState { id, backtrace } => {
+                write!(f, "set:context-state:{:?} {}", id, backtrace)
             }
         }
     }

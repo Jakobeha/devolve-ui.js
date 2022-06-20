@@ -4,7 +4,7 @@ use std::sync::{Arc, Mutex, MutexGuard, Weak};
 use smallvec::SmallVec;
 use crate::core::component::component::VComponent;
 use crate::core::component::node::NodeId;
-use crate::core::component::path::VComponentPath;
+use crate::core::component::path::{VComponentPath, VComponentRefResolved};
 use crate::core::misc::notify_flag::NotifyFlag;
 use crate::core::view::view::VViewData;
 
@@ -122,9 +122,9 @@ impl StaleData {
     pub(super) fn apply_updates<ViewData: VViewData>(&self, root_component: &mut Box<VComponent<ViewData>>) -> StaleDataResult<()> {
         let mut local_lock = self.needs_update_lock()?;
         for path in local_lock.drain(..) {
-            // Component may no longer exist
-            if let Some(child_component) = root_component.down_path_mut(&path) {
-                child_component.update();
+            // Component may no longer exist so we need to check for some
+            if let Some(VComponentRefResolved { parent_contexts, component: child_component }) = root_component.down_path_mut(&path, Vec::new()) {
+                child_component.update(&mut parent_contexts.into_iter().collect());
             }
         }
         Ok(())

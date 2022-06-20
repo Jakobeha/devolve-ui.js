@@ -38,7 +38,7 @@ use crate::core::component::context::VComponentContext2;
 use crate::core::component::mode::VMode;
 use crate::core::component::node::{NodeId, VComponentAndView, VNode};
 use crate::core::component::parent::VParent;
-use crate::core::component::path::VComponentPath;
+use crate::core::component::path::{VComponentPath, VComponentRefResolvedPtr};
 use crate::core::component::root::VComponentRoot;
 use crate::core::logging::common::LogStart;
 use crate::core::logging::render_logger::{RenderLogger, RenderLoggerImpl};
@@ -340,7 +340,7 @@ impl <Engine: RenderEngine> Renderer<Engine> where Engine::RenderLayer: VRenderL
     /// Assign a root component to the renderer.
     /// Before a root component is assigned, the renderer is empty and trying to show will panic.
     /// You can assign another root component after and it will be replaced and re-render.
-    pub fn root(self: &Rc<Self>, construct: impl Fn(VComponentContext2<'_, (), Engine::ViewData>) -> VNode<Engine::ViewData> + 'static) {
+    pub fn root(self: &Rc<Self>, construct: impl Fn(VComponentContext2<'_, '_, (), Engine::ViewData>) -> VNode<Engine::ViewData> + 'static) {
         self._root(|parent| VComponent::new(parent, &mut VComponentContexts::new(), ().into(), (), construct))
     }
 
@@ -988,7 +988,7 @@ impl <Engine: RenderEngine> VComponentRoot for Renderer<Engine> {
         NeedsUpdateFlag::from(&self.stale_data, path, view.id())
     }
 
-    fn _with_component(self: Rc<Self>, path: &VComponentPath) -> Option<*mut Box<VComponent<Self::ViewData>>> {
+    fn _with_component(self: Rc<Self>, path: &VComponentPath) -> Option<VComponentRefResolvedPtr<Self::ViewData>> {
         self.root_component.borrow_mut().as_mut()
             .and_then(|root| root.down_path_mut(path, Vec::new()))
             .map(|component| component.into_ptr())

@@ -90,13 +90,14 @@ pub type NoDependencies = Infallible;
 /// props and state hooks like `use_state`.
 pub fn use_effect<
     'a,
+    'a0: 'a,
     Props : Any,
-    Destructor: FnOnce(VDestructorContext2<'_, Props, ViewData>) + 'static,
+    Destructor: FnOnce(VDestructorContext2<'_, '_, Props, ViewData>) + 'static,
     ViewData: VViewData + 'static
 >(
-    c: &mut VComponentContext1<'a, Props, ViewData>,
+    c: &mut VComponentContext1<'a, 'a0, Props, ViewData>,
     rerun: UseEffectRerun<NoDependencies>,
-    effect: impl Fn(VEffectContext2<'_, Props, ViewData>) -> Destructor + 'static
+    effect: impl Fn(VEffectContext2<'_, '_, Props, ViewData>) -> Destructor + 'static
 ) {
     use_effect_with_deps(c, rerun, effect);
 }
@@ -109,12 +110,13 @@ pub fn use_effect<
 /// However, this function allows you to pass an `FnOnce` to `effect` since we statically know it will only be called once.
 pub fn use_effect_on_create<
     'a,
+    'a0: 'a,
     Props : Any,
-    Destructor: FnOnce(VDestructorContext2<'_, Props, ViewData>) + 'static,
+    Destructor: FnOnce(VDestructorContext2<'_, '_, Props, ViewData>) + 'static,
     ViewData: VViewData + 'static
 >(
-    c: &mut VComponentContext1<'a, Props, ViewData>,
-    effect: impl FnOnce(VEffectContext2<'_, Props, ViewData>) -> Destructor + 'static
+    c: &mut VComponentContext1<'a, 'a0, Props, ViewData>,
+    effect: impl FnOnce(VEffectContext2<'_, '_, Props, ViewData>) -> Destructor + 'static
 ) {
     let effect = RefCell::new(Some(effect));
     use_effect(c, UseEffectRerun::OnCreate, move |c| {
@@ -131,14 +133,15 @@ pub fn use_effect_on_create<
 /// Without the 2 versions, you would always have to specify dependencies on `use_effect` even if the enum variant didn't have them.
 pub fn use_effect_with_deps<
     'a,
-    Props : Any,
+    'a0: 'a,
+    Props: Any,
     Dependencies: CollectionOfPartialEqs + 'static,
-    Destructor: FnOnce(VDestructorContext2<'_, Props, ViewData>) + 'static,
+    Destructor: FnOnce(VDestructorContext2<'_, '_, Props, ViewData>) + 'static,
     ViewData: VViewData + 'static
 >(
-    c: &mut VComponentContext1<'a, Props, ViewData>,
+    c: &mut VComponentContext1<'a, 'a0, Props, ViewData>,
     rerun: UseEffectRerun<Dependencies>,
-    effect: impl Fn(VEffectContext2<'_, Props, ViewData>) -> Destructor + 'static
+    effect: impl Fn(VEffectContext2<'_, '_, Props, ViewData>) -> Destructor + 'static
 ) {
     match rerun {
         UseEffectRerun::OnCreate => {

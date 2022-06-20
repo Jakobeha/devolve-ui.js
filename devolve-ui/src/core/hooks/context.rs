@@ -7,19 +7,35 @@
 //! If a child calls `use_provide` with the same context as its parent, then the child's context
 //! will shadow in its own children.
 
-use std::any::Any;
-use std::marker::PhantomData;
+use std::any::{Any, TypeId};
+use std::marker::{PhantomData, PhantomPinned};
 use crate::core::component::context::{VComponentContext, VContext};
 use crate::core::component::update_details::{UpdateBacktrace, UpdateDetails};
 use crate::core::hooks::state::StateDeref;
 use crate::core::view::view::VViewData;
+#[cfg(feature = "serde")]
+use serde::{Serialize, Deserialize};
 
 #[derive(Debug)]
-pub struct ContextIdSource<T: Any>;
+pub struct ContextIdSource<T: Any>(PhantomData<T>, PhantomPinned);
 
-pub type ContextId<T: Any> = *const ContextIdSource<T>;
+impl <T: Any> ContextIdSource<T> {
+    pub const fn new() -> Self {
+        ContextIdSource(PhantomData, PhantomPinned)
+    }
+}
 
-pub type AnonContextId = *const ();
+pub type ContextId<T> = *const ContextIdSource<T>;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+pub struct AnonContextId(usize);
+
+impl <T: Any> From<*const ContextIdSource<T>> for AnonContextId {
+    fn from(id: *const ContextIdSource<T>) -> Self {
+        AnonContextId(id as usize)
+    }
+}
 
 #[derive(Debug)]
 pub struct ContextState<T: Any, ViewData: VViewData> {
@@ -27,24 +43,26 @@ pub struct ContextState<T: Any, ViewData: VViewData> {
     phantom: PhantomData<ViewData>
 }
 
-pub fn use_provide<'a, T: Any, ViewData: VViewData + 'a>(
-    c: &mut impl VComponentContext<'a, ViewData=ViewData>,
+pub fn use_provide<'a, 'a0: 'a, T: Any, ViewData: VViewData + 'a>(
+    c: &mut impl VComponentContext<'a, 'a0, ViewData=ViewData>,
     id: ContextId<T>,
-    get_initial: impl FnOnce() -> T
+    get_initial: impl FnOnce() -> Box<T>
 ) -> ContextState<T, ViewData> {
-    let conflict = c.get_mut_or_insert_context(id as AnonContextId, || Box::new(get_initial()));
-    assert!(conflict.is_none(), "contexts with same id ({:?}) in same component", id);
+    let local_contexts = c.local_contexts();
+    if !local_contexts.contains_key(&id.into()) {
+        local_contexts.insert(id.into(), get_initial());
+    }
     ContextState {
         id,
         phantom: PhantomData
     }
 }
 
-pub fn use_consume<'a, T: Any, ViewData: VViewData + 'a>(
-    c: &mut impl VComponentContext<'a, ViewData=ViewData>,
+pub fn use_consume<'a, 'a0: 'a, T: Any, ViewData: VViewData + 'a>(
+    c: &mut impl VComponentContext<'a, 'a0, ViewData=ViewData>,
     id: ContextId<T>
 ) -> ContextState<T, ViewData> {
-    let existing = c.get_mut_context(&id as &AnonContextId);
+    let existing = c.get_mut_context(&id.into());
     assert!(existing.is_some(), "context with id ({:?}) not found in parent", id);
     ContextState {
         id,
@@ -53,21 +71,32 @@ pub fn use_consume<'a, T: Any, ViewData: VViewData + 'a>(
 }
 
 impl <T: Any, ViewData: VViewData> ContextState<T, ViewData> {
-    pub fn get<'a: 'b, 'b>(&self, c: &'b mut impl VContext<'a, ViewData=ViewData>) -> &'b T where ViewData: 'b {
-        c.get_context(&self.id as &AnonContextId).unwrap_or_else(|| panic!("context with id ({:?}) not found in parent", self.id))
+    pub fn get<'a: 'b, 'b>(&self, c: &'b impl VContext<'a, ViewData=ViewData>) -> &'b T where ViewData: 'b {
+        let value_any = c
+            .get_context(&self.id.into())
+            .unwrap_or_else(|| panic!("context with id ({:?}) not found in parent", self.id));
+        assert!(value_any.is::<T>(), "context with id ({:?}) has wrong type: expected {:?}, got {:?}", self.id, TypeId::of::<T>(), (*value_any).type_id());
+        unsafe { value_any.downcast_ref_unchecked::<T>() }
     }
 
     pub fn get_mut<'a: 'b, 'b>(&self, c: &'b mut impl VContext<'a, ViewData=ViewData>) -> StateDeref<'b, T, ViewData> where ViewData: 'b {
         let update_details = UpdateDetails::SetContextState {
-            index: self.0.index,
-            backtrace: UpdateBacktrace::her()
+            id: self.id.into(),
+            backtrace: UpdateBacktrace::here()
         };
         // See comment in StateDeref::drop
         let component = c.component() as *mut _;
+
+        let value_any = c
+            .get_mut_context(&self.id.into())
+            .unwrap_or_else(|| panic!("context with id ({:?}) not found in parent", self.id));
+        assert!(value_any.is::<T>(), "context with id ({:?}) has wrong type: expected {:?}, got {:?}", self.id, TypeId::of::<T>(), (*value_any).type_id());
+        let value = unsafe { value_any.downcast_mut_unchecked() };
+
         StateDeref {
             component,
             update_details,
-            value: c.get_mut_context(&self.id as &AnonContextId).unwrap_or_else(|| panic!("context with id ({:?}) not found in parent", self.id))
+            value
         }
     }
 }

@@ -15,7 +15,6 @@ use crate::core::component::root::VComponentRoot;
 use crate::core::view::view::VViewData;
 #[cfg(feature = "serde")]
 use serde::{Serialize, Deserialize};
-use crate::core::hooks::context::AnonContextId;
 
 /// Identifies a `VComponent` among its siblings.
 /// Needed because the siblings may change and we need to remember the component and check if it was deleted.
@@ -77,12 +76,21 @@ impl <ViewData: VViewData> VComponentRef<ViewData> {
     }
 }
 
-impl <ViewData: VViewData> VComponentRefResolvedPtr<ViewData> {
-    pub(super) unsafe fn into_mut(self) -> VComponentRefResolved<'_, ViewData> {
-        VComponentRefResolved {
-            parent_contexts: mem::transmute(self.parent_contexts),
-            component: self.component.as_mut().unwrap()
+impl <'a, ViewData: VViewData> VComponentRefResolved<'a, ViewData> {
+    pub(in crate::core) fn into_ptr(self) -> VComponentRefResolvedPtr<ViewData> {
+        VComponentRefResolvedPtr {
+            parent_contexts: unsafe { mem::transmute(self.parent_contexts) },
+            component: self.component as *mut _
         }
+    }
+}
+
+impl <ViewData: VViewData> VComponentRefResolvedPtr<ViewData> {
+    pub(super) unsafe fn with_into_mut<R>(self, fun: impl FnOnce(VComponentRefResolved<'_, ViewData>) -> R) -> R {
+        fun(VComponentRefResolved {
+            parent_contexts: mem::transmute(self.parent_contexts),
+            component: &mut *self.component
+        })
     }
 }
 // endregion

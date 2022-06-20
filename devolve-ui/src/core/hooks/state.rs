@@ -32,8 +32,8 @@ pub struct StateDeref<'a, T: Any, ViewData: VViewData> {
     pub(super) value: &'a mut T
 }
 
-pub fn use_state<'a, T: Any, ViewData: VViewData + 'a, F: FnOnce() -> T>(
-    c: &mut impl VComponentContext<'a, ViewData=ViewData>,
+pub fn use_state<'a, 'a0: 'a, T: Any, ViewData: VViewData + 'a, F: FnOnce() -> T>(
+    c: &mut impl VComponentContext<'a, 'a0, ViewData=ViewData>,
     initial_state: F
 ) -> State<T, ViewData> {
     State(use_non_updating_state(c, initial_state))

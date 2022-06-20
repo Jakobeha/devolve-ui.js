@@ -13,7 +13,10 @@ pub struct NonUpdatingState<T: Any, ViewData: VViewData> {
     phantom: PhantomData<(T, ViewData)>
 }
 
-pub fn use_non_updating_state<'a, T: Any, ViewData: VViewData + 'a>(c: &mut impl VComponentContext<'a, ViewData=ViewData>, initial_state: impl FnOnce() -> T) -> NonUpdatingState<T, ViewData> {
+pub fn use_non_updating_state<'a, 'a0: 'a, T: Any, ViewData: VViewData + 'a>(
+    c: &mut impl VComponentContext<'a, 'a0, ViewData=ViewData>,
+    initial_state: impl FnOnce() -> T
+) -> NonUpdatingState<T, ViewData> {
     let c = c.component();
     let index = c.h.next_state_index;
     c.h.next_state_index += 1;

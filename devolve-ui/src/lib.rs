@@ -1,5 +1,6 @@
 #![feature(arbitrary_self_types)]
 #![feature(decl_macro)]
+#![feature(downcast_unchecked)]
 #![feature(explicit_generic_args_with_impl_trait)]
 #![feature(generic_associated_types)]
 #![feature(is_some_with)]

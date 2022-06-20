@@ -16,19 +16,20 @@ use crate::core::view::view::VViewData;
 /// Instead a node is returned refernencing the component via `key`.
 pub fn make_component<
     'a,
+    'a0: 'a,
     ViewData: VViewData + 'static,
     Str: TryInto<VComponentKey>,
     Props: 'static,
-    F: Fn(VComponentContext2<'_, Props, ViewData>) -> VNode<ViewData> + 'static
+    F: Fn(VComponentContext2<Props, ViewData>) -> VNode<ViewData> + 'static
 >(
-    c: &'a mut impl VComponentContext<'a, ViewData=ViewData>,
+    c: &'a mut impl VComponentContext<'a, 'a0, ViewData=ViewData>,
     key: Str,
     props: Props,
     construct: F
 ) -> VNode<ViewData> where Str::Error: Debug {
     let key = key.try_into().expect("key couldn't be converted into VComponentKey");
-    let parent = c.component();
-    let component = VComponent::new(VParent::Component(parent), key, props, construct);
+    let (parent, contexts) = c.component_and_contexts();
+    let component = VComponent::new(VParent::Component(parent), contexts, key, props, construct);
     let component = parent.add_child(component);
     VNode::Component {
         id: component.head.id(),
