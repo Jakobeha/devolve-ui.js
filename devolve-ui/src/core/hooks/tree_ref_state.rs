@@ -24,7 +24,7 @@ use crate::core::renderer::stale_data::NeedsUpdateFlag;
 use crate::core::component::context::VComponentContext;
 use crate::core::component::path::{VComponentPath, VComponentRefResolved};
 use crate::core::component::update_details::UpdateDetails;
-use crate::core::data::obs_ref::{ObsRef, ObsRefableRoot};
+use crate::core::data::obs_ref::mt::{ObsRef, ObsRefableRoot};
 use crate::core::hooks::state_internal::use_non_updating_state;
 use crate::core::misc::map_lock_result::MappableLockResult;
 use crate::core::view::view::VViewData;

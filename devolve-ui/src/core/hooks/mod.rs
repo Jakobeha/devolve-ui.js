@@ -8,6 +8,7 @@ pub mod context;
 /// State mutable by children and other threads.
 pub mod atomic_ref_state;
 /// State mutable by children and other threads. Does precise updates
+#[cfg(feature = "obs-ref")]
 pub mod tree_ref_state;
 /// Effects which can be run at certain points in the component's lifecycle and based on dependencies
 pub mod effect;
