@@ -26,6 +26,10 @@ pub enum UpdateDetails {
         id: AnonContextId,
         backtrace: UpdateBacktrace
     },
+    SetAtomicState {
+        index: usize,
+        backtrace: UpdateBacktrace
+    },
     SetTreeState {
         origin: String
     }
@@ -52,11 +56,13 @@ impl UpdateBacktrace {
     }
 }
 
-#[derive(Debug)]
-pub(super) struct UpdateStack(Vec<UpdateFrame>);
+#[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "serde", serde(transparent))]
+pub struct UpdateStack(Vec<UpdateFrame>);
 
 impl UpdateStack {
-    pub fn new() -> Self {
+    pub(super) fn new() -> Self {
         Self(Vec::new())
     }
 
@@ -71,32 +77,35 @@ impl UpdateStack {
         self.last_open().unwrap()
     }
 
-    pub fn add_to_last(&mut self, details: UpdateDetails) {
+    pub(super) fn add_to_last(&mut self, details: UpdateDetails) {
         self.last_open_or_make().add(details);
     }
 
-    pub fn append_to_last(&mut self, details: &mut Vec<UpdateDetails>) {
+    pub(super) fn append_to_last(&mut self, details: &mut Vec<UpdateDetails>) {
         if !details.is_empty() {
             self.last_open_or_make().append(details);
         }
     }
 
-    pub fn close_last(&mut self, log_last: impl FnOnce(&UpdateFrame)) {
+    pub(super) fn close_last(&mut self) {
         if let Some(last) = self.last_open() {
             last.close();
-            log_last(last);
         }
     }
 
-    pub fn clear(&mut self) {
+    pub(super) fn clear(&mut self) {
         self.0.clear();
     }
 
-    pub fn len(&self) -> usize {
+    pub(super) fn is_empty(&self) -> bool {
+        self.0.is_empty()
+    }
+
+    pub(super) fn len(&self) -> usize {
         self.0.len()
     }
 
-    pub fn has_pending(&self) -> bool {
+    pub(super) fn has_pending(&self) -> bool {
         self.0.last().is_some_and(|frame| frame.is_open)
     }
 }
@@ -166,7 +175,10 @@ impl Display for UpdateDetails {
                 write!(f, "set:state:{} {}", index, backtrace)
             }
             UpdateDetails::SetContextState { id, backtrace } => {
-                write!(f, "set:context-state:{:?} {}", id, backtrace)
+                write!(f, "set:context-state:{:?} {}", *id, backtrace)
+            }
+            UpdateDetails::SetAtomicState { index, backtrace } => {
+                write!(f, "set:atomic-state:{} {}", index, backtrace)
             }
             UpdateDetails::SetTreeState { origin } => {
                 write!(f, "set:tree-state {}", origin)

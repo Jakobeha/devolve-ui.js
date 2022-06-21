@@ -15,25 +15,29 @@ use std::cmp::Ordering;
 use std::hash::{Hash, Hasher};
 use std::ops::{Deref, DerefMut};
 use smallvec::SmallVec;
+use crate::core::misc::is_thread_safe::TSMutex;
 
 // region types
 
-pub type Observer<Root, S> = Box<dyn Fn(&Root, &[S::Key], &str)>;
+pub union Observer<Root, S, const IS_THREAD_SAFE: bool> {
+    yes: Box<dyn Fn(&Root, &[S::Key], &str) + Send>,
+    no: Box<dyn Fn(&Root, &[S::Key], &str)>
+}
 
 /// Holds a mutable reference. Whenever you access it mutably,
 /// it will trigger observers. You can access an observable reference to children of `ObsRefable`
-pub trait ObsRef<Root, T, S: SubCtx> {
+pub trait ObsRef<Root, T, S: SubCtx, const IS_THREAD_SAFE: bool> {
     /// Returns an immutable reference to the underlying value
     fn i(&self, s: S) -> &T;
 
     /// Returns a mutable reference to the underlying value.
     /// When the reference is dropped, observers will be called
-    fn m(&mut self, s: S) -> ObsDeref<Root, T, S>;
+    fn m(&mut self, s: S) -> ObsDeref<Root, T, S, IS_THREAD_SAFE>;
 
     /// Add observer which will be called when `m` is called and then the reference is dropped.
-    fn after_mutate(&self, observer: Observer<Root, S>);
+    fn after_mutate(&self, observer: Observer<Root, S, IS_THREAD_SAFE>);
 
-    fn base(&self) -> &Rc<ObsRefRootBase<Root, S>>;
+    fn base(&self) -> &TSRc<ObsRefRootBase<Root, S, IS_THREAD_SAFE>, IS_THREAD_SAFE>;
 }
 
 /// Whenever you get a reference, you must pass a subscriber context.
@@ -46,32 +50,32 @@ pub trait SubCtx: Clone {
 }
 
 #[derive(Debug)]
-pub struct ObsDeref<'a, Root, T, S: SubCtx> {
+pub struct ObsDeref<'a, Root, T, S: SubCtx, const IS_THREAD_SAFE: bool> {
     // Has to be a pointer because we also store a reference to root.
     value: *mut T,
-    parents_pending: &'a Vec<Weak<ObsRefPending<S>>>,
+    parents_pending: &'a Vec<TSWeak<ObsRefPending<S, IS_THREAD_SAFE>, IS_THREAD_SAFE>>,
     path: &'a str,
-    root: Rc<ObsRefRootBase<Root, S>>,
+    root: TSRc<ObsRefRootBase<Root, S, IS_THREAD_SAFE>, IS_THREAD_SAFE>,
 }
 
 // TODO: Do we need to pin Rc<ObsRefRootBase<T>>?
 //   The children child_values reference root_value,
 //   but they should't outlive root_value and shouldn't exist
 //   if root_value has mutable access (since they also have mutable access)
-pub struct ObsRefRootBase<T, S: SubCtx> {
+pub struct ObsRefRootBase<T, S: SubCtx, const IS_THREAD_SAFE: bool> {
     root_value: T,
     // SmallVec is ideal here because we usually don't have many observers
-    observers: RefCell<SmallVec<[Observer<T, S>; 3]>>,
-    pending: Rc<ObsRefPending<S>>
+    observers: TSRwLock<SmallVec<[Observer<T, S, IS_THREAD_SAFE>; 3]>, IS_THREAD_SAFE>,
+    pending: TSRc<ObsRefPending<S, IS_THREAD_SAFE>, IS_THREAD_SAFE>
 }
 
 #[derive(Debug)]
-pub struct ObsRefChildBase<Root, T, S: SubCtx> {
+pub struct ObsRefChildBase<Root, T, S: SubCtx, const IS_THREAD_SAFE: bool> {
     // self.root.value contains the real value
     // We don't store a lifetime because it's dependent on root, which is reference-counted.
     // However, we guarantee it won't be dangling.
     child_value: *mut T,
-    pending: Rc<ObsRefPending<S>>,
+    pending: TSRc<ObsRefPending<S>, IS_THREAD_SAFE>,
     // The child clones its pending instances and sends them to parents. This ensures that
     // when the parent gets modified, the child is still observed.
     //
@@ -81,17 +85,17 @@ pub struct ObsRefChildBase<Root, T, S: SubCtx> {
     // The root can't be dropped but intermediate parents can.
     // In that case, their Weak reference will be empty, but we can just ignore them
     // since you cannot modify them specifically.
-    parents_pending: Vec<Weak<ObsRefPending<S>>>,
+    parents_pending: Vec<TSWeak<ObsRefPending<S, IS_THREAD_SAFE>, IS_THREAD_SAFE>>,
     path: String,
-    root: Rc<ObsRefRootBase<Root, S>>,
+    root: TSRc<ObsRefRootBase<Root, S, IS_THREAD_SAFE>, IS_THREAD_SAFE>,
 }
 
 #[derive(Debug)]
-struct ObsRefPending<S: SubCtx> {
-    pub direct: RefCell<SmallVec<[S::Key; 3]>>,
+struct ObsRefPending<S: SubCtx, const IS_THREAD_SAFE: bool> {
+    pub direct: TSMutex<SmallVec<[S::Key; 3]>, IS_THREAD_SAFE>,
     // Child's pending values are also stored in each parent. This ensures that when the parent
     // gets modified, the child is still observed.
-    pub from_children: RefCell<SmallVec<[S::Key; 3]>>,
+    pub from_children: TSMutex<SmallVec<[S::Key; 3]>, IS_THREAD_SAFE>,
 }
 
 // endregion

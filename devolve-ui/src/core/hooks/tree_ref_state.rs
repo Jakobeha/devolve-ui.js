@@ -39,22 +39,22 @@ pub fn use_tree_ref_state<'a, 'a0: 'a, T: ObsRefableRoot<VComponentPath>, ViewDa
     c: &mut impl VComponentContext<'a, 'a0, ViewData=ViewData>,
     get_initial: impl FnOnce() -> T
 ) -> TreeRefState<T, ViewData> {
-    let renderer = c.component_imm().renderer();
+    let component = c.component_imm();
+    let notifier = component
+        .renderer()
+        .upgrade()
+        .expect("use_tree_ref_state called in context with nil renderer")
+        .needs_update_notifier();
     let state = use_non_updating_state(c, || {
         let obs_ref = get_initial().into_obs_ref();
         obs_ref.after_mutate(Box::new(move |_root, referenced_paths, triggered_path| {
-            if let Some(renderer) = renderer.upgrade() {
-                for referenced_path in referenced_paths {
-                    renderer.with_component(referenced_path, |referenced_component| {
-                        if let Some(VComponentRefResolved { parent_contexts, component: referenced_component }) = referenced_component {
-                            let update_details = UpdateDetails::SetTreeState {
-                                // TODO: Remove allocation? (also from observer, in debug mode)
-                                origin: triggered_path.to_owned()
-                            };
-                            referenced_component.head.update(update_details);
-                            referenced_component.update(parent_contexts.collect());
-                        }
-                    })
+            for referenced_path in referenced_paths {
+                let result = notifier.set(referenced_path, UpdateDetails::SetTreeState {
+                    // TODO: Remove allocation? (also from observer, in debug mode)
+                    origin: triggered_path.to_owned()
+                });
+                if result.is_err() {
+                    eprintln!("failed to set needs update flag from {} for {}", triggered_path, referenced_path);
                 }
             }
         }));

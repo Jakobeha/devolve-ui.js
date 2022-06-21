@@ -1,5 +1,5 @@
 use std::rc::{Rc, Weak};
-use crate::core::data::obs_ref::st::{ObsRefableRoot, ObsRefableChild, ObsRefRootBase, ObsRefChildBase};
+use crate::core::data::obs_ref::{ObsRefableRoot, ObsRefableChild, ObsRefRootBase, ObsRefChildBase};
 
 // Specific ObsRefable implementations
 pub trait Leaf {}

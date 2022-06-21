@@ -30,7 +30,7 @@ use std::mem;
 use crate::core::component::context::{VComponentContext1, VComponentContext2, VDestructorContext1, VDestructorContext2, VEffectContext1, VEffectContext2};
 use crate::core::component::path::{VComponentKey, VComponentPath, VComponentRef, VComponentRefResolved};
 use crate::core::component::root::VComponentRoot;
-use crate::core::component::update_details::{UpdateDetails, UpdateStack};
+use crate::core::component::update_details::{UpdateDetails, UpdateFrame, UpdateStack};
 use crate::core::hooks::context::AnonContextId;
 #[cfg(feature = "logging")]
 use crate::core::logging::update_logger::{UpdateLogEntry, UpdateLogger};
@@ -51,8 +51,7 @@ pub struct VComponent<ViewData: VViewData> {
 /// You don't usually call methods on this directly but instead pass it to hooks and other constructors.
 pub struct VComponentHead<ViewData: VViewData> {
     /* readonly pub */  id: NodeId,
-    /* readonly pub */  key: VComponentKey,
-    /* readonly pub */  parent_path: VComponentPath,
+    /* readonly pub */  path: VComponentPath,
 
     node: Option<VNode<ViewData>>,
 
@@ -73,8 +72,17 @@ pub(in crate::core) struct VComponentStateData {
     // pub(in crate::core) consumed_contexts: HashMap<Context, Box<dyn Any>>
 }
 
+#[derive(Debug)]
+pub struct ContextPendingUpdates {
+    pub update_details: Vec<UpdateDetails>,
+    // These next 2 properties are redundant but to VComponentHead but because we don't pass it
+    // in associated data, we need them. Otherwise we need some annoying code restructuring
+    pub path: VComponentPath,
+    pub is_being_updated: bool
+}
+
 pub type VComponentLocalContexts = HashMap<AnonContextId, Box<dyn Any>>;
-pub type VComponentContexts<'a> = HashMapWithAssocMutStack<'a, AnonContextId, Box<dyn Any>, Vec<UpdateDetails>>;
+pub type VComponentContexts<'a> = HashMapWithAssocMutStack<'a, AnonContextId, Box<dyn Any>, ContextPendingUpdates>;
 
 /// Part of the component with data whose size depends on `Props`, so it's a runtime-sized trait object.
 pub(super) trait VComponentConstruct: Debug {
@@ -85,8 +93,8 @@ pub(super) trait VComponentConstruct: Debug {
     fn props(&self) -> &dyn Any;
     fn construct(&mut self, component: &mut VComponentHead<Self::ViewData>, contexts: &mut VComponentContexts<'_>) -> VNode<Self::ViewData>;
 
-    fn local_contexts_and_changes(&mut self) -> (&mut VComponentLocalContexts, &mut Vec<UpdateDetails>);
-    fn local_context_changes(&mut self) -> &mut Vec<UpdateDetails>;
+    fn local_contexts_and_changes(&mut self) -> (&mut VComponentLocalContexts, &mut ContextPendingUpdates);
+    fn local_context_changes(&mut self) -> &mut ContextPendingUpdates;
     fn local_contexts_and_props(&mut self) -> (&mut VComponentLocalContexts, &dyn Any);
 
     fn run_effects(&mut self, component: &mut VComponentHead<Self::ViewData>, contexts: &mut VComponentContexts<'_>);
@@ -119,7 +127,7 @@ struct VComponentConstructImpl<Props: Any, ViewData: VViewData, F: Fn(VComponent
 
 struct VComponentConstructState<Props: Any, ViewData: VViewData> {
     pub local_contexts: VComponentLocalContexts,
-    pub local_context_changes: Vec<UpdateDetails>,
+    pub pending_updates: ContextPendingUpdates,
     pub effects: VComponentEffects<Props, ViewData>,
     pub destructors: VComponentDestructors<Props, ViewData>
 }
@@ -173,6 +181,7 @@ impl <ViewData: VViewData + 'static> VComponent<ViewData> {
                                 phantom: PhantomData
                             }));
                             found_child.head.is_fresh = true;
+                            found_child.head.pending_update(UpdateDetails::Reuse);
                             found_child.update(contexts);
                             // When we return this it will be added back to parent.children
                             return Action::Reuse(found_child)
@@ -188,17 +197,22 @@ impl <ViewData: VViewData + 'static> VComponent<ViewData> {
         })();
         match action {
             Action::Reuse(found_child) => found_child,
-            Action::Create(parent, props, construct) => Self::create(parent, key, props, construct)
+            Action::Create(parent, props, construct) => {
+                let component = Self::create(parent, key, props, construct);
+                component.head.pending_update(UpdateDetails::CreateNew);
+                component.update(contexts);
+                component
+            }
         }
     }
 
     /// Create a new component with the parent and key. Don't call if there is already an existing component.
     fn create<Props: 'static, F: Fn(VComponentContext2<'_, '_, Props, ViewData>) -> VNode<ViewData> + 'static>(parent: VParent<'_, ViewData>, key: VComponentKey, props: Props, construct: F) -> Box<Self>{
+        let path = parent.path() + key;
         Box::new(VComponent {
             head: VComponentHead {
                 id: NodeId::next(),
-                key,
-                parent_path: parent.path(),
+                path: path.clone(),
                 node: None,
                 children: HashMap::new(),
                 renderer: match parent {
@@ -225,7 +239,7 @@ impl <ViewData: VViewData + 'static> VComponent<ViewData> {
             construct: Box::new(VComponentConstructImpl {
                 props,
                 construct,
-                s: VComponentConstructState::new()
+                s: VComponentConstructState::new(path)
             })
         })
     }
@@ -233,67 +247,52 @@ impl <ViewData: VViewData + 'static> VComponent<ViewData> {
 
 impl <ViewData: VViewData> VComponent<ViewData> {
     /// Run pending updates on this component.
+    /// If there are any pending updates, updates will also be run on children.
+    /// Otherwise they won't but also this should never be called if there are no pending updates.
     pub(in crate::core) fn update(mut self: &mut Box<Self>, contexts: &mut VComponentContexts<'_>) {
+        self.head.is_being_updated = true;
+        self.construct.local_context_changes().is_being_updated = true;
         loop {
-            self.head.recursive_update_stack_trace.append_to_last(self.construct.local_context_changes());
+            // Update stack trace stuff
+
+            self.head.recursive_update_stack_trace.append_to_last(&mut self.construct.local_context_changes().update_details);
             if !self.head.recursive_update_stack_trace.has_pending() {
                 break
             }
 
-            self.head.recursive_update_stack_trace.close_last(|#[cfg_attr(not(feature = "logging"), allow(unused))] details| {
-                #[cfg(feature = "logging")]
-                VComponentHead::with_update_logger(&self.head.renderer, |logger| {
-                    logger.log(UpdateLogEntry::Update(details.clone()));
-                })
-            });
+            self.head.recursive_update_stack_trace.close_last();
             let recursive_update_stack_trace = &self.head.recursive_update_stack_trace;
             assert!(recursive_update_stack_trace.len() < VMode::max_recursive_updates_before_loop_detected(), "update loop detected:\n{}", recursive_update_stack_trace);
 
-            if self.head.node.is_none() {
-                // Do construct
-                self.do_update(contexts, |self_, contexts| {
-                    // Actually do construct and set node
-                    let mut node = self_.construct.construct(&mut self_.head, contexts);
+            // Actual update stuff
 
-                    // from devolve-ui.js: "Create pixi if pixi component and on web"
-                    // should have a hook in view trait we can call through node.view().hook(...)
-
-                    // Update children (if box or another component)
-                    // We push contexts in self_.construct.construct but then pop them and we have to push again,
-                    // which is redundant :(. It already happens a lot anyways.
-                    let (local_contexts, local_context_changes) = self_.construct.local_contexts_and_changes();
-                    contexts.with_push(local_contexts, local_context_changes, |contexts| {
-                        node.update(&mut self_.head, contexts);
-                    });
-
-                    self_.head.node = Some(node)
-                })
-            } else {
-                // Reset
+            // Reset if reconstruct
+            if self.head.node.is_some() {
                 self.run_update_destructors(contexts);
                 self.head.h.next_state_index = 0;
-                // self.head.h.provided_contexts.clear();
-
-                // Do construct
-                self.do_update(contexts, |self_, contexts| {
-                    let mut node = self_.construct.construct(&mut self_.head, contexts);
-
-                    // from devolve-ui.js: "Update pixi if pixi component and on web"
-                    // should have a hook in view trait we can call through node.view().hook(...)
-
-                    // Update children (if box or another component)
-                    let (local_contexts, local_context_changes) = self_.construct.local_contexts_and_changes();
-                    contexts.with_push(local_contexts, local_context_changes, |contexts| {
-                        node.update(&mut self_.head, contexts);
-                    });
-
-                    self_.head.invalidate();
-                    self_.head.node = Some(node)
-                })
             }
-        }
 
-        self.head.recursive_update_stack_trace.clear()
+            // Construct or reconstruct
+            let mut node = self.construct.construct(&mut self.head, contexts);
+            self.head.node = Some(node);
+
+            // After construct
+            self.clear_fresh_and_remove_stale_children(contexts);
+            self.run_effects(contexts);
+        }
+        self.construct.local_context_changes().is_being_updated = false;
+        self.head.is_being_updated = false;
+
+        VComponentHead::with_update_logger(&self.head.renderer, |logger| {
+            logger.log_update(self.head.path().clone(), self.head.recursive_update_stack_trace.clone());
+        });
+
+        if self.head.recursive_update_stack_trace.is_empty() {
+            eprintln!("WARNING: component at path {} updated but it had no pending updates", self.head.path());
+        } else {
+            self.head.recursive_update_stack_trace.clear();
+            self.head.invalidate_view();
+        }
     }
 
     /// Destroy the component: run destructors and invalidate + children
@@ -306,7 +305,8 @@ impl <ViewData: VViewData> VComponent<ViewData> {
         // from devolve-ui.js: "Destroy pixi if pixi component and on web"
         // should have a hook in view trait we can call through node.view().hook(...)
 
-        self.head.invalidate();
+        // We need to explicitly call because this is not an update
+        self.head.invalidate_view();
 
         for child in self.head.children.into_values() {
             let (local_contexts, local_context_changes) = self.construct.local_contexts_and_changes();
@@ -314,21 +314,6 @@ impl <ViewData: VViewData> VComponent<ViewData> {
                 child.destroy(contexts)
             });
         }
-    }
-
-    /// `body` will change the component's `node`, and this does other necessary changes.
-    fn do_update<'a>(
-        mut self: &mut Box<Self>,
-        contexts: &mut VComponentContexts<'a>,
-        body: impl FnOnce(&mut Box<Self>, &mut VComponentContexts<'a>) -> ()
-    ) {
-        self.head.is_being_updated = true;
-
-        body(self, contexts);
-
-        self.clear_fresh_and_remove_stale_children(contexts);
-        self.head.is_being_updated = false;
-        self.run_effects(contexts);
     }
 
     /// Remove children who weren't re-used in the update.
@@ -385,25 +370,28 @@ impl <ViewData: VViewData> VComponent<ViewData> {
 }
 
 impl <ViewData: VViewData> VComponentHead<ViewData> {
-    /// Mark that the component has pending updates if not already marked.
+    /// Mark that the component has a pending update.
     /// `details` is used for the debug message if we detect an infinite loop.
-    pub(in crate::core) fn update(&mut self, details: UpdateDetails) {
+    pub(in crate::core) fn pending_update(&mut self, details: UpdateDetails) {
         self.recursive_update_stack_trace.add_to_last(details);
+        if let Some(renderer) = self.renderer.upgrade() {
+            renderer.queue_needs_update(self.path());
+        }
     }
 
-    /// Mark that this component needs updates and its view is stale.
-    fn invalidate(&self) {
+    /// Mark that this component's view is stale.
+    fn invalidate_view(&self) {
         if let Some(renderer) = self.renderer.upgrade() {
-            renderer.invalidate(self.path(), self.view());
+            renderer.invalidate_view(self.view());
         }
     }
 
     /// A flag for another thread or time which, when set,
     /// marks that this component needs updates and its view is stale (if it still exists).
-    pub(in crate::core) fn invalidate_flag(&self) -> NeedsUpdateFlag {
+    pub(in crate::core) fn needs_update_flag(&self) -> NeedsUpdateFlag {
         match self.renderer.upgrade() {
-            None => NeedsUpdateFlag::empty(self.path(), self.view().id()),
-            Some(renderer) => renderer.invalidate_flag_for(self.path(), self.view())
+            None => NeedsUpdateFlag::empty(self.path().clone()),
+            Some(renderer) => renderer.needs_update_flag_for(self.path().clone())
         }
     }
 
@@ -413,13 +401,13 @@ impl <ViewData: VViewData> VComponentHead<ViewData> {
     }
 
     /// Key which identifies this component in updates.
-    pub fn key(&self) -> VComponentKey {
-        self.key.clone()
+    pub fn key(&self) -> &VComponentKey {
+        self.path.last().unwrap()
     }
 
-    /// Path which identifies this component from the root, by following keys.
-    pub(super) fn path(&self) -> VComponentPath {
-        self.parent_path.clone() + self.key.clone()
+    /// Path which identifies this component from the root, by following keys
+    pub fn path(&self) -> &VComponentPath {
+        &self.path
     }
 
     /// Child component's head
@@ -452,7 +440,7 @@ impl <ViewData: VViewData> VComponentHead<ViewData> {
     pub(super) fn vref(&self) -> VComponentRef<ViewData> {
         VComponentRef {
             renderer: self.renderer.clone(),
-            path: self.path()
+            path: self.path().clone()
         }
     }
 
@@ -521,7 +509,7 @@ impl <Props: Any, ViewData: VViewData, F: Fn(VComponentContext2<'_, '_, Props, V
 
     fn construct(&mut self, component: &mut VComponentHead<Self::ViewData>, contexts: &mut VComponentContexts<'_>) -> VNode<Self::ViewData> {
         let construct = &self.construct;
-        contexts.with_push(&mut self.s.local_contexts, &mut self.s.local_context_changes, |contexts| {
+        contexts.with_push(&mut self.s.local_contexts, &mut self.s.pending_updates, |contexts| {
             construct((VComponentContext1 {
                 component,
                 contexts,
@@ -531,12 +519,12 @@ impl <Props: Any, ViewData: VViewData, F: Fn(VComponentContext2<'_, '_, Props, V
         })
     }
 
-    fn local_contexts_and_changes(&mut self) -> (&mut VComponentLocalContexts, &mut Vec<UpdateDetails>) {
-        (&mut self.s.local_contexts, &mut self.s.local_context_changes)
+    fn local_contexts_and_changes(&mut self) -> (&mut VComponentLocalContexts, &mut ContextPendingUpdates) {
+        (&mut self.s.local_contexts, &mut self.s.pending_updates)
     }
 
-    fn local_context_changes(&mut self) -> &mut Vec<UpdateDetails> {
-        &mut self.s.local_context_changes
+    fn local_context_changes(&mut self) -> &mut ContextPendingUpdates {
+        &mut self.s.pending_updates
     }
 
     fn local_contexts_and_props(&mut self) -> (&mut VComponentLocalContexts, &dyn Any) {
@@ -544,9 +532,12 @@ impl <Props: Any, ViewData: VViewData, F: Fn(VComponentContext2<'_, '_, Props, V
     }
 
     fn run_effects(&mut self, component: &mut VComponentHead<Self::ViewData>, contexts: &mut VComponentContexts<'_>) {
-        contexts.with_push(&mut self.s.local_contexts, &mut self.s.local_context_changes, |contexts| {
+        contexts.with_push(&mut self.s.local_contexts, &mut self.s.pending_updates, |contexts| {
             while let Some(effect) = self.s.effects.effects.pop() {
-                if component.recursive_update_stack_trace.has_pending() || !self.s.local_context_changes.is_empty() {
+                // If we have pending updates, we break, because immediately after this function ends
+                // we run the pending updates and then call run_effects again to run remanining effects.
+                // This is so effects don't have stale data.
+                if component.recursive_update_stack_trace.has_pending() || !self.s.pending_updates.update_details.is_empty() {
                     break
                 }
 
@@ -561,7 +552,7 @@ impl <Props: Any, ViewData: VViewData, F: Fn(VComponentContext2<'_, '_, Props, V
     }
 
     fn run_update_destructors(&mut self, component: &mut VComponentHead<Self::ViewData>, contexts: &mut VComponentContexts) {
-        contexts.with_push(&mut self.s.local_contexts, &mut self.s.local_context_changes, |contexts| {
+        contexts.with_push(&mut self.s.local_contexts, &mut self.s.pending_updates, |contexts| {
             while let Some(update_destructor) = self.s.destructors.update_destructors.pop() {
                 update_destructor((VDestructorContext1 {
                     component,
@@ -574,7 +565,7 @@ impl <Props: Any, ViewData: VViewData, F: Fn(VComponentContext2<'_, '_, Props, V
     }
 
     fn run_permanent_destructors(&mut self, component: &mut VComponentHead<Self::ViewData>, contexts: &mut VComponentContexts) {
-        contexts.with_push(&mut self.s.local_contexts, &mut self.s.local_context_changes, |contexts| {
+        contexts.with_push(&mut self.s.local_contexts, &mut self.s.pending_updates, |contexts| {
             while let Some(permanent_destructor) = self.s.destructors.permanent_destructors.pop() {
                 permanent_destructor((VDestructorContext1 {
                     component,
@@ -610,12 +601,33 @@ impl <Props: Any, ViewData: VViewData + 'static, F: Fn(VComponentContext2<'_, '_
 }
 
 impl <Props: Any, ViewData: VViewData> VComponentConstructState<Props, ViewData> {
-    pub fn new() -> Self {
+    pub fn new(path: VComponentPath) -> Self {
         VComponentConstructState {
             local_contexts: HashMap::new(),
-            local_context_changes: Vec::new(),
+            pending_updates: ContextPendingUpdates::new(path),
             effects: VComponentEffects::new(),
             destructors: VComponentDestructors::new()
+        }
+    }
+}
+
+impl ContextPendingUpdates {
+    fn new(path: VComponentPath) -> Self {
+        ContextPendingUpdates {
+            update_details: Vec::new(),
+            path,
+            is_being_updated: false
+        }
+    }
+
+    pub(in crate::core) fn pending_update<ViewData: VViewData>(&mut self, update_details: UpdateDetails, renderer: Weak<dyn VComponentRoot<ViewData=ViewData>>) {
+        self.update_details.push(update_details);
+        if !self.is_being_updated {
+            // This happens when we've got a context update from an async update.
+            // Otherwise the parent is being updated, and we've got a context update from a child update from a parent update.
+            if let Some(renderer) = renderer.upgrade() {
+                renderer.mark_needs_update(&self.path)
+            }
         }
     }
 }
@@ -654,7 +666,7 @@ impl <ViewData: VViewData + Debug> Debug for VComponentHead<ViewData> {
         f.debug_struct("VComponentHead")
             .field("id", &self.id)
             .field("key", &self.key)
-            .field("parent_path", &self.parent_path)
+            .field("path", &self.path)
             .field("is_fresh", &self.is_fresh)
             .field("is_being_created", &self.is_being_created())
             .field("is_being_updated", &self.is_being_updated)

@@ -37,11 +37,11 @@ impl <T: Any, ViewData: VViewData> State<T, ViewData> {
     }
 
     pub fn get_mut<'a: 'b, 'b>(&self, c: &'b mut impl VContext<'a, ViewData=ViewData>) -> &'b mut T where ViewData: 'b {
-        let update_details = UpdateDetails::SetState {
+        let details = UpdateDetails::SetState {
             index: self.0.index,
             backtrace: UpdateBacktrace::here()
         };
-        c.component().update(update_details);
+        c.component().pending_update(details);
         self.0.get_mut(c)
     }
 }

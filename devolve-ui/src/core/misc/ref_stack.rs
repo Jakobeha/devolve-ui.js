@@ -2,10 +2,7 @@
 //! Internally this stores the elements as pointers, but has invariants to guarantee (unproven) safety.
 
 use std::collections::HashMap;
-use std::convert::Infallible;
-use std::hash::Hash;
 use std::marker::PhantomData;
-use std::mem;
 
 #[derive(Debug, PartialEq)]
 pub struct RefStack<'a, T>(
@@ -26,7 +23,10 @@ impl <'a, T> RefStack<'a, T> {
     /// The fact that this is a function guarantees that `elem` will not be dropped while `fun` is run,
     /// ensuring that storing them as pointers is safe.
     pub fn with_push<R>(&mut self, elem: &mut T, fun: impl FnOnce(&mut RefStack<'_, T>) -> R) -> R {
-        self.with_push_accoc(elem, &UNUSED_ASSOC, fun)
+        self.0.push(elem as *mut T);
+        let result = fun(self);
+        self.0.pop();
+        result
     }
 
     /// Get the top item

@@ -18,30 +18,45 @@ use std::ops::{Deref, DerefMut, Drop};
 use std::sync::{Arc, LockResult, Mutex, MutexGuard, TryLockResult};
 use crate::core::renderer::stale_data::NeedsUpdateFlag;
 use crate::core::component::context::VComponentContext;
+use crate::core::component::update_details::{UpdateBacktrace, UpdateDetails};
 use crate::core::hooks::state_internal::use_non_updating_state;
 use crate::core::misc::map_lock_result::MappableLockResult;
 use crate::core::view::view::VViewData;
 
 #[derive(Debug)]
-pub struct AtomicRefState<T: Any, ViewData: VViewData>(Arc<Mutex<T>>, NeedsUpdateFlag, PhantomData<ViewData>);
+pub struct AtomicRefState<T: Any, ViewData: VViewData> {
+    data: Arc<Mutex<T>>,
+    index: usize,
+    flag: NeedsUpdateFlag,
+    phantom: PhantomData<ViewData>
+}
 
 #[derive(Debug)]
-pub struct AtomicAccess<'a, T: Any, ViewData: VViewData>(MutexGuard<'a, T>, PhantomData<ViewData>);
+pub struct AtomicAccess<'a, T: Any, ViewData: VViewData> {
+    data: MutexGuard<'a, T>,
+    phantom: PhantomData<ViewData>
+}
 
 #[derive(Debug)]
-pub struct AtomicAccessMut<'a, T: Any, ViewData: VViewData>(MutexGuard<'a, T>, NeedsUpdateFlag, PhantomData<ViewData>);
+pub struct AtomicAccessMut<'a, T: Any, ViewData: VViewData> {
+    data: MutexGuard<'a, T>,
+    index: usize,
+    flag: NeedsUpdateFlag,
+    phantom: PhantomData<ViewData>
+}
 
 pub fn use_atomic_ref_state<'a, 'a0: 'a, T: Any, ViewData: VViewData + 'a>(
     c: &mut impl VComponentContext<'a, 'a0, ViewData=ViewData>,
     get_initial: impl FnOnce() -> T
 ) -> AtomicRefState<T, ViewData> {
     let state = use_non_updating_state(c, || Arc::new(Mutex::new(get_initial())));
-    let invalidate_flag = c.component().invalidate_flag();
-    AtomicRefState(
-        state.get(c).clone(),
-        invalidate_flag,
-        PhantomData
-    )
+    let flag = c.component().needs_update_flag();
+    AtomicRefState {
+        data: state.get(c).clone(),
+        index: state.index,
+        flag,
+        phantom: PhantomData
+    }
 }
 
 impl <T: Any, ViewData: VViewData> AtomicRefState<T, ViewData> {
@@ -54,23 +69,31 @@ impl <T: Any, ViewData: VViewData> AtomicRefState<T, ViewData> {
     }
 
     pub fn get_mut(&self) -> LockResult<AtomicAccessMut<'_, T, ViewData>> {
-        self.0.lock().map2(|v| AtomicAccessMut::new(v, self.1.clone()))
+        self.0.lock().map2(|v| AtomicAccessMut::new(v, self.index, self.1.clone()))
     }
 
     pub fn try_get_mut(&self) -> TryLockResult<AtomicAccessMut<'_, T, ViewData>> {
-        self.0.try_lock().map2(|v| AtomicAccessMut::new(v, self.1.clone()))
+        self.0.try_lock().map2(|v| AtomicAccessMut::new(v, self.index, self.1.clone()))
     }
 }
 
 impl <'a, T: Any, ViewData: VViewData> AtomicAccess<'a, T, ViewData> {
     fn new(inner: MutexGuard<'a, T>) -> AtomicAccess<'a, T, ViewData> {
-        AtomicAccess(inner, PhantomData)
+        AtomicAccess {
+            data: inner,
+            phantom: PhantomData
+        }
     }
 }
 
 impl <'a, T: Any, ViewData: VViewData> AtomicAccessMut<'a, T, ViewData> {
-    fn new(inner: MutexGuard<'a, T>, invalidate_flag: NeedsUpdateFlag) -> AtomicAccessMut<'a, T, ViewData> {
-        AtomicAccessMut(inner, invalidate_flag, PhantomData)
+    fn new(inner: MutexGuard<'a, T>, index: usize, flag: NeedsUpdateFlag) -> AtomicAccessMut<'a, T, ViewData> {
+        AtomicAccessMut {
+            data: inner,
+            index,
+            flag,
+            phantom: PhantomData
+        }
     }
 }
 
@@ -99,7 +122,11 @@ impl <'a, T: Any, ViewData: VViewData> DerefMut for AtomicAccessMut<'a, T, ViewD
 
 impl <'a, T: Any, ViewData: VViewData> Drop for AtomicAccessMut<'a, T, ViewData> {
     fn drop(&mut self) {
-        let result = self.1.set();
+        let details = UpdateDetails::SetAtomicState {
+            index: self.index,
+            backtrace: UpdateBacktrace::here()
+        };
+        let result = self.1.set(details);
         if result.is_err() {
             eprintln!("error updating from AtomicRefState: {:?}", result.unwrap_err());
         }
@@ -108,13 +135,19 @@ impl <'a, T: Any, ViewData: VViewData> Drop for AtomicAccessMut<'a, T, ViewData>
 
 impl <T: Any, ViewData: VViewData> Clone for AtomicRefState<T, ViewData> {
     fn clone(&self) -> Self {
-        Self(self.0.clone(), self.1.clone(), self.2)
+        Self {
+            data: self.data.clone(),
+            index: self.index,
+            flag: self.flag.clone(),
+            phantom: self.phantom
+        }
     }
 
     fn clone_from(&mut self, source: &Self) {
-        self.0.clone_from(&source.0);
-        self.1.clone_from(&source.1);
+        self.data.clone_from(&source.data);
+        self.index = source.index;
+        self.flag.clone_from(&source.flag);
         // No-op
-        self.2.clone_from(&source.2)
+        self.phantom = source.phantom;
     }
 }

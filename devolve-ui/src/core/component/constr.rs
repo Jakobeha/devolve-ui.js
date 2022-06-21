@@ -33,7 +33,7 @@ pub fn make_component<
     let component = parent.add_child(component);
     VNode::Component {
         id: component.head.id(),
-        key: component.head.key()
+        key: *component.head.key()
     }
 }
 

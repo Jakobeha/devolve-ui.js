@@ -4,13 +4,14 @@ use std::io;
 use std::marker::PhantomData;
 use crate::core::logging::common::{GenericLogger, LogStart};
 use crate::core::view::view::VViewData;
-use crate::core::component::update_details::UpdateFrame;
+use crate::core::component::update_details::UpdateStack;
 #[cfg(feature = "logging")]
 use serde::{Serialize, Deserialize};
+use crate::core::component::path::VComponentPath;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum UpdateLogEntry {
-    Update(UpdateFrame),
+    Update(VComponentPath, UpdateStack),
 }
 
 pub struct UpdateLogger<ViewData: VViewData> {
@@ -26,7 +27,11 @@ impl <ViewData: VViewData> UpdateLogger<ViewData> {
         })
     }
 
-    pub(in crate::core) fn log(&mut self, entry: UpdateLogEntry) {
+    fn log(&mut self, entry: UpdateLogEntry) {
         self.logger.log(entry)
+    }
+
+    pub(in crate::core) fn log_update(&mut self, path: VComponentPath, update_stack: UpdateStack) {
+        self.log(UpdateLogEntry::Update(path, update_stack))
     }
 }

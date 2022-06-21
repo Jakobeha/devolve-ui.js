@@ -4,6 +4,7 @@
 pub mod float_ord;
 pub mod ident;
 pub mod io_write_2_fmt_write;
+pub mod is_thread_safe;
 pub(crate) mod map_lock_result;
 pub mod notify_flag;
 pub mod option_f32;

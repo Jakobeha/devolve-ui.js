@@ -10,3 +10,5 @@
 pub mod st;
 /// Thread-safe
 pub mod mt;
+/// Generic over both depending on const parameter
+pub mod generic;

@@ -1,8 +1,10 @@
 //! A `VNode` is either a component of a view. Either way, the node contains content which is rendered,
 //! and may contain child nodes.
 
+use std::collections::HashMap;
 use std::fmt;
 use std::fmt::{Display, Formatter};
+use std::iter::once;
 use crate::core::component::component::{VComponent, VComponentContexts, VComponentHead};
 use crate::core::component::path::VComponentKey;
 use crate::core::view::view::{VView, VViewData};
@@ -14,6 +16,58 @@ use serde::{Serialize, Deserialize};
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "serde", serde(transparent))]
 pub struct NodeId(usize);
+
+#[derive(Debug, Clone, Eq, PartialEq, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "serde", serde(transparent))]
+pub struct NodeIdPath(Vec<NodeId>);
+
+#[derive(Debug, Clone, Eq, PartialEq, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "serde", serde(transparent))]
+pub struct NodeIdTree(HashMap<NodeId, NodeIdTree>);
+
+impl NodeIdPath {
+    fn new() -> Self {
+        NodeIdPath(Vec::new())
+    }
+
+    fn prepend(&mut self, id: NodeId) {
+        self.0.insert(0, id);
+    }
+
+    pub fn iter(&self) -> impl Iterator<Item=NodeId> {
+        self.0.iter().copied()
+    }
+}
+
+impl FromIterator<NodeId> for NodeIdPath {
+    fn from_iter<T: IntoIterator<Item=NodeId>>(iter: T) -> Self {
+        NodeIdPath(Vec::from_iter(iter))
+    }
+}
+
+impl NodeIdTree {
+    pub fn new() -> Self {
+        NodeIdTree(HashMap::new())
+    }
+
+    pub fn insert(&mut self, path: &NodeIdPath) {
+        let mut node = self;
+        for id in path.iter() {
+            node = node.0.entry(id).or_insert(NodeIdTree::new());
+        }
+    }
+
+    pub fn preorder(&self) -> impl Iterator<Item=NodeIdPath> {
+        once(NodeIdPath::new()).chain(self.0.iter().flat_map(|(id, subtree)| {
+            subtree.iter().map(|mut path| {
+                path.prepend(*id);
+                path
+            })
+        }))
+    }
+}
 
 impl Display for NodeId {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {

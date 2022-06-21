@@ -12,17 +12,20 @@ use crate::core::logging::update_logger::UpdateLogger;
 #[cfg(feature = "input")]
 use crate::core::renderer::input::{KeyEvent, MouseEvent, ResizeEvent};
 use crate::core::renderer::listeners::{RendererListener, RendererListenerId};
-use crate::core::renderer::stale_data::NeedsUpdateFlag;
+use crate::core::renderer::stale_data::{NeedsUpdateFlag, NeedsUpdateNotifier};
 use crate::core::view::view::{VView, VViewData};
 
 pub(in crate::core) trait VComponentRoot {
     type ViewData: VViewData;
 
-    /// Mark the view as stale and the given path needs to be updated
-    fn invalidate(self: Rc<Self>, path: VComponentPath, view: &Box<VView<Self::ViewData>>);
-    /// A flag for a separate thread or time. When set, this marks that the view is stale and the given path
-    /// needs to be updated, like `invalidate`
-    fn invalidate_flag_for(self: Rc<Self>, path: VComponentPath, view: &Box<VView<Self::ViewData>>) -> NeedsUpdateFlag;
+    /// Marks the given path needs to be updated
+    fn mark_needs_update(self: Rc<Self>, path: &VComponentPath);
+    /// Mark the view as stale
+    fn invalidate_view(self: Rc<Self>, view: &Box<VView<Self::ViewData>>);
+    /// A flag for a separate thread or time. When set, this marks that the given path needs to be updated, like `mark_needs_update`
+    fn needs_update_flag_for(self: Rc<Self>, path: VComponentPath) -> NeedsUpdateFlag;
+    /// A flag for a separate thread or time. When set, this marks that an arbitrary path needs to be updated, like `mark_needs_update`
+    fn needs_update_notifier(self: Rc<Self>) -> NeedsUpdateNotifier;
 
     fn _with_component(self: Rc<Self>, path: &VComponentPath) -> Option<VComponentRefResolvedPtr<Self::ViewData>>;
 

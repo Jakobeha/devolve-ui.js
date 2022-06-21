@@ -11,7 +11,6 @@ use std::any::{Any, TypeId};
 use std::marker::{PhantomData, PhantomPinned};
 use crate::core::component::context::{VComponentContext, VContext};
 use crate::core::component::update_details::{UpdateBacktrace, UpdateDetails};
-use crate::core::hooks::state::StateDeref;
 use crate::core::view::view::VViewData;
 #[cfg(feature = "serde")]
 use serde::{Serialize, Deserialize};
@@ -91,7 +90,8 @@ impl <T: Any, ViewData: VViewData> ContextState<T, ViewData> {
         assert!(value_any.is::<T>(), "context with id ({:?}) has wrong type: expected {:?}, got {:?}", self.id, TypeId::of::<T>(), (*value_any).type_id());
         let value = unsafe { value_any.downcast_mut_unchecked() };
 
-        context_changes.push(update_details);
+        let renderer = c.component().renderer();
+        context_changes.pending_update(update_details, renderer);
         value
     }
 }

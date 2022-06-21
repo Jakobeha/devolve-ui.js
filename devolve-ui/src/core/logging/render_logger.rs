@@ -171,7 +171,7 @@ impl <ViewData: VViewData + Serialize + Debug + Clone, RenderLayer: Serialize + 
         let should_be_none = self.view_map.insert(view.id(), LoggedRenderView {
             view: view.clone(),
 
-            component_key: c.key(),
+            component_key: *c.key(),
             parent_id,
             prev_sibling_id,
 

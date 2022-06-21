@@ -101,6 +101,10 @@ impl VComponentPath {
         Self(Vec::new())
     }
 
+    pub fn last(&self) -> Option<&VComponentKey> {
+        self.0.last()
+    }
+
     pub fn iter(&self) -> impl Iterator<Item = &VComponentKey> {
         self.0.iter()
     }

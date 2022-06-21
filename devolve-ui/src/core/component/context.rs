@@ -15,7 +15,7 @@
 use std::any::Any;
 use std::iter::once;
 use std::marker::PhantomData;
-use crate::core::component::component::{VComponentContexts, VComponentDestructors, VComponentEffects, VComponentHead, VComponentLocalContexts};
+use crate::core::component::component::{ContextPendingUpdates, VComponentContexts, VComponentDestructors, VComponentEffects, VComponentHead, VComponentLocalContexts};
 use crate::core::component::path::{VComponentRef, VComponentRefResolved};
 use crate::core::component::update_details::UpdateDetails;
 use crate::core::hooks::context::AnonContextId;
@@ -74,7 +74,7 @@ pub trait VContext<'a> {
     fn component_imm<'b>(&'b self) -> &'b VComponentHead<Self::ViewData> where 'a: 'b;
     fn component<'b>(&'b mut self) -> &'b mut VComponentHead<Self::ViewData> where 'a: 'b;
     fn get_context<'b>(&'b self, id: &AnonContextId) -> Option<&'b Box<dyn Any>> where 'a: 'b;
-    fn get_mut_context<'b>(&'b mut self, id: &AnonContextId) -> Option<(&'b mut Box<dyn Any>, &'b mut Vec<UpdateDetails>)> where 'a: 'b;
+    fn get_mut_context<'b>(&'b mut self, id: &AnonContextId) -> Option<(&'b mut Box<dyn Any>, &'b mut ContextPendingUpdates)> where 'a: 'b;
 }
 
 pub trait VComponentContext<'a, 'a0> : VContext<'a> {
@@ -97,7 +97,7 @@ impl <'a, 'a0: 'a, Props: Any, ViewData: VViewData> VContext<'a> for VComponentC
         self.contexts.get(id).map(|(context, _path)| context)
     }
 
-    fn get_mut_context<'b>(&'b mut self, id: &AnonContextId) -> Option<(&'b mut Box<dyn Any>, &'b mut Vec<UpdateDetails>)> where 'a: 'b {
+    fn get_mut_context<'b>(&'b mut self, id: &AnonContextId) -> Option<(&'b mut Box<dyn Any>, &'b mut ContextPendingUpdates)> where 'a: 'b {
         self.contexts.get_mut(id)
     }
 }
@@ -127,7 +127,7 @@ impl <'a, 'a0: 'a, Props: Any, ViewData: VViewData> VContext<'a> for VEffectCont
         self.contexts.get(id).map(|(context, _path)| context)
     }
 
-    fn get_mut_context<'b>(&'b mut self, id: &AnonContextId) -> Option<(&'b mut Box<dyn Any>, &'b mut Vec<UpdateDetails>)> where 'a: 'b {
+    fn get_mut_context<'b>(&'b mut self, id: &AnonContextId) -> Option<(&'b mut Box<dyn Any>, &'b mut ContextPendingUpdates)> where 'a: 'b {
         self.contexts.get_mut(id)
     }
 }
@@ -146,6 +146,8 @@ impl <'a, 'a0: 'a, Props: Any, ViewData: VViewData> VEffectContext1<'a, 'a0, Pro
     /// This allows you to transfer effect context data (e.g. props) across time and threads.
     ///
     /// **Warning:** Calling `with` on multiple components at the same time (e.g. nested) will cause a runtime error.
+    ///
+    /// TODO: Improve and make actually `Send`
     pub fn vref(&mut self) -> VEffectContextRef<Props, ViewData> {
         VEffectContextRef {
             component: self.component.vref(),
@@ -207,7 +209,7 @@ impl <'a, 'a0: 'a, Props: Any, ViewData: VViewData> VContext<'a> for VDestructor
         self.contexts.get(id).map(|(context, _path)| context)
     }
 
-    fn get_mut_context<'b>(&'b mut self, id: &AnonContextId) -> Option<(&'b mut Box<dyn Any>, &'b mut Vec<UpdateDetails>)> where 'a: 'b {
+    fn get_mut_context<'b>(&'b mut self, id: &AnonContextId) -> Option<(&'b mut Box<dyn Any>, &'b mut ContextPendingUpdates)> where 'a: 'b {
         self.contexts.get_mut(id)
     }
 }
@@ -237,7 +239,7 @@ impl <'a, 'a0: 'a, Props: Any, ViewData: VViewData> VContext<'a> for VPlainConte
         self.contexts.get(id).map(|(context, _path)| context)
     }
 
-    fn get_mut_context<'b>(&'b mut self, id: &AnonContextId) -> Option<(&'b mut Box<dyn Any>, &'b mut Vec<UpdateDetails>)> where 'a: 'b {
+    fn get_mut_context<'b>(&'b mut self, id: &AnonContextId) -> Option<(&'b mut Box<dyn Any>, &'b mut ContextPendingUpdates)> where 'a: 'b {
         self.contexts.get_mut(id)
     }
 }

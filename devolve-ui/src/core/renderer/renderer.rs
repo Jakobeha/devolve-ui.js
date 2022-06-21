@@ -38,7 +38,7 @@ use crate::core::component::context::VComponentContext2;
 use crate::core::component::mode::VMode;
 use crate::core::component::node::{NodeId, VComponentAndView, VNode};
 use crate::core::component::parent::VParent;
-use crate::core::component::path::{VComponentPath, VComponentRefResolvedPtr};
+use crate::core::component::path::{VComponentPath, VComponentRefResolved, VComponentRefResolvedPtr};
 use crate::core::component::root::VComponentRoot;
 use crate::core::logging::common::LogStart;
 use crate::core::logging::render_logger::{RenderLogger, RenderLoggerImpl};
@@ -57,7 +57,7 @@ use crate::core::renderer::engine::InputListeners;
 use crate::core::renderer::listeners::{RendererListener, RendererListenerId, RendererListeners};
 use crate::core::renderer::render::{VRender, VRenderLayer};
 use crate::core::renderer::running::RcRunning;
-use crate::core::renderer::stale_data::{NeedsRerenderFlag, NeedsUpdateFlag, StaleData};
+use crate::core::renderer::stale_data::{NeedsRerenderFlag, NeedsUpdateFlag, LocalStaleData, SharedStaleData, NeedsUpdateNotifier};
 
 #[derive(Debug)]
 struct CachedRender<Layer> {
@@ -76,7 +76,8 @@ pub struct Renderer<Engine: RenderEngine + 'static> {
     root_component: RefCell<Option<Box<VComponent<Engine::ViewData>>>>,
 
     cached_renders: RefCell<HashMap<NodeId, CachedRender<Engine::RenderLayer>>>,
-    stale_data: Arc<StaleData>,
+    local_stale_data: LocalStaleData,
+    shared_stale_data: Arc<SharedStaleData>,
 
     #[cfg(feature = "time")]
     interval_between_frames: Cell<Duration>,
@@ -183,7 +184,8 @@ impl <Engine: RenderEngine> Renderer<Engine> {
             is_visible: Cell::new(false),
             root_component: RefCell::new(None),
             cached_renders: RefCell::new(HashMap::new()),
-            stale_data: Arc::new(StaleData::new()),
+            local_stale_data: LocalStaleData::new(),
+            shared_stale_data: Arc::new(SharedStaleData::new()),
             #[cfg(feature = "time")]
             interval_between_frames: Cell::new(Self::DEFAULT_INTERVAL_BETWEEN_FRAMES),
             #[cfg(feature = "time")]
@@ -216,7 +218,7 @@ impl <Engine: RenderEngine> Renderer<Engine> {
     /// without specifying a component to update (use `VComponentHead::invalidate` if you want to do that).
     /// This is useful e.g. if your display output changes.
     pub fn needs_rerender_flag(self: &Rc<Self>) -> NeedsRerenderFlag {
-        NeedsRerenderFlag::from(&self.stale_data)
+        NeedsRerenderFlag::from(&self.shared_stale_data)
     }
 
     /// If this needs to rerender any components.
@@ -224,19 +226,25 @@ impl <Engine: RenderEngine> Renderer<Engine> {
     /// as is the case when the window is resized.
     /// However, if any component needs updates then `needs_rerender()` is guaranteed to be true,
     /// unless the component isn't visible.
+    ///
+    /// Note that if the renderer needs to rerender because of other threads but `poll` wasn't called,
+    /// this will return false: `poll` is needed to sync data from other threads.
     pub fn needs_rerender(self: &Rc<Self>) -> bool {
-        self.is_visible() && self.stale_data.needs_rerender().get()
+        self.is_visible() && self.local_stale_data.needs_rerender().get()
     }
 
     /// Mark that the component needs to rerender (only applies if it's visible)
     fn set_needs_rerender(self: &Rc<Self>) {
-        self.stale_data.needs_rerender().set();
+        self.local_stale_data.needs_rerender().set();
     }
 
     /// Mark that the component no longer needs to rerender.
-    /// This is only used in `render`, when the component is actually renderered.
+    /// This is only used in `render`, when the component is actually rendered.
+    ///
+    /// Note that if the renderer needs to rerender because of other threads, this won't clear that flag.
+    /// The flag for other threads is cleared in `poll`.
     fn clear_needs_rerender(self: &Rc<Self>) {
-        self.stale_data.needs_rerender().clear();
+        self.local_stale_data.needs_rerender().clear();
     }
 
     /// Remove a view and all its parents from the render cache.
@@ -253,6 +261,13 @@ impl <Engine: RenderEngine> Renderer<Engine> {
         }
     }
 
+    /// Update `local_stale_data` from `shared_stale_data`, and clear the latter.
+    fn pull_shared_stale_data(self: &Rc<Self>) {
+        let result = self.local_stale_data.append(&mut self.shared_stale_data);
+        if result.is_err() {
+            eprintln!("Error pulling update/rerender data from other threads: {:?}", result.unwrap_err());
+        }
+    }
 
     /// Just update components. However, then we are rendering old views.
     /// Idk if this should be public. There may be situations where a component needs to update to run side-effects.
@@ -260,17 +275,7 @@ impl <Engine: RenderEngine> Renderer<Engine> {
     /// would need a component to run side-effects but not want to render, especially because of a).
     fn update_components(self: &Rc<Self>) {
         if let Some(root_component) = self.root_component.borrow_mut().as_mut() {
-            let result = self.stale_data.apply_updates(root_component);
-            if result.is_err() {
-                eprintln!("Error getting components to update from other threads: {:?}", result.unwrap_err());
-            }
-        }
-    }
-
-    fn invalidate_views_from_other_threads(self: &Rc<Self>) {
-        let result = self.stale_data.invalidate_views(|view_id| self.uncache_view(view_id));
-        if result.is_err() {
-            eprintln!("Error getting views to invalidate from other threads: {:?}", result.unwrap_err());
+            self.local_stale_data.apply_updates(root_component).unwrap();
         }
     }
 
@@ -328,10 +333,11 @@ impl <Engine: RenderEngine> Renderer<Engine> {
 }
 
 impl <Engine: RenderEngine> Renderer<Engine> where Engine::RenderLayer: VRenderLayer {
-    /// Updates components and rerenders if necessary
+    /// Pulls shared staled data, updates components, and rerenders if necessary.
     pub fn poll(self: &Rc<Self>) {
+        self.pull_shared_stale_data();
+
         self.update_components();
-        self.invalidate_views_from_other_threads();
         if self.needs_rerender() {
             self.rerender();
         }
@@ -973,19 +979,21 @@ impl <Engine: RenderEngine> Renderer<Engine> where Engine::ViewData: Serialize +
 impl <Engine: RenderEngine> VComponentRoot for Renderer<Engine> {
     type ViewData = Engine::ViewData;
 
-    fn invalidate(self: Rc<Self>, path: VComponentPath, view: &Box<VView<Engine::ViewData>>) {
-        self.uncache_view(view.id());
-
-        let result = self.stale_data.queue_path_for_update(path);
-        if result.is_err() {
-            eprintln!("WARNING: invalidate failed: {:?}", result.unwrap_err());
-        }
-
+    fn mark_needs_update(self: Rc<Self>, path: &VComponentPath) {
+        self.local_stale_data.queue_path_for_update_no_details(path).unwrap();
         self.set_needs_rerender();
     }
 
-    fn invalidate_flag_for(self: Rc<Self>, path: VComponentPath, view: &Box<VView<Self::ViewData>>) -> NeedsUpdateFlag {
-        NeedsUpdateFlag::from(&self.stale_data, path, view.id())
+    fn invalidate_view(self: Rc<Self>, view: &Box<VView<Engine::ViewData>>) {
+        self.uncache_view(view.id());
+    }
+
+    fn needs_update_flag_for(self: Rc<Self>, path: VComponentPath) -> NeedsUpdateFlag {
+        NeedsUpdateFlag::from(&self.shared_stale_data, path)
+    }
+
+    fn needs_update_notifier(self: Rc<Self>) -> NeedsUpdateNotifier {
+        NeedsUpdateNotifier::from(&self.shared_stale_data)
     }
 
     fn _with_component(self: Rc<Self>, path: &VComponentPath) -> Option<VComponentRefResolvedPtr<Self::ViewData>> {
@@ -1058,7 +1066,8 @@ impl <Engine: RenderEngine + Debug> Debug for Renderer<Engine> where Engine::Vie
             .field("root_component", &self.root_component.borrow())
             .field("cached_renders", &self.cached_renders.borrow())
             .field("is_visible", &self.is_visible.get())
-            .field("stale_data", &self.stale_data)
+            .field("local_stale_data", &self.local_stale_data)
+            .field("shared_stale_data", &self.shared_stale_data)
             .field("engine", &self.engine.borrow())
             .finish_non_exhaustive()
     }
