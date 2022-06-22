@@ -12,6 +12,10 @@
 #![feature(const_intoiterator_identity)]
 #![feature(const_convert)]
 #![feature(const_fn_floating_point_arithmetic)]
+#![feature(unsize)]
+#![feature(coerce_unsized)]
+#![feature(dispatch_from_dyn)]
+#![feature(map_try_insert)]
 #![cfg_attr(feature = "backtrace", feature(backtrace))]
 
 pub mod core;

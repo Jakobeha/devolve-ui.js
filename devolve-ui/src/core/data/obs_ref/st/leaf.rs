@@ -4,7 +4,7 @@ use crate::core::data::obs_ref::st::{ObsRefableRoot, ObsRefableChild, ObsRefRoot
 // Specific ObsRefable implementations
 pub trait Leaf {}
 
-pub macro derive_obs_ref_leaf($name:tt $( < $( $param:ident ),* > )?) {
+pub macro derive_obs_ref_leaf($name:ident $( < $( $param:ident ),* > )?) {
     impl $( < $( $param ),* > )? Leaf for $name $( < $( $param ),* > )? {}
 
     impl <$( $( $param ),* , )? S: SubCtx> ObsRefableRoot<S> for $name $( < $( $param ),* > )? {

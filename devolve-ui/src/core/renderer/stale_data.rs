@@ -79,7 +79,7 @@ impl NeedsUpdateFlag {
     /// Set this component needs update
     pub fn set(&self, details: UpdateDetails) -> StaleDataResult<()> {
         if let Some(stale_data) = self.stale_data.upgrade() {
-            stale_data.queue_path_for_update(self.path.clone(), details)?;
+            stale_data.queue_path_for_update_with_details(&self.path, details)?;
             stale_data.needs_rerender.set();
         }
         Ok(())
@@ -118,7 +118,7 @@ impl <const IS_THREAD_SAFE: bool> StaleData<IS_THREAD_SAFE> {
     pub(super) fn queue_path_for_update_with_details(&self, path: &VComponentPath, details: UpdateDetails) -> StaleDataResult<()> {
         let mut needs_update = self.needs_update_lock()?;
         let mut detailss = match needs_update.get_mut(path) {
-            None => needs_update.insert(path.clone(), Vec::new()),
+            None => needs_update.try_insert(path.clone(), Vec::new()).unwrap(),
             Some(detailss) => detailss
         };
         detailss.push(details);
@@ -159,8 +159,8 @@ impl <const IS_THREAD_SAFE: bool> StaleData<IS_THREAD_SAFE> {
     pub(super) fn append<const IS_THREAD_SAFE2: bool>(&mut self, other: &mut StaleData<IS_THREAD_SAFE2>) -> StaleDataResult<()> {
         {
             let mut needs_update = self.needs_update_lock()?;
-            let mut other_needs_update = other.needs_update_lock();
-            for (other_path, other_detailss) in other_needs_update.drain() {
+            let mut other_needs_update = other.needs_update_lock()?;
+            for (other_path, mut other_detailss) in other_needs_update.drain() {
                 needs_update.entry(other_path).or_default().append(&mut other_detailss);
             }
         }

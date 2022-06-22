@@ -183,7 +183,7 @@ impl <Props: Any, ViewData: VViewData + 'static> VEffectContextRef<Props, ViewDa
 
     pub fn try_with<R>(&self, fun: impl FnOnce(VPlainContext2<'_, '_, Props, ViewData>) -> R) -> Option<R> {
         self.component.try_with(|VComponentRefResolved { parent_contexts, component }| {
-            let (local_contexts, local_context_changes props) = component.construct.local_contexts_and_cast_props();
+            let (local_contexts, local_context_changes, props) = component.construct.local_contexts_and_cast_props();
             fun((VPlainContext1 {
                 component: &mut component.head,
                 contexts: &mut parent_contexts.into_iter().chain(once((local_contexts, local_context_changes))).collect(),

@@ -1,27 +1,27 @@
 //! A vector where each element further down has a shorter lifetime than the top, which has lifetime 'a.
 //! Internally this stores the elements as pointers, but has invariants to guarantee (unproven) safety.
 
+use std::fmt::{Debug, Formatter};
 use std::marker::PhantomData;
 
-#[derive(Debug, PartialEq)]
-pub struct RefStack<'a, T>(
+pub struct MutStack<'a, T>(
     Vec<*mut T>,
     PhantomData<&'a ()>,
 );
 
-impl <T> RefStack<'static, T> {
+impl <T> MutStack<'static, T> {
     /// Create a stack with no elements and a static lifetime, which means that
     /// every element pushed will be popped before the stack is dropped.
     pub fn new() -> Self {
-        RefStack(Vec::new(), PhantomData)
+        MutStack(Vec::new(), PhantomData)
     }
 }
 
-impl <'a, T> RefStack<'a, T> {
+impl <'a, T> MutStack<'a, T> {
     /// Push an element, then run fun, then pop.
     /// The fact that this is a function guarantees that `elem` will not be dropped while `fun` is run,
     /// ensuring that storing them as pointers is safe.
-    pub fn with_push<R>(&mut self, elem: &mut T, fun: impl FnOnce(&mut RefStack<'_, T>) -> R) -> R {
+    pub fn with_push<R>(&mut self, elem: &mut T, fun: impl FnOnce(&mut MutStack<'_, T>) -> R) -> R {
         self.0.push(elem as *mut T);
         let result = fun(self);
         self.0.pop();
@@ -30,7 +30,12 @@ impl <'a, T> RefStack<'a, T> {
 
     /// Get the top item
     pub fn top_mut<'b>(&'b mut self) -> Option<&'b mut &'a mut T> {
-        self.top_mut_assoc().map(|(map, ())| map)
+        self.0.last_mut().map(|elem| unsafe { &mut **elem })
+    }
+
+    /// Iterate from bottom to top
+    fn iter(&self) -> impl Iterator<Item=&T> {
+        self.0.iter().map(|elem| unsafe { &**elem })
     }
 
     /// Iterate from top to bottom
@@ -44,10 +49,22 @@ impl <'a, T> RefStack<'a, T> {
     }
 }
 
-impl <'a, T> FromIterator<&'a mut T> for RefStack<'a, T> {
+impl <'a, T: 'a> FromIterator<&'a mut T> for MutStack<'a, T> {
     /// Create a stack from a vector of references. Since the references must outlive the stack itself,
     /// this ensures that storing them as pointers is safe.
     fn from_iter<I: IntoIterator<Item=&'a mut T>>(iter: I) -> Self {
-        RefStack(iter.into_iter().map(|elem| elem as *mut _).collect(), PhantomData)
+        MutStack(iter.into_iter().map(|elem| elem as *mut _).collect(), PhantomData)
+    }
+}
+
+impl <'a, T: Debug> Debug for MutStack<'a, T> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        f.debug_list().entries(self.iter()).finish()
+    }
+}
+
+impl <'a, 'b, A: PartialEq<B>, B> PartialEq<MutStack<'b, B>> for MutStack<'a, A> {
+    fn eq(&self, other: &MutStack<'b, B>) -> bool {
+        self.iter().eq(other.iter())
     }
 }

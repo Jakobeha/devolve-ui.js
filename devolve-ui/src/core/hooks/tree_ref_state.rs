@@ -33,7 +33,7 @@ pub struct TreeRefState<T: ObsRefableRoot<VContextSubCtx<ViewData>>, ViewData: V
 #[derive(Debug)]
 pub struct TreeAccess<'a, T: ObsRefableRoot<VContextSubCtx<ViewData>>, ViewData: VViewData + 'static>(MutexGuard<'a, T::ObsRefImpl>, PhantomData<ViewData>);
 
-pub fn use_tree_ref_state<'a, 'a0: 'a, T: ObsRefableRoot<VContextSubCtx<ViewData>>, ViewData: VViewData + 'static>(
+pub fn use_tree_ref_state<'a, 'a0: 'a, T: ObsRefableRoot<VContextSubCtx<ViewData>> + 'static, ViewData: VViewData + 'static>(
     c: &mut impl VComponentContext<'a, 'a0, ViewData=ViewData>,
     get_initial: impl FnOnce() -> T
 ) -> TreeRefState<T, ViewData> {
@@ -65,24 +65,24 @@ pub fn use_tree_ref_state<'a, 'a0: 'a, T: ObsRefableRoot<VContextSubCtx<ViewData
     )
 }
 
-impl <T: ObsRefableRoot<VContextSubCtx<ViewData>>, ViewData: VViewData + 'static> TreeRefState<T, ViewData> {
-    pub fn get(&self) -> LockResult<TreeAccess<'_, T, ViewData>> {
+impl <T: ObsRefableRoot<VContextSubCtx<ViewData>> + 'static, ViewData: VViewData + 'static> TreeRefState<T, ViewData> {
+    pub fn get(&self) -> LockResult<TreeAccess<'_, T::ObsRefImpl, ViewData>> {
         self.0.lock().map2(TreeAccess::new)
     }
 
-    pub fn try_get(&self) -> TryLockResult<TreeAccess<'_, T, ViewData>> {
+    pub fn try_get(&self) -> TryLockResult<TreeAccess<'_, T::ObsRefImpl, ViewData>> {
         self.0.try_lock().map2(TreeAccess::new)
     }
 }
 
 impl <'a, T: ObsRefableRoot<VContextSubCtx<ViewData>>, ViewData: VViewData + 'static> TreeAccess<'a, T, ViewData> {
-    fn new(inner: MutexGuard<'a, T>) -> TreeAccess<'a, T, ViewData> {
+    fn new(inner: MutexGuard<'a, T::ObsRefImpl>) -> TreeAccess<'a, T, ViewData> {
         TreeAccess(inner, PhantomData)
     }
 }
 
 impl <'a, T: ObsRefableRoot<VContextSubCtx<ViewData>>, ViewData: VViewData + 'static> Deref for TreeAccess<'a, T, ViewData> {
-    type Target = <MutexGuard<'a, T> as Deref>::Target;
+    type Target = <MutexGuard<'a, T::ObsRefImpl> as Deref>::Target;
 
     fn deref(&self) -> &Self::Target {
         self.0.deref()

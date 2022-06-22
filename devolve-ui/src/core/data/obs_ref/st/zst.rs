@@ -30,7 +30,7 @@ impl <Root, T: Zst, S: SubCtx> ObsRef<Root, T, S> for ZstObsRef<Root, T, S> {
     }
 }
 
-pub macro derive_obs_refable_zst($name:tt $( < $( $param:ident ),* > )?) {
+pub macro derive_obs_refable_zst($name:ident $( < $( $param:ident ),* > )?) {
     impl $( < $( $param ),* > )? Zst for $name $( < $( $param ),* > )? {
         const INSTANCE: Self = Self;
     }
@@ -62,6 +62,35 @@ pub macro derive_obs_refable_zst($name:tt $( < $( $param:ident ),* > )?) {
     }
 }
 
-derive_obs_refable_zst!(());
 derive_obs_refable_zst!(PhantomData<T>);
 derive_obs_refable_zst!(PhantomPinned);
+
+impl Zst for () {
+    const INSTANCE: Self = ();
+}
+
+/// Special `ObsRefableRoot` implementation for ZSTs:
+/// they will never mutate, so we can return a dummy ZST obs-ref.
+impl <S: SubCtx> ObsRefableRoot<S> for () {
+    type ObsRefImpl = ZstObsRef<(), (), S>;
+
+    fn into_obs_ref(self) -> Self::ObsRefImpl {
+        ZstObsRef(PhantomData)
+    }
+}
+
+/// Special `ObsRefableRoot` implementation for ZSTs:
+/// they will never mutate, so we can return a dummy ZST obs-ref.
+impl <Root, S: SubCtx> ObsRefableChild<Root, S> for () {
+    type ObsRefImpl = ZstObsRef<Root, (), S>;
+
+    unsafe fn _as_obs_ref_child(
+        _this: *mut Self,
+        _ancestors_pending: &[Weak<ObsRefPending<S>>],
+        _parent_pending: &Rc<ObsRefPending<S>>,
+        _path: String,
+        _root: Rc<ObsRefRootBase<Root, S>>
+    ) -> Self::ObsRefImpl {
+        ZstObsRef(PhantomData)
+    }
+}

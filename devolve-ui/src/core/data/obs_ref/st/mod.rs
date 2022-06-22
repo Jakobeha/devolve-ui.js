@@ -102,7 +102,6 @@ pub struct ObsRefRootBase<T, S: SubCtx> {
     pending: Rc<ObsRefPending<S>>
 }
 
-#[derive(Debug)]
 pub struct ObsRefChildBase<Root, T, S: SubCtx> {
     // self.root.value contains the real value
     // We don't store a lifetime because it's dependent on root, which is reference-counted.
@@ -123,7 +122,6 @@ pub struct ObsRefChildBase<Root, T, S: SubCtx> {
     root: Rc<ObsRefRootBase<Root, S>>,
 }
 
-#[derive(Debug)]
 struct ObsRefPending<S: SubCtx> {
     pub direct: RefCell<SmallVec<[S::Key; 3]>>,
     // Child's pending values are also stored in each parent. This ensures that when the parent
@@ -292,13 +290,13 @@ impl <'a, Root, T, S: SubCtx> Deref for ObsDeref<'a, Root, T, S> {
     type Target = T;
 
     fn deref(&self) -> &T {
-        self.value as &T
+        unsafe { &*self.value }
     }
 }
 
 impl <'a, Root, T, S: SubCtx> DerefMut for ObsDeref<'a, Root, T, S> {
     fn deref_mut(&mut self) -> &mut T {
-        self.value as &mut T
+        unsafe { &mut *self.value }
     }
 }
 
@@ -334,10 +332,10 @@ impl <Root: Debug, T: Debug, S: SubCtx> Debug for ObsRefChildBase<Root, T, S> wh
     }
 }
 
-impl <Root: Debug, T: Debug, S: SubCtx> Debug for ObsDeref<Root, T, S> where S::Key: Debug {
+impl <'a, Root: Debug, T: Debug, S: SubCtx> Debug for ObsDeref<'a, Root, T, S> where S::Key: Debug {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         f.debug_struct("ObsDeref")
-            .field("value", self.value as &T)
+            .field("value", unsafe { &*self.value })
             .field("parents_pending", &self.parents_pending)
             .field("path", &self.path)
             .field("root", &self.root)

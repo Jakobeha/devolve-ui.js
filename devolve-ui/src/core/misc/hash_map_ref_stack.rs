@@ -4,16 +4,16 @@
 //! which will be borrowed from getting any element in that map.
 
 use std::collections::HashMap;
+use std::fmt::{Debug, Formatter};
 use std::hash::Hash;
 use std::marker::PhantomData;
 use std::mem;
 use replace_with::replace_with_or_abort_and_return;
-use crate::core::misc::ref_stack::RefStack;
+use crate::core::misc::ref_stack::MutStack;
 
 #[derive(Debug, PartialEq)]
-pub struct HashMapMutStack<'a, K, V>(RefStack<'a, HashMap<K, V>>);
+pub struct HashMapMutStack<'a, K, V>(MutStack<'a, HashMap<K, V>>);
 
-#[derive(Debug, PartialEq)]
 pub struct HashMapWithAssocMutStack<'a, K, V, Assoc>(
     Vec<(*mut HashMap<K, V>, *mut Assoc)>,
     PhantomData<&'a ()>,
@@ -21,7 +21,7 @@ pub struct HashMapWithAssocMutStack<'a, K, V, Assoc>(
 
 impl <K, V> HashMapMutStack<'static, K, V> {
     pub fn new() -> Self {
-        HashMapMutStack(RefStack::new())
+        HashMapMutStack(MutStack::new())
     }
 }
 
@@ -59,6 +59,12 @@ impl <'a, K, V, Assoc> HashMapWithAssocMutStack<'a, K, V, Assoc> {
 
     pub fn top_mut<'b>(&'b mut self) -> Option<(&'b mut &'a mut HashMap<K, V>, &'b mut &'a mut Assoc)> {
         unsafe { mem::transmute(self.0.last_mut()) }
+    }
+
+
+    /// Iterate from bottom to top
+    fn iter(&self) -> impl Iterator<Item=(&HashMap<K, V>, &Assoc)> {
+        self.0.iter().map(|(elem, assoc)| unsafe { (&**elem, &**assoc) })
     }
 }
 
@@ -106,14 +112,26 @@ impl <'a, K: Eq + Hash, V, Assoc> HashMapWithAssocMutStack<'a, K, V, Assoc> {
     }
 }
 
-impl <'a, K, V> FromIterator<&'a mut HashMap<K, V>> for HashMapMutStack<'a, K, V> {
+impl <'a, K: 'a, V: 'a> FromIterator<&'a mut HashMap<K, V>> for HashMapMutStack<'a, K, V> {
     fn from_iter<I: IntoIterator<Item=&'a mut HashMap<K, V>>>(iter: I) -> Self {
-        HashMapMutStack(RefStack::from_iter(iter))
+        HashMapMutStack(MutStack::from_iter(iter))
     }
 }
 
-impl <'a, K, V, Assoc> FromIterator<(&'a mut HashMap<K, V>, &'a mut Assoc)> for HashMapWithAssocMutStack<'a, K, V, Assoc> {
+impl <'a, K: 'a, V: 'a, Assoc> FromIterator<(&'a mut HashMap<K, V>, &'a mut Assoc)> for HashMapWithAssocMutStack<'a, K, V, Assoc> {
     fn from_iter<I: IntoIterator<Item=(&'a mut HashMap<K, V>, &'a mut Assoc)>>(iter: I) -> Self {
-        HashMapWithAssocMutStack(iter.into_iter().map(|elem| elem as *mut _).collect(), PhantomData)
+        HashMapWithAssocMutStack(iter.into_iter().map(|(elem, assoc)| (elem as *mut _, assoc as *mut _)).collect(), PhantomData)
+    }
+}
+
+impl <'a, K: Debug, V: Debug, Assoc: Debug> Debug for HashMapWithAssocMutStack<'a, K, V, Assoc> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        f.debug_list().entries(self.iter()).finish()
+    }
+}
+
+impl <'a, 'b, K: Eq + Hash, V: PartialEq<V>, AssocA: PartialEq<AssocB>, AssocB> PartialEq<HashMapWithAssocMutStack<'b, K, V, AssocB>> for HashMapWithAssocMutStack<'a, K, V, AssocA> {
+    fn eq(&self, other: &HashMapWithAssocMutStack<'b, K, V, AssocB>) -> bool {
+        self.iter().eq(other.iter())
     }
 }
