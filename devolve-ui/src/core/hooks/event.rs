@@ -29,7 +29,7 @@ fn _use_event_listener<'a, 'a0: 'a, Props: Any, Event: 'static, ViewData: VViewD
     unregister_listener: impl Fn(VDestructorContext2<'_, '_, Props, ViewData>, Rc<dyn VComponentRoot<ViewData=ViewData>>, RendererListenerId<Event>) + 'static
 ) {
     let unregister_listener = Rc::new(unregister_listener);
-    use_effect(c, rerun, move |(mut c, props)| {
+    use_effect(c, rerun, move |(c, props)| {
         let weak_renderer = c.component_imm().renderer();
         let renderer = weak_renderer.upgrade();
 

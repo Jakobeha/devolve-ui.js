@@ -87,7 +87,7 @@ impl <T: ObsRefableChild<Vec<T>, S>, S: SubCtx> ObsRefRootForVec<T, S> {
         children[index].get_or_insert_with(|| {
             let root = self.base().clone();
             let extension = format!("[{}]", index);
-            let value = &mut self.base.root_value;
+            let value = &self.base.root_value;
             value[index].as_obs_ref_child(
                 &[],
                 &self.base.pending,
@@ -127,7 +127,7 @@ impl <Root, T: ObsRefableChild<Root, S>, S: SubCtx> ObsRefChildForVec<Root, T, S
         children[index].get_or_insert_with(|| {
             let extension = format!("[{}]", index);
             let root = self.base().clone();
-            let value = &mut *self.base.child_value;
+            let value = &*self.base.child_value;
             value[index].as_obs_ref_child(
                 &self.base.parents_pending,
                 &self.base.pending,

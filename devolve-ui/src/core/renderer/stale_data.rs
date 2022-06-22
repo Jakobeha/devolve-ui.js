@@ -5,18 +5,18 @@ use std::sync::{Arc, Weak};
 use crate::core::component::component::VComponent;
 use crate::core::component::path::{VComponentPath, VComponentRefResolved};
 use crate::core::component::update_details::UpdateDetails;
-use crate::core::misc::is_thread_safe::{TSMutex, TSMutexGuard, TSNotifyFlag};
+use crate::core::misc::is_thread_safe::{TsMutex, TsMutexGuard, TsNotifyFlag};
 use crate::core::view::view::VViewData;
 
 /// All data for whether the renderer needs some kind of update.
 #[derive(Debug)]
 pub(super) struct StaleData<const IS_THREAD_SAFE: bool> {
     /// Components to update
-    needs_update: TSMutex<HashMap<VComponentPath, Vec<UpdateDetails>>, IS_THREAD_SAFE>,
+    needs_update: TsMutex<HashMap<VComponentPath, Vec<UpdateDetails>>, IS_THREAD_SAFE>,
     /// Whether we need to rerender.
     /// This should always be set when `needs_update` is modified,
     /// but the invariant is maintained in `Renderer` and not here.
-    needs_rerender: TSNotifyFlag<IS_THREAD_SAFE>
+    needs_rerender: TsNotifyFlag<IS_THREAD_SAFE>
 }
 
 pub(super) type LocalStaleData = StaleData<false>;
@@ -104,12 +104,12 @@ impl NeedsUpdateNotifier {
 impl <const IS_THREAD_SAFE: bool> StaleData<IS_THREAD_SAFE> {
     pub(super) fn new() -> Self {
         StaleData {
-            needs_update: TSMutex::new(HashMap::with_capacity(4)),
-            needs_rerender: TSNotifyFlag::new()
+            needs_update: TsMutex::new(HashMap::with_capacity(4)),
+            needs_rerender: TsNotifyFlag::new()
         }
     }
 
-    fn needs_update_lock(&self) -> StaleDataResult<TSMutexGuard<'_, HashMap<VComponentPath, Vec<UpdateDetails>>, IS_THREAD_SAFE>> {
+    fn needs_update_lock(&self) -> StaleDataResult<TsMutexGuard<'_, HashMap<VComponentPath, Vec<UpdateDetails>>, IS_THREAD_SAFE>> {
         self.needs_update.lock().map_err(|_err| StaleDataError::NeedsUpdatePoison)
     }
 
@@ -117,7 +117,7 @@ impl <const IS_THREAD_SAFE: bool> StaleData<IS_THREAD_SAFE> {
     /// however this function doesn't, `Renderer` which calls this does.
     pub(super) fn queue_path_for_update_with_details(&self, path: &VComponentPath, details: UpdateDetails) -> StaleDataResult<()> {
         let mut needs_update = self.needs_update_lock()?;
-        let mut detailss = match needs_update.get_mut(path) {
+        let detailss = match needs_update.get_mut(path) {
             None => needs_update.try_insert(path.clone(), Vec::new()).unwrap(),
             Some(detailss) => detailss
         };
@@ -151,12 +151,12 @@ impl <const IS_THREAD_SAFE: bool> StaleData<IS_THREAD_SAFE> {
 
     /// Access the needs_rerender flag to get, set or clear.
     #[allow(clippy::needless_lifetimes)]
-    pub(super) fn needs_rerender<'a>(&'a self) -> &'a TSNotifyFlag<IS_THREAD_SAFE> {
+    pub(super) fn needs_rerender<'a>(&'a self) -> &'a TsNotifyFlag<IS_THREAD_SAFE> {
         &self.needs_rerender
     }
 
     /// Append data from the other stale data and clear it
-    pub(super) fn append<const IS_THREAD_SAFE2: bool>(&mut self, other: &mut StaleData<IS_THREAD_SAFE2>) -> StaleDataResult<()> {
+    pub(super) fn append<const IS_THREAD_SAFE2: bool>(&self, other: &StaleData<IS_THREAD_SAFE2>) -> StaleDataResult<()> {
         {
             let mut needs_update = self.needs_update_lock()?;
             let mut other_needs_update = other.needs_update_lock()?;

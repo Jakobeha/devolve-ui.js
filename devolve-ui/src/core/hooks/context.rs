@@ -84,13 +84,13 @@ impl <T: Any, ViewData: VViewData> ContextState<T, ViewData> {
             backtrace: UpdateBacktrace::here()
         };
 
+        let renderer = c.component().renderer();
         let (value_any, context_changes) = c
             .get_mut_context(&self.id.into())
             .unwrap_or_else(|| panic!("context with id ({:?}) not found in parent", self.id));
         assert!(value_any.is::<T>(), "context with id ({:?}) has wrong type: expected {:?}, got {:?}", self.id, TypeId::of::<T>(), (*value_any).type_id());
         let value = unsafe { value_any.downcast_mut_unchecked() };
 
-        let renderer = c.component().renderer();
         context_changes.pending_update(update_details, renderer);
         value
     }

@@ -12,6 +12,7 @@
 #![feature(const_intoiterator_identity)]
 #![feature(const_convert)]
 #![feature(const_fn_floating_point_arithmetic)]
+#![feature(negative_impls)]
 #![feature(unsize)]
 #![feature(coerce_unsized)]
 #![feature(dispatch_from_dyn)]

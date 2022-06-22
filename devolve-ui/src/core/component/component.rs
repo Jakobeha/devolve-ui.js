@@ -201,7 +201,7 @@ impl <ViewData: VViewData + 'static> VComponent<ViewData> {
         match action {
             Action::Reuse(found_child) => found_child,
             Action::Create(parent, props, construct) => {
-                let component = Self::create(parent, key, props, construct);
+                let mut component = Self::create(parent, key, props, construct);
                 component.update(contexts);
                 component
             }
@@ -278,7 +278,7 @@ impl <ViewData: VViewData> VComponent<ViewData> {
             }
 
             // Construct or reconstruct
-            let mut node = self.construct.construct(&mut self.head, contexts);
+            let node = self.construct.construct(&mut self.head, contexts);
             self.head.node = Some(node);
 
             // After construct
@@ -433,7 +433,7 @@ impl <ViewData: VViewData> VComponentHead<ViewData> {
 
     /// Add a new child component.
     pub(super) fn add_child(&mut self, child: Box<VComponent<ViewData>>) -> &Box<VComponent<ViewData>> {
-        let key = child.head.key();
+        let key = *child.head.key();
         let old_value = self.children.insert(key.clone(), child);
         assert!(old_value.is_none(), "child with key {} added twice", key);
         self.children.get(&key).unwrap()
@@ -540,10 +540,11 @@ impl <Props: Any, ViewData: VViewData, F: Fn(VComponentContext2<'_, '_, Props, V
     fn run_effects(&mut self, component: &mut VComponentHead<Self::ViewData>, contexts: &mut VComponentContexts<'_>) {
         contexts.with_push(&mut self.s.local_contexts, &mut self.s.pending_updates, |contexts| {
             while let Some(effect) = self.s.effects.effects.pop() {
+                let update_details = &contexts.top_mut().unwrap().1.update_details;
                 // If we have pending updates, we break, because immediately after this function ends
                 // we run the pending updates and then call run_effects again to run remanining effects.
                 // This is so effects don't have stale data.
-                if component.recursive_update_stack_trace.has_pending() || !self.s.pending_updates.update_details.is_empty() {
+                if component.recursive_update_stack_trace.has_pending() || !update_details.is_empty() {
                     break
                 }
 

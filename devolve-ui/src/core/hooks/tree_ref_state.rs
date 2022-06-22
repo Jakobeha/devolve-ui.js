@@ -56,7 +56,7 @@ pub fn use_tree_ref_state<'a, 'a0: 'a, T: ObsRefableRoot<VContextSubCtx<ViewData
                 }
             }
         }));
-        Arc::new(Mutex::new(get_initial().into_obs_ref()))
+        Arc::new(Mutex::new(obs_ref))
     });
 
     TreeRefState(
@@ -66,11 +66,11 @@ pub fn use_tree_ref_state<'a, 'a0: 'a, T: ObsRefableRoot<VContextSubCtx<ViewData
 }
 
 impl <T: ObsRefableRoot<VContextSubCtx<ViewData>> + 'static, ViewData: VViewData + 'static> TreeRefState<T, ViewData> {
-    pub fn get(&self) -> LockResult<TreeAccess<'_, T::ObsRefImpl, ViewData>> {
+    pub fn get(&self) -> LockResult<TreeAccess<'_, T, ViewData>> {
         self.0.lock().map2(TreeAccess::new)
     }
 
-    pub fn try_get(&self) -> TryLockResult<TreeAccess<'_, T::ObsRefImpl, ViewData>> {
+    pub fn try_get(&self) -> TryLockResult<TreeAccess<'_, T, ViewData>> {
         self.0.try_lock().map2(TreeAccess::new)
     }
 }
@@ -107,7 +107,7 @@ impl <T: ObsRefableRoot<VContextSubCtx<ViewData>>, ViewData: VViewData + 'static
     }
 }
 
-struct VContextSubCtx<ViewData: VViewData + 'static>(PhantomData<ViewData>);
+pub struct VContextSubCtx<ViewData: VViewData + 'static>(PhantomData<ViewData>);
 
 impl <ViewData: VViewData + 'static> SubCtx for VContextSubCtx<ViewData> {
     type Input<'a> = &'a dyn VContext<'a, ViewData=ViewData>;

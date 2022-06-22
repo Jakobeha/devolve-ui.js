@@ -263,7 +263,7 @@ impl <Engine: RenderEngine> Renderer<Engine> {
 
     /// Update `local_stale_data` from `shared_stale_data`, and clear the latter.
     fn pull_shared_stale_data(self: &Rc<Self>) {
-        let result = self.local_stale_data.append(&mut self.shared_stale_data);
+        let result = self.local_stale_data.append(&self.shared_stale_data);
         if result.is_err() {
             eprintln!("Error pulling update/rerender data from other threads: {:?}", result.unwrap_err());
         }

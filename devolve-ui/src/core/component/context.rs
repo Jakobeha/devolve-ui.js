@@ -78,7 +78,7 @@ pub trait VContext<'a> {
 
 pub trait VComponentContext<'a, 'a0> : VContext<'a> {
     fn component_and_contexts<'b>(&'b mut self) -> (&'b mut VComponentHead<Self::ViewData>, &'b mut VComponentContexts<'a0>) where 'a: 'b;
-    fn local_contexts<'b>(&'b mut self) -> &'b mut &'a0 mut VComponentLocalContexts where 'a: 'b;
+    fn local_contexts<'b>(&'b mut self) -> &'b mut VComponentLocalContexts where 'a: 'b;
 }
 
 impl <'a, 'a0: 'a, Props: Any, ViewData: VViewData> VContext<'a> for VComponentContext1<'a, 'a0, Props, ViewData> {
@@ -106,7 +106,7 @@ impl <'a, 'a0: 'a, Props: Any, ViewData: VViewData> VComponentContext<'a, 'a0> f
         (self.component, self.contexts)
     }
 
-    fn local_contexts<'b>(&'b mut self) -> &'b mut &'a0 mut VComponentLocalContexts where 'a: 'b {
+    fn local_contexts<'b>(&'b mut self) -> &'b mut VComponentLocalContexts where 'a: 'b {
         self.contexts.top_mut().expect("empty context stack in hook").0
     }
 }

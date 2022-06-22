@@ -98,6 +98,7 @@ impl <ViewData: VViewData> VComponentRefResolvedPtr<ViewData> {
 // region boilerplate
 impl VComponentPath {
     pub const ROOT: VComponentPath = VComponentPath::new();
+    pub const ROOT_REF: &'static VComponentPath = &Self::ROOT;
 
     pub const fn new() -> Self {
         Self(Vec::new())

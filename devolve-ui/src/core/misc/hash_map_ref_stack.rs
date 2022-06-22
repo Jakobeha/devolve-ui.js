@@ -11,7 +11,7 @@ use std::mem;
 use replace_with::replace_with_or_abort_and_return;
 use crate::core::misc::ref_stack::MutStack;
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug)]
 pub struct HashMapMutStack<'a, K, V>(MutStack<'a, HashMap<K, V>>);
 
 pub struct HashMapWithAssocMutStack<'a, K, V, Assoc>(
@@ -31,8 +31,6 @@ impl <K, V, Assoc> HashMapWithAssocMutStack<'static, K, V, Assoc> {
     }
 }
 
-static UNUSED_ASSOC: () = ();
-
 impl <'a, K, V> HashMapMutStack<'a, K, V> {
     pub fn with_push<R>(&mut self, map: &mut HashMap<K, V>, fun: impl FnOnce(&mut HashMapMutStack<'_, K, V>) -> R) -> R {
         self.0.with_push(map, |stack| {
@@ -44,7 +42,11 @@ impl <'a, K, V> HashMapMutStack<'a, K, V> {
         })
     }
 
-    pub fn top_mut<'b>(&'b mut self) -> Option<&'b mut &'a mut HashMap<K, V>> {
+    pub fn top<'b>(&'b mut self) -> Option<&'b HashMap<K, V>> where 'a: 'b {
+        self.0.top()
+    }
+
+    pub fn top_mut<'b>(&'b mut self) -> Option<&'b mut HashMap<K, V>> where 'a: 'b {
         self.0.top_mut()
     }
 }
@@ -57,10 +59,13 @@ impl <'a, K, V, Assoc> HashMapWithAssocMutStack<'a, K, V, Assoc> {
         result
     }
 
-    pub fn top_mut<'b>(&'b mut self) -> Option<(&'b mut &'a mut HashMap<K, V>, &'b mut &'a mut Assoc)> {
-        unsafe { mem::transmute(self.0.last_mut()) }
+    pub fn top<'b>(&'b self) -> Option<&'b (&'a HashMap<K, V>, &'a Assoc)> where 'a: 'b {
+        unsafe { mem::transmute(self.0.last()) }
     }
 
+    pub fn top_mut<'b>(&'b mut self) -> Option<&'b mut (&'a mut HashMap<K, V>, &'a mut Assoc)> where 'a: 'b {
+        unsafe { mem::transmute(self.0.last_mut()) }
+    }
 
     /// Iterate from bottom to top
     fn iter(&self) -> impl Iterator<Item=(&HashMap<K, V>, &Assoc)> {
@@ -130,8 +135,8 @@ impl <'a, K: Debug, V: Debug, Assoc: Debug> Debug for HashMapWithAssocMutStack<'
     }
 }
 
-impl <'a, 'b, K: Eq + Hash, V: PartialEq<V>, AssocA: PartialEq<AssocB>, AssocB> PartialEq<HashMapWithAssocMutStack<'b, K, V, AssocB>> for HashMapWithAssocMutStack<'a, K, V, AssocA> {
-    fn eq(&self, other: &HashMapWithAssocMutStack<'b, K, V, AssocB>) -> bool {
+impl <'a, 'b, K: Eq + Hash, V: PartialEq<V>, AssocA: PartialEq<AssocA>> PartialEq<HashMapWithAssocMutStack<'b, K, V, AssocA>> for HashMapWithAssocMutStack<'a, K, V, AssocA> {
+    fn eq(&self, other: &HashMapWithAssocMutStack<'b, K, V, AssocA>) -> bool {
         self.iter().eq(other.iter())
     }
 }

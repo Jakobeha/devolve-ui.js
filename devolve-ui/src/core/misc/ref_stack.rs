@@ -29,7 +29,12 @@ impl <'a, T> MutStack<'a, T> {
     }
 
     /// Get the top item
-    pub fn top_mut<'b>(&'b mut self) -> Option<&'b mut &'a mut T> {
+    pub fn top<'b>(&'b self) -> Option<&'b T> where 'a: 'b {
+        self.0.last().map(|elem| unsafe { &**elem })
+    }
+
+    /// Get the top item
+    pub fn top_mut<'b>(&'b mut self) -> Option<&'b mut T> where 'a: 'b {
         self.0.last_mut().map(|elem| unsafe { &mut **elem })
     }
 

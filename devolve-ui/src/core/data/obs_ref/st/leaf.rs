@@ -4,10 +4,10 @@ use crate::core::data::obs_ref::st::{ObsRefableRoot, ObsRefableChild, ObsRefRoot
 // Specific ObsRefable implementations
 pub trait Leaf {}
 
-pub macro derive_obs_ref_leaf($name:ident $( < $( $param:ident ),* > )?) {
+pub macro derive_obs_ref_leaf($name:ident $( < $( $param:ident ),* > )? $( where ( $($where_tt:tt)* ) )? ) {
     impl $( < $( $param ),* > )? Leaf for $name $( < $( $param ),* > )? {}
 
-    impl <$( $( $param ),* , )? S: SubCtx> ObsRefableRoot<S> for $name $( < $( $param ),* > )? {
+    impl <$( $( $param ),* , )? S: SubCtx> ObsRefableRoot<S> for $name $( < $( $param ),* > )?  $( where $($where_tt)* )? {
         type ObsRefImpl = Rc<ObsRefRootBase<$name $( < $( $param ),* > )?, S>>;
 
         fn into_obs_ref(self) -> Self::ObsRefImpl {
@@ -15,7 +15,7 @@ pub macro derive_obs_ref_leaf($name:ident $( < $( $param:ident ),* > )?) {
         }
     }
 
-    impl <Root, $( $( $param ),* , )? S: SubCtx> ObsRefableChild<Root, S> for $name $( < $( $param ),* > )? {
+    impl <Root, $( $( $param ),* , )? S: SubCtx> ObsRefableChild<Root, S> for $name $( < $( $param ),* > )? $( where $($where_tt)* )? {
         type ObsRefImpl = ObsRefChildBase<Root, $name $( < $( $param ),* > )?, S>;
 
         unsafe fn _as_obs_ref_child(this: *mut Self, ancestors_pending: &[Weak<ObsRefPending<S>>], parent_pending: &Rc<ObsRefPending<S>>, path: String, root: Rc<ObsRefRootBase<Root, S>>) -> Self::ObsRefImpl {

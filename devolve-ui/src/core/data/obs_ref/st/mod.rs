@@ -55,7 +55,7 @@ pub trait ObsRefableChild<Root, S: SubCtx>: Sized {
     ) -> Self::ObsRefImpl;
 
     unsafe fn as_obs_ref_child(
-        &mut self,
+        &self,
         ancestors_pending: &[Weak<ObsRefPending<S>>],
         parent_pending: &Rc<ObsRefPending<S>>,
         path_head: &str,
@@ -67,14 +67,14 @@ pub trait ObsRefableChild<Root, S: SubCtx>: Sized {
         } else {
             format!("{}.{}", path_head, extension)
         };
-        Self::_as_obs_ref_child(self as *mut Self, ancestors_pending, parent_pending, path, root)
+        Self::_as_obs_ref_child(self as *const Self as *mut Self, ancestors_pending, parent_pending, path, root)
     }
 }
 
 /// Whenever you get a reference, you must pass a subscriber context.
 /// Then when the reference is mutated, the propagator will receive all of the subscription keys
 /// and can retrieve the contexts and forward updates to them.
-pub trait SubCtx {
+pub trait SubCtx: 'static {
     type Input<'a>;
     type Key: Clone;
 
@@ -122,11 +122,11 @@ pub struct ObsRefChildBase<Root, T, S: SubCtx> {
     root: Rc<ObsRefRootBase<Root, S>>,
 }
 
-struct ObsRefPending<S: SubCtx> {
-    pub direct: RefCell<SmallVec<[S::Key; 3]>>,
+pub struct ObsRefPending<S: SubCtx> {
+    pub(super) direct: RefCell<SmallVec<[S::Key; 3]>>,
     // Child's pending values are also stored in each parent. This ensures that when the parent
     // gets modified, the child is still observed.
-    pub from_children: RefCell<SmallVec<[S::Key; 3]>>,
+    pub(super) from_children: RefCell<SmallVec<[S::Key; 3]>>,
 }
 // endregion
 
@@ -148,7 +148,7 @@ impl <T, S: SubCtx> ObsRefRootBase<T, S> {
         let pending: Vec<S::Key> = parents_pending
             .iter()
             .filter_map(Weak::upgrade)
-            .flat_map(|pending| pending.direct.borrow_mut().drain(..))
+            .flat_map(|pending| pending.direct.borrow_mut().drain(..).collect::<Vec<_>>())
             .chain(self.pending.from_children.borrow_mut().drain(..))
             .collect();
 
@@ -196,7 +196,7 @@ impl <Root, T, S: SubCtx> ObsRefChildBase<Root, T, S> {
 
     fn push_pending(&self, s: S::Input<'_>) {
         let subscription = S::convert_into_subscription_key(s);
-        for parent in self.parents_pending {
+        for parent in self.parents_pending.iter() {
             if let Some(parent) = parent.upgrade() {
                 parent.from_children.borrow_mut().push(subscription.clone());
             }
@@ -215,15 +215,16 @@ impl <S: SubCtx> ObsRefPending<S> {
 }
 
 
-impl <'a, Root, T, S: SubCtx> ObsDeref<'a, Root, T, S> {
+impl <'a, Root: 'a, T, S: SubCtx> ObsDeref<'a, Root, T, S> {
     const PARENTS_PENDING: Vec<Weak<ObsRefPending<S>>> = Vec::new();
+    const PARENTS_PENDING_REF: &'static Vec<Weak<ObsRefPending<S>>> = &Self::PARENTS_PENDING;
 
     pub(super) fn zst(instance: &T) -> Self {
         ObsDeref {
             value: instance as *const T as *mut T,
-            parents_pending: &Self::PARENTS_PENDING,
+            parents_pending: Self::PARENTS_PENDING_REF,
             path: "<zst deref>",
-            root: None,
+            root: None
         }
     }
 }
@@ -237,13 +238,12 @@ impl <T, S: SubCtx> ObsRef<T, T, S> for Rc<ObsRefRootBase<T, S>> {
         &self.root_value
     }
 
-    fn m(&mut self, s: S::Input<'_>) -> ObsDeref<T, T, S> {
+    fn m(&mut self, s: S::Input<'_>) -> ObsDeref<'_, T, T, S> {
         self.push_pending(s);
 
-        let value = &mut self.root_value as *mut T;
         ObsDeref {
-            value,
-            parents_pending: &Vec::new(),
+            value: &self.root_value as *const T as *mut T,
+            parents_pending: ObsDeref::<'_, T, T, S>::PARENTS_PENDING_REF,
             path: "",
             root: Some(self),
         }

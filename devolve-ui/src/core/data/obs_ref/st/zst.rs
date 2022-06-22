@@ -2,19 +2,20 @@ use std::marker::{PhantomData, PhantomPinned};
 use std::rc::{Rc, Weak};
 use crate::core::data::obs_ref::st::{ObsRefableRoot, ObsRefableChild, ObsRefRootBase, SubCtx, ObsRefPending, ObsRef, ObsDeref, Observer};
 
-pub trait Zst {
+pub trait ZstStatic: 'static {
     const INSTANCE: Self;
+    const INSTANCE_REF: &'static Self;
 }
 
 // impl <T> Zst for T where T is a ZST
 
 /// Special `ObsRef` implementation for ZSTs:
 /// they will never mutate, so we can return a dummy ZST obs-ref.
-struct ZstObsRef<Root, T: Zst, S: SubCtx>(PhantomData<(Root, T, S)>);
+pub struct ZstObsRef<Root, T: ZstStatic, S: SubCtx>(PhantomData<(Root, T, S)>);
 
-impl <Root, T: Zst, S: SubCtx> ObsRef<Root, T, S> for ZstObsRef<Root, T, S> {
+impl <Root, T: ZstStatic, S: SubCtx> ObsRef<Root, T, S> for ZstObsRef<Root, T, S> {
     fn i(&self, _s: S::Input<'_>) -> &T {
-        &T::INSTANCE
+        T::INSTANCE_REF
     }
 
     fn m(&mut self, _s: S::Input<'_>) -> ObsDeref<Root, T, S> {
@@ -30,14 +31,15 @@ impl <Root, T: Zst, S: SubCtx> ObsRef<Root, T, S> for ZstObsRef<Root, T, S> {
     }
 }
 
-pub macro derive_obs_refable_zst($name:ident $( < $( $param:ident ),* > )?) {
-    impl $( < $( $param ),* > )? Zst for $name $( < $( $param ),* > )? {
+pub macro derive_obs_refable_zst($name:ident $( < $( $param:ident ),* > )? $( where ( $($where_tt:tt)* ) )?) {
+    impl $( < $( $param ),* > )? ZstStatic for $name $( < $( $param ),* > )? $( where $($where_tt)* )? {
         const INSTANCE: Self = Self;
+        const INSTANCE_REF: &'static Self = &Self;
     }
 
     /// Special `ObsRefableRoot` implementation for ZSTs:
     /// they will never mutate, so we can return a dummy ZST obs-ref.
-    impl <$( $( $param ),* , )? S: SubCtx> ObsRefableRoot<S> for $name $( < $( $param ),* > )? {
+    impl <$( $( $param ),* , )? S: SubCtx> ObsRefableRoot<S> for $name $( < $( $param ),* > )? $( where $($where_tt)* )? {
         type ObsRefImpl = ZstObsRef<$name $( < $( $param ),* > )?, $name $( < $( $param ),* > )?, S>;
 
         fn into_obs_ref(self) -> Self::ObsRefImpl {
@@ -47,7 +49,7 @@ pub macro derive_obs_refable_zst($name:ident $( < $( $param:ident ),* > )?) {
 
     /// Special `ObsRefableRoot` implementation for ZSTs:
     /// they will never mutate, so we can return a dummy ZST obs-ref.
-    impl <Root, $( $( $param ),* , )? S: SubCtx> ObsRefableChild<Root, S> for $name $( < $( $param ),* > )? {
+    impl <Root, $( $( $param ),* , )? S: SubCtx> ObsRefableChild<Root, S> for $name $( < $( $param ),* > )? $( where $($where_tt)* )? {
         type ObsRefImpl = ZstObsRef<Root, $name $( < $( $param ),* > )?, S>;
 
         unsafe fn _as_obs_ref_child(
@@ -62,11 +64,12 @@ pub macro derive_obs_refable_zst($name:ident $( < $( $param:ident ),* > )?) {
     }
 }
 
-derive_obs_refable_zst!(PhantomData<T>);
+derive_obs_refable_zst!(PhantomData<T> where ( T: 'static ));
 derive_obs_refable_zst!(PhantomPinned);
 
-impl Zst for () {
+impl ZstStatic for () {
     const INSTANCE: Self = ();
+    const INSTANCE_REF: &'static Self = &();
 }
 
 /// Special `ObsRefableRoot` implementation for ZSTs:
