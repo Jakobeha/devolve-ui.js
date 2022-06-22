@@ -3,6 +3,7 @@ use std::backtrace::Backtrace;
 use std::fmt::{Display, Formatter};
 #[cfg(feature = "logging")]
 use serde::{Serialize, Deserialize};
+use crate::core::component::path::VComponentKey;
 use crate::core::hooks::context::AnonContextId;
 
 #[derive(Debug, Clone)]
@@ -18,6 +19,14 @@ pub struct UpdateBacktrace(
 #[derive(Debug, Clone)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum UpdateDetails {
+    CreateNew {
+        key: VComponentKey,
+        backtrace: UpdateBacktrace
+    },
+    Reuse {
+        key: VComponentKey,
+        backtrace: UpdateBacktrace
+    },
     SetState {
         index: usize,
         backtrace: UpdateBacktrace
@@ -137,6 +146,11 @@ impl UpdateFrame {
         self.simultaneous.push(details);
     }
 
+    fn append(&mut self, detailss: &mut Vec<UpdateDetails>) {
+        assert!(self.is_open, "closed");
+        self.simultaneous.append(detailss);
+    }
+
     pub fn simultaneous(&self) -> &Vec<UpdateDetails> {
         &self.simultaneous
     }
@@ -171,6 +185,12 @@ impl Display for UpdateFrame {
 impl Display for UpdateDetails {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
+            UpdateDetails::CreateNew { key, backtrace } => {
+                write!(f, "create-new:{} {}", key, backtrace)
+            },
+            UpdateDetails::Reuse { key, backtrace } => {
+                write!(f, "reuse:{} {}", key, backtrace)
+            },
             UpdateDetails::SetState { index, backtrace } => {
                 write!(f, "set:state:{} {}", index, backtrace)
             }

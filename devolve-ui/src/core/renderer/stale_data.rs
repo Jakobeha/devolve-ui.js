@@ -1,15 +1,11 @@
 //! These structs are how devolve-ui communicates to the renderer that it needs to be updated even from another thread.
 //! You don't use these directly, instead they are used through classes like `AtomicRefState`.
-use std::cell::RefCell;
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 use std::sync::{Arc, Weak};
-use smallvec::SmallVec;
 use crate::core::component::component::VComponent;
-use crate::core::component::node::NodeId;
 use crate::core::component::path::{VComponentPath, VComponentRefResolved};
 use crate::core::component::update_details::UpdateDetails;
 use crate::core::misc::is_thread_safe::{TSMutex, TSMutexGuard, TSNotifyFlag};
-use crate::core::misc::notify_flag::NotifyFlag;
 use crate::core::view::view::VViewData;
 
 /// All data for whether the renderer needs some kind of update.
@@ -96,9 +92,9 @@ impl NeedsUpdateNotifier {
     }
 
     /// Set this component needs update
-    pub fn set(&self, path: VComponentPath, details: UpdateDetails) -> StaleDataResult<()> {
+    pub fn set(&self, path: &VComponentPath, details: UpdateDetails) -> StaleDataResult<()> {
         if let Some(stale_data) = self.0.upgrade() {
-            stale_data.queue_path_for_update(path, details)?;
+            stale_data.queue_path_for_update_with_details(path, details)?;
             stale_data.needs_rerender.set();
         }
         Ok(())

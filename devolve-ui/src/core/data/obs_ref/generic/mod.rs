@@ -19,7 +19,7 @@ use crate::core::misc::is_thread_safe::TSMutex;
 
 // region types
 
-pub union Observer<Root, S, const IS_THREAD_SAFE: bool> {
+pub union Observer<Root, S: SubCtx, const IS_THREAD_SAFE: bool> {
     yes: Box<dyn Fn(&Root, &[S::Key], &str) + Send>,
     no: Box<dyn Fn(&Root, &[S::Key], &str)>
 }
@@ -28,11 +28,11 @@ pub union Observer<Root, S, const IS_THREAD_SAFE: bool> {
 /// it will trigger observers. You can access an observable reference to children of `ObsRefable`
 pub trait ObsRef<Root, T, S: SubCtx, const IS_THREAD_SAFE: bool> {
     /// Returns an immutable reference to the underlying value
-    fn i(&self, s: S) -> &T;
+    fn i(&self, s: S::Input<'_>) -> &T;
 
     /// Returns a mutable reference to the underlying value.
     /// When the reference is dropped, observers will be called
-    fn m(&mut self, s: S) -> ObsDeref<Root, T, S, IS_THREAD_SAFE>;
+    fn m(&mut self, s: S::Input<'_>) -> ObsDeref<Root, T, S, IS_THREAD_SAFE>;
 
     /// Add observer which will be called when `m` is called and then the reference is dropped.
     fn after_mutate(&self, observer: Observer<Root, S, IS_THREAD_SAFE>);
@@ -43,10 +43,11 @@ pub trait ObsRef<Root, T, S: SubCtx, const IS_THREAD_SAFE: bool> {
 /// Whenever you get a reference, you must pass a subscriber context.
 /// Then when the reference is mutated, the propagator will receive all of the subscription keys
 /// and can retrieve the contexts and forward updates to them.
-pub trait SubCtx: Clone {
-    type Key;
+pub trait SubCtx {
+    type Input<'a>;
+    type Key: Clone;
 
-    fn into_subscription_key(self) -> Self::Key;
+    fn convert_into_subscription_key(input: Self::Input<'_>) -> Self::Key;
 }
 
 #[derive(Debug)]
@@ -151,8 +152,8 @@ impl <T, S: SubCtx> ObsRefRootBase<T, S> {
         }
     }
 
-    fn push_pending(&self, s: S) {
-        let subscription = s.into_subscription_key();
+    fn push_pending(&self, s: S::Input<'_>) {
+        let subscription = S::convert_into_subscription_key(s);
         self.pending.direct.borrow_mut().push(subscription);
     }
 }
@@ -188,8 +189,8 @@ impl <Root, T, S: SubCtx> ObsRefChildBase<Root, T, S> {
         self.path.as_str()
     }
 
-    fn push_pending(&self, s: S) {
-        let subscription = s.into_subscription_key();
+    fn push_pending(&self, s: S::Input<'_>) {
+        let subscription = S::convert_into_subscription_key(s);
         for parent in self.parents_pending {
             if let Some(parent) = parent.upgrade() {
                 parent.from_children.borrow_mut().push(subscription.clone());
@@ -209,13 +210,13 @@ impl <S: SubCtx> ObsRefPending<S> {
 }
 
 impl <T, S: SubCtx> ObsRef<T, T, S> for Rc<ObsRefRootBase<T, S>> {
-    fn i(&self, s: S) -> &T {
+    fn i(&self, s: S::Input<'_>) -> &T {
         self.push_pending(s);
 
         &self.root_value
     }
 
-    fn m(&mut self, s: S) -> ObsDeref<T, T, S> {
+    fn m(&mut self, s: S::Input<'_>) -> ObsDeref<T, T, S> {
         self.push_pending(s);
 
         let value = &mut self.root_value as *mut T;
@@ -237,13 +238,13 @@ impl <T, S: SubCtx> ObsRef<T, T, S> for Rc<ObsRefRootBase<T, S>> {
 }
 
 impl <Root, T, S: SubCtx> ObsRef<Root, T, S> for ObsRefChildBase<Root, T, S> {
-    fn i(&self, s: S) -> &T {
+    fn i(&self, s: S::Input<'_>) -> &T {
         self.push_pending(s);
 
         unsafe { &*self.child_value }
     }
 
-    fn m(&mut self, s: S) -> ObsDeref<Root, T, S> {
+    fn m(&mut self, s: S::Input<'_>) -> ObsDeref<Root, T, S> {
         self.push_pending(s);
 
         ObsDeref {

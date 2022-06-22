@@ -40,7 +40,7 @@ impl Default for BoxConstrArgs {
 }
 
 macro _box2(($d:tt) @ $name:ident, $layout_direction: expr) {
-    pub fn $name<ViewData: HasTuiViewData>(view_args: VViewConstrArgs, data_args: BoxConstrArgs<ViewData>, children: Vec<VNode<ViewData>>) -> VNode<ViewData> {
+    pub fn $name<ViewData: HasTuiViewData>(view_args: VViewConstrArgs, data_args: BoxConstrArgs, children: Vec<VNode<ViewData>>) -> VNode<ViewData> {
         constr_view(view_args, ViewData::tui_box(
             children,
             $crate::view_data::tui::tui::TuiBoxAttrs {

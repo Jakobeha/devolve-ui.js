@@ -30,11 +30,11 @@ use std::mem;
 use crate::core::component::context::{VComponentContext1, VComponentContext2, VDestructorContext1, VDestructorContext2, VEffectContext1, VEffectContext2};
 use crate::core::component::path::{VComponentKey, VComponentPath, VComponentRef, VComponentRefResolved};
 use crate::core::component::root::VComponentRoot;
-use crate::core::component::update_details::{UpdateDetails, UpdateFrame, UpdateStack};
+use crate::core::component::update_details::{UpdateBacktrace, UpdateDetails, UpdateStack};
 use crate::core::hooks::context::AnonContextId;
 #[cfg(feature = "logging")]
-use crate::core::logging::update_logger::{UpdateLogEntry, UpdateLogger};
-use crate::core::misc::hash_map_ref_stack::{HashMapMutStack, HashMapWithAssocMutStack};
+use crate::core::logging::update_logger::UpdateLogger;
+use crate::core::misc::hash_map_ref_stack::HashMapWithAssocMutStack;
 use crate::core::renderer::stale_data::NeedsUpdateFlag;
 use crate::core::view::view::{VView, VViewData};
 
@@ -93,9 +93,9 @@ pub(super) trait VComponentConstruct: Debug {
     fn props(&self) -> &dyn Any;
     fn construct(&mut self, component: &mut VComponentHead<Self::ViewData>, contexts: &mut VComponentContexts<'_>) -> VNode<Self::ViewData>;
 
-    fn local_contexts_and_changes(&mut self) -> (&mut VComponentLocalContexts, &mut ContextPendingUpdates);
+    fn local_contexts(&mut self) -> (&mut VComponentLocalContexts, &mut ContextPendingUpdates);
     fn local_context_changes(&mut self) -> &mut ContextPendingUpdates;
-    fn local_contexts_and_props(&mut self) -> (&mut VComponentLocalContexts, &dyn Any);
+    fn local_contexts_and_props(&mut self) -> (&mut VComponentLocalContexts, &mut ContextPendingUpdates, &dyn Any);
 
     fn run_effects(&mut self, component: &mut VComponentHead<Self::ViewData>, contexts: &mut VComponentContexts<'_>);
     fn run_update_destructors(&mut self, component: &mut VComponentHead<Self::ViewData>, contexts: &mut VComponentContexts<'_>);
@@ -181,7 +181,10 @@ impl <ViewData: VViewData + 'static> VComponent<ViewData> {
                                 phantom: PhantomData
                             }));
                             found_child.head.is_fresh = true;
-                            found_child.head.pending_update(UpdateDetails::Reuse);
+                            found_child.head.pending_update(UpdateDetails::Reuse {
+                                key,
+                                backtrace: UpdateBacktrace::here()
+                            });
                             found_child.update(contexts);
                             // When we return this it will be added back to parent.children
                             return Action::Reuse(found_child)
@@ -199,7 +202,6 @@ impl <ViewData: VViewData + 'static> VComponent<ViewData> {
             Action::Reuse(found_child) => found_child,
             Action::Create(parent, props, construct) => {
                 let component = Self::create(parent, key, props, construct);
-                component.head.pending_update(UpdateDetails::CreateNew);
                 component.update(contexts);
                 component
             }
@@ -232,7 +234,10 @@ impl <ViewData: VViewData + 'static> VComponent<ViewData> {
                 // Create = needs update
                 recursive_update_stack_trace: {
                     let mut stack = UpdateStack::new();
-                    stack.add_to_last(UpdateDetails::Create(key));
+                    stack.add_to_last(UpdateDetails::CreateNew {
+                        key,
+                        backtrace: UpdateBacktrace::here()
+                    });
                     stack
                 }
             },
@@ -309,7 +314,7 @@ impl <ViewData: VViewData> VComponent<ViewData> {
         self.head.invalidate_view();
 
         for child in self.head.children.into_values() {
-            let (local_contexts, local_context_changes) = self.construct.local_contexts_and_changes();
+            let (local_contexts, local_context_changes) = self.construct.local_contexts();
             contexts.with_push(local_contexts, local_context_changes, |contexts| {
                 child.destroy(contexts)
             });
@@ -349,16 +354,17 @@ impl <ViewData: VViewData> VComponent<ViewData> {
     }
 
     /// Child component with the given key
-    fn local_contexts_and_child_mut<'a>(self: &'a mut Box<Self>, key: &VComponentKey) -> (&'a mut VComponentLocalContexts, Option<&'a mut Box<VComponent<ViewData>>>) {
-        (self.construct.local_contexts(), self.head.children.get_mut(key))
+    fn local_contexts_and_child_mut<'a>(self: &'a mut Box<Self>, key: &VComponentKey) -> (&'a mut VComponentLocalContexts, &'a mut ContextPendingUpdates, Option<&'a mut Box<VComponent<ViewData>>>) {
+        let (local_contexts, local_context_changes) = self.construct.local_contexts();
+        (local_contexts, local_context_changes, self.head.children.get_mut(key))
     }
 
     /// Descendent with the given path.
-    pub(in crate::core) fn down_path_mut<'a>(self: &'a mut Box<Self>, path: &VComponentPath, mut parents: Vec<&'a mut VComponentLocalContexts>) -> Option<VComponentRefResolved<'a, ViewData>> {
+    pub(in crate::core) fn down_path_mut<'a>(self: &'a mut Box<Self>, path: &VComponentPath, mut parents: Vec<(&'a mut VComponentLocalContexts, &'a mut ContextPendingUpdates)>) -> Option<VComponentRefResolved<'a, ViewData>> {
         let mut current = self;
         for segment in path.iter() {
-            let (local_contexts, child) = current.local_contexts_and_child_mut(segment);
-            parents.push(local_contexts);
+            let (local_contexts, changes, child) = current.local_contexts_and_child_mut(segment);
+            parents.push((local_contexts, changes));
             current = child?;
         }
         let result = VComponentRefResolved {
@@ -427,7 +433,7 @@ impl <ViewData: VViewData> VComponentHead<ViewData> {
 
     /// Add a new child component.
     pub(super) fn add_child(&mut self, child: Box<VComponent<ViewData>>) -> &Box<VComponent<ViewData>> {
-        let key = child.head.key.clone();
+        let key = child.head.key();
         let old_value = self.children.insert(key.clone(), child);
         assert!(old_value.is_none(), "child with key {} added twice", key);
         self.children.get(&key).unwrap()
@@ -481,10 +487,10 @@ impl <ViewData: VViewData> VComponentHead<ViewData> {
 impl <ViewData: VViewData> dyn VComponentConstruct<ViewData=ViewData> {
     /// Runtime-cast `props` to whatever we want, but it panics if they're not the same type.
     #[allow(clippy::needless_lifetimes)]
-    pub(super) fn local_contexts_and_cast_props<'a, Props: Any>(&'a mut self) -> (&'a mut VComponentLocalContexts, &'a Props) {
-        let (local_contexts, props) = self.local_contexts_and_props();
+    pub(super) fn local_contexts_and_cast_props<'a, Props: Any>(&'a mut self) -> (&'a mut VComponentLocalContexts, &'a mut ContextPendingUpdates, &'a Props) {
+        let (local_contexts, local_context_changes, props) = self.local_contexts_and_props();
         let props = props.downcast_ref().expect("props casted to the wrong type");
-        (local_contexts, props)
+        (local_contexts, local_context_changes, props)
     }
 }
 
@@ -519,7 +525,7 @@ impl <Props: Any, ViewData: VViewData, F: Fn(VComponentContext2<'_, '_, Props, V
         })
     }
 
-    fn local_contexts_and_changes(&mut self) -> (&mut VComponentLocalContexts, &mut ContextPendingUpdates) {
+    fn local_contexts(&mut self) -> (&mut VComponentLocalContexts, &mut ContextPendingUpdates) {
         (&mut self.s.local_contexts, &mut self.s.pending_updates)
     }
 
@@ -527,8 +533,8 @@ impl <Props: Any, ViewData: VViewData, F: Fn(VComponentContext2<'_, '_, Props, V
         &mut self.s.pending_updates
     }
 
-    fn local_contexts_and_props(&mut self) -> (&mut VComponentLocalContexts, &dyn Any) {
-        (&mut self.s.local_contexts, &self.props)
+    fn local_contexts_and_props(&mut self) -> (&mut VComponentLocalContexts, &mut ContextPendingUpdates, &dyn Any) {
+        (&mut self.s.local_contexts, &mut self.s.pending_updates, &self.props)
     }
 
     fn run_effects(&mut self, component: &mut VComponentHead<Self::ViewData>, contexts: &mut VComponentContexts<'_>) {
@@ -626,7 +632,7 @@ impl ContextPendingUpdates {
             // This happens when we've got a context update from an async update.
             // Otherwise the parent is being updated, and we've got a context update from a child update from a parent update.
             if let Some(renderer) = renderer.upgrade() {
-                renderer.mark_needs_update(&self.path)
+                renderer.queue_needs_update(&self.path)
             }
         }
     }
@@ -665,7 +671,6 @@ impl <ViewData: VViewData + Debug> Debug for VComponentHead<ViewData> {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("VComponentHead")
             .field("id", &self.id)
-            .field("key", &self.key)
             .field("path", &self.path)
             .field("is_fresh", &self.is_fresh)
             .field("is_being_created", &self.is_being_created())

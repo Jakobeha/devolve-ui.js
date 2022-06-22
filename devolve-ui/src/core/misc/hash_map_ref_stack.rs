@@ -4,10 +4,10 @@
 //! which will be borrowed from getting any element in that map.
 
 use std::collections::HashMap;
-use std::convert::Infallible;
 use std::hash::Hash;
 use std::marker::PhantomData;
 use std::mem;
+use replace_with::replace_with_or_abort_and_return;
 use crate::core::misc::ref_stack::RefStack;
 
 #[derive(Debug, PartialEq)]
@@ -35,7 +35,13 @@ static UNUSED_ASSOC: () = ();
 
 impl <'a, K, V> HashMapMutStack<'a, K, V> {
     pub fn with_push<R>(&mut self, map: &mut HashMap<K, V>, fun: impl FnOnce(&mut HashMapMutStack<'_, K, V>) -> R) -> R {
-        self.0.with_push(map, fun)
+        self.0.with_push(map, |stack| {
+            replace_with_or_abort_and_return(stack, |stack| {
+                let mut map_stack = HashMapMutStack(stack);
+                let result = fun(&mut map_stack);
+                (result, map_stack.0)
+            })
+        })
     }
 
     pub fn top_mut<'b>(&'b mut self) -> Option<&'b mut &'a mut HashMap<K, V>> {
@@ -44,7 +50,7 @@ impl <'a, K, V> HashMapMutStack<'a, K, V> {
 }
 
 impl <'a, K, V, Assoc> HashMapWithAssocMutStack<'a, K, V, Assoc> {
-    pub fn with_push<R>(&mut self, map: &mut HashMap<K, V>, assoc: &mut Assoc, fun: impl FnOnce(&mut HashMapMutStack<'_, K, V>) -> R) -> R {
+    pub fn with_push<R>(&mut self, map: &mut HashMap<K, V>, assoc: &mut Assoc, fun: impl FnOnce(&mut HashMapWithAssocMutStack<'_, K, V, Assoc>) -> R) -> R {
         self.0.push((map as *mut HashMap<K, V>, assoc as *mut Assoc));
         let result = fun(self);
         self.0.pop();

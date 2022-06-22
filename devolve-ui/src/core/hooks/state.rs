@@ -14,8 +14,6 @@
 //! values between closures, but they will be stale.
 
 use std::any::Any;
-use std::ops::{Deref, DerefMut};
-use crate::core::component::component::VComponentHead;
 use crate::core::component::context::{VComponentContext, VContext};
 use crate::core::component::update_details::{UpdateBacktrace, UpdateDetails};
 use crate::core::view::view::VViewData;

@@ -17,7 +17,6 @@ use std::iter::once;
 use std::marker::PhantomData;
 use crate::core::component::component::{ContextPendingUpdates, VComponentContexts, VComponentDestructors, VComponentEffects, VComponentHead, VComponentLocalContexts};
 use crate::core::component::path::{VComponentRef, VComponentRefResolved};
-use crate::core::component::update_details::UpdateDetails;
 use crate::core::hooks::context::AnonContextId;
 use crate::core::view::view::VViewData;
 
@@ -171,10 +170,10 @@ impl <Props: Any, ViewData: VViewData + 'static> VEffectContextRef<Props, ViewDa
             match component {
                 None => fun(None),
                 Some(VComponentRefResolved { parent_contexts, component }) => {
-                    let (local_contexts, props) = component.construct.local_contexts_and_cast_props();
+                    let (local_contexts, local_context_changes, props) = component.construct.local_contexts_and_cast_props();
                     fun(Some((VPlainContext1 {
                         component: &mut component.head,
-                        contexts: &mut parent_contexts.into_iter().chain(once(local_contexts)).collect(),
+                        contexts: &mut parent_contexts.into_iter().chain(once((local_contexts, local_context_changes))).collect(),
                         phantom: PhantomData
                     }, props)))
                 }
@@ -184,10 +183,10 @@ impl <Props: Any, ViewData: VViewData + 'static> VEffectContextRef<Props, ViewDa
 
     pub fn try_with<R>(&self, fun: impl FnOnce(VPlainContext2<'_, '_, Props, ViewData>) -> R) -> Option<R> {
         self.component.try_with(|VComponentRefResolved { parent_contexts, component }| {
-            let (local_contexts, props) = component.construct.local_contexts_and_cast_props();
+            let (local_contexts, local_context_changes props) = component.construct.local_contexts_and_cast_props();
             fun((VPlainContext1 {
                 component: &mut component.head,
-                contexts: &mut parent_contexts.into_iter().chain(once(local_contexts)).collect(),
+                contexts: &mut parent_contexts.into_iter().chain(once((local_contexts, local_context_changes))).collect(),
                 phantom: PhantomData
             }, props))
         })

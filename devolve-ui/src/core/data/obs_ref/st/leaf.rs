@@ -1,43 +1,44 @@
 use std::rc::{Rc, Weak};
-use crate::core::data::obs_ref::st::{ObsRefableRoot, ObsRefableChild, ObsRefRootBase, ObsRefChildBase};
+use crate::core::data::obs_ref::st::{ObsRefableRoot, ObsRefableChild, ObsRefRootBase, ObsRefChildBase, SubCtx, ObsRefPending};
 
 // Specific ObsRefable implementations
 pub trait Leaf {}
 
-// impl <T> Leaf for T where T: Copy {}
-impl Leaf for u8 {}
-impl Leaf for u16 {}
-impl Leaf for u32 {}
-impl Leaf for u64 {}
-impl Leaf for u128 {}
-impl Leaf for usize {}
-impl Leaf for i8 {}
-impl Leaf for i16 {}
-impl Leaf for i32 {}
-impl Leaf for i64 {}
-impl Leaf for i128 {}
-impl Leaf for isize {}
-impl Leaf for f32 {}
-impl Leaf for f64 {}
-impl Leaf for bool {}
-impl Leaf for char {}
+pub macro derive_obs_ref_leaf($name:tt $( < $( $param:ident ),* > )?) {
+    impl $( < $( $param ),* > )? Leaf for $name $( < $( $param ),* > )? {}
 
-impl <T : Leaf> ObsRefableRoot for T {
-    type ObsRefImpl = Rc<ObsRefRootBase<T>>;
+    impl <$( $( $param ),* , )? S: SubCtx> ObsRefableRoot<S> for $name $( < $( $param ),* > )? {
+        type ObsRefImpl = Rc<ObsRefRootBase<$name $( < $( $param ),* > )?, S>>;
 
-    fn into_obs_ref(self: Self) -> Self::ObsRefImpl {
-        ObsRefRootBase::new(self)
+        fn into_obs_ref(self) -> Self::ObsRefImpl {
+            ObsRefRootBase::new(self)
+        }
     }
-}
 
-impl <Root, T : Leaf> ObsRefableChild<Root> for T {
-    type ObsRefImpl = ObsRefChildBase<Root, T>;
+    impl <Root, $( $( $param ),* , )? S: SubCtx> ObsRefableChild<Root, S> for $name $( < $( $param ),* > )? {
+        type ObsRefImpl = ObsRefChildBase<Root, $name $( < $( $param ),* > )?, S>;
 
-    unsafe fn _as_obs_ref_child(this: *mut Self, path: String, root: Weak<ObsRefRootBase<Root>>) -> Self::ObsRefImpl {
-        ObsRefChildBase {
-            child_value: this,
-            path,
-            root
+        unsafe fn _as_obs_ref_child(this: *mut Self, ancestors_pending: &[Weak<ObsRefPending<S>>], parent_pending: &Rc<ObsRefPending<S>>, path: String, root: Rc<ObsRefRootBase<Root, S>>) -> Self::ObsRefImpl {
+            ObsRefChildBase::new(this, ancestors_pending, parent_pending, path, root)
         }
     }
 }
+
+// impl <T: Copy> Leaf for T {}
+// impl <T: Zst> !Leaf for T {}
+derive_obs_ref_leaf!(u8);
+derive_obs_ref_leaf!(u16);
+derive_obs_ref_leaf!(u32);
+derive_obs_ref_leaf!(u64);
+derive_obs_ref_leaf!(u128);
+derive_obs_ref_leaf!(usize);
+derive_obs_ref_leaf!(i8);
+derive_obs_ref_leaf!(i16);
+derive_obs_ref_leaf!(i32);
+derive_obs_ref_leaf!(i64);
+derive_obs_ref_leaf!(i128);
+derive_obs_ref_leaf!(isize);
+derive_obs_ref_leaf!(f32);
+derive_obs_ref_leaf!(f64);
+derive_obs_ref_leaf!(bool);
+derive_obs_ref_leaf!(char);

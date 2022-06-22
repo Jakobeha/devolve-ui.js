@@ -10,7 +10,7 @@ use std::ops::AddAssign;
 use std::rc::Weak;
 use std::mem::MaybeUninit;
 use arrayvec::{ArrayString, CapacityError};
-use crate::core::component::component::{VComponent, VComponentLocalContexts};
+use crate::core::component::component::{ContextPendingUpdates, VComponent, VComponentLocalContexts};
 use crate::core::component::root::VComponentRoot;
 use crate::core::view::view::VViewData;
 #[cfg(feature = "serde")]
@@ -45,7 +45,7 @@ pub struct VComponentRef<ViewData: VViewData> {
 
 #[derive(Debug)]
 pub struct VComponentRefResolved<'a, ViewData: VViewData> {
-    pub parent_contexts: Vec<&'a mut VComponentLocalContexts>,
+    pub parent_contexts: Vec<(&'a mut VComponentLocalContexts, &'a mut ContextPendingUpdates)>,
     pub component: &'a mut Box<VComponent<ViewData>>
 }
 
@@ -97,7 +97,9 @@ impl <ViewData: VViewData> VComponentRefResolvedPtr<ViewData> {
 
 // region boilerplate
 impl VComponentPath {
-    pub fn new() -> Self {
+    pub const ROOT: VComponentPath = VComponentPath::new();
+
+    pub const fn new() -> Self {
         Self(Vec::new())
     }
 
@@ -151,6 +153,14 @@ impl Add<VComponentKey> for VComponentPath {
     fn add(mut self, rhs: VComponentKey) -> Self::Output {
         self.0.push(rhs);
         self
+    }
+}
+
+impl Add<VComponentKey> for &VComponentPath {
+    type Output = VComponentPath;
+
+    fn add(self, rhs: VComponentKey) -> Self::Output {
+        self.clone() + rhs
     }
 }
 

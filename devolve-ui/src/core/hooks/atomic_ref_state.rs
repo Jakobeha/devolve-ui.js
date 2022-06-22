@@ -20,7 +20,6 @@ use crate::core::renderer::stale_data::NeedsUpdateFlag;
 use crate::core::component::context::VComponentContext;
 use crate::core::component::update_details::{UpdateBacktrace, UpdateDetails};
 use crate::core::hooks::state_internal::use_non_updating_state;
-use crate::core::misc::map_lock_result::MappableLockResult;
 use crate::core::view::view::VViewData;
 
 #[derive(Debug)]
@@ -61,19 +60,19 @@ pub fn use_atomic_ref_state<'a, 'a0: 'a, T: Any, ViewData: VViewData + 'a>(
 
 impl <T: Any, ViewData: VViewData> AtomicRefState<T, ViewData> {
     pub fn get(&self) -> LockResult<AtomicAccess<'_, T, ViewData>> {
-        self.0.lock().map2(AtomicAccess::new)
+        self.data.lock().map2(AtomicAccess::new)
     }
 
     pub fn try_get(&self) -> TryLockResult<AtomicAccess<'_, T, ViewData>> {
-        self.0.try_lock().map2(AtomicAccess::new)
+        self.data.try_lock().map2(AtomicAccess::new)
     }
 
     pub fn get_mut(&self) -> LockResult<AtomicAccessMut<'_, T, ViewData>> {
-        self.0.lock().map2(|v| AtomicAccessMut::new(v, self.index, self.1.clone()))
+        self.data.lock().map2(|v| AtomicAccessMut::new(v, self.index, self.flag.clone()))
     }
 
     pub fn try_get_mut(&self) -> TryLockResult<AtomicAccessMut<'_, T, ViewData>> {
-        self.0.try_lock().map2(|v| AtomicAccessMut::new(v, self.index, self.1.clone()))
+        self.data.try_lock().map2(|v| AtomicAccessMut::new(v, self.index, self.flag.clone()))
     }
 }
 
@@ -101,7 +100,7 @@ impl <'a, T: Any, ViewData: VViewData> Deref for AtomicAccess<'a, T, ViewData> {
     type Target = <MutexGuard<'a, T> as Deref>::Target;
 
     fn deref(&self) -> &Self::Target {
-        self.0.deref()
+        self.data.deref()
     }
 }
 
@@ -110,13 +109,13 @@ impl <'a, T: Any, ViewData: VViewData> Deref for AtomicAccessMut<'a, T, ViewData
     type Target = <MutexGuard<'a, T> as Deref>::Target;
 
     fn deref(&self) -> &Self::Target {
-        self.0.deref()
+        self.data.deref()
     }
 }
 
 impl <'a, T: Any, ViewData: VViewData> DerefMut for AtomicAccessMut<'a, T, ViewData> {
     fn deref_mut(&mut self) -> &mut Self::Target {
-        self.0.deref_mut()
+        self.data.deref_mut()
     }
 }
 
@@ -126,7 +125,7 @@ impl <'a, T: Any, ViewData: VViewData> Drop for AtomicAccessMut<'a, T, ViewData>
             index: self.index,
             backtrace: UpdateBacktrace::here()
         };
-        let result = self.1.set(details);
+        let result = self.flag.set(details);
         if result.is_err() {
             eprintln!("error updating from AtomicRefState: {:?}", result.unwrap_err());
         }

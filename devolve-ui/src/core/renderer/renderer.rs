@@ -38,7 +38,7 @@ use crate::core::component::context::VComponentContext2;
 use crate::core::component::mode::VMode;
 use crate::core::component::node::{NodeId, VComponentAndView, VNode};
 use crate::core::component::parent::VParent;
-use crate::core::component::path::{VComponentPath, VComponentRefResolved, VComponentRefResolvedPtr};
+use crate::core::component::path::{VComponentPath, VComponentRefResolvedPtr};
 use crate::core::component::root::VComponentRoot;
 use crate::core::logging::common::LogStart;
 use crate::core::logging::render_logger::{RenderLogger, RenderLoggerImpl};
@@ -979,7 +979,7 @@ impl <Engine: RenderEngine> Renderer<Engine> where Engine::ViewData: Serialize +
 impl <Engine: RenderEngine> VComponentRoot for Renderer<Engine> {
     type ViewData = Engine::ViewData;
 
-    fn mark_needs_update(self: Rc<Self>, path: &VComponentPath) {
+    fn queue_needs_update(self: Rc<Self>, path: &VComponentPath) {
         self.local_stale_data.queue_path_for_update_no_details(path).unwrap();
         self.set_needs_rerender();
     }

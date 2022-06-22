@@ -4,7 +4,6 @@
 use std::collections::HashMap;
 use std::fmt;
 use std::fmt::{Display, Formatter};
-use std::iter::once;
 use crate::core::component::component::{VComponent, VComponentContexts, VComponentHead};
 use crate::core::component::path::VComponentKey;
 use crate::core::view::view::{VView, VViewData};
@@ -22,7 +21,7 @@ pub struct NodeId(usize);
 #[cfg_attr(feature = "serde", serde(transparent))]
 pub struct NodeIdPath(Vec<NodeId>);
 
-#[derive(Debug, Clone, Eq, PartialEq, Hash)]
+#[derive(Debug, Clone, Eq, PartialEq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "serde", serde(transparent))]
 pub struct NodeIdTree(HashMap<NodeId, NodeIdTree>);
@@ -36,7 +35,7 @@ impl NodeIdPath {
         self.0.insert(0, id);
     }
 
-    pub fn iter(&self) -> impl Iterator<Item=NodeId> {
+    pub fn iter<'a>(&'a self) -> impl Iterator<Item=NodeId> + 'a {
         self.0.iter().copied()
     }
 }
@@ -57,15 +56,6 @@ impl NodeIdTree {
         for id in path.iter() {
             node = node.0.entry(id).or_insert(NodeIdTree::new());
         }
-    }
-
-    pub fn preorder(&self) -> impl Iterator<Item=NodeIdPath> {
-        once(NodeIdPath::new()).chain(self.0.iter().flat_map(|(id, subtree)| {
-            subtree.iter().map(|mut path| {
-                path.prepend(*id);
-                path
-            })
-        }))
     }
 }
 

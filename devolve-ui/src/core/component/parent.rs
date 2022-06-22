@@ -10,9 +10,9 @@ pub(in crate::core) enum VParent<'a, ViewData: VViewData> {
 }
 
 impl <'a, ViewData: VViewData> VParent<'a, ViewData> {
-    pub(in crate::core) fn path(&self) -> VComponentPath {
+    pub(in crate::core) fn path(&self) -> &VComponentPath {
         match self {
-            VParent::Root(_root) => VComponentPath::new(),
+            VParent::Root(_root) => &VComponentPath::ROOT,
             VParent::Component(component) => component.path()
         }
     }

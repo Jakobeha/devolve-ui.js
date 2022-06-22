@@ -1,7 +1,6 @@
 //! A vector where each element further down has a shorter lifetime than the top, which has lifetime 'a.
 //! Internally this stores the elements as pointers, but has invariants to guarantee (unproven) safety.
 
-use std::collections::HashMap;
 use std::marker::PhantomData;
 
 #[derive(Debug, PartialEq)]
@@ -45,10 +44,10 @@ impl <'a, T> RefStack<'a, T> {
     }
 }
 
-impl <'a, K, V> FromIterator<&'a T> for RefStack<'a, T> {
+impl <'a, T> FromIterator<&'a mut T> for RefStack<'a, T> {
     /// Create a stack from a vector of references. Since the references must outlive the stack itself,
     /// this ensures that storing them as pointers is safe.
-    fn from_iter<I: IntoIterator<Item=&'a mut HashMap<K, V>>>(iter: I) -> Self {
+    fn from_iter<I: IntoIterator<Item=&'a mut T>>(iter: I) -> Self {
         RefStack(iter.into_iter().map(|elem| elem as *mut _).collect(), PhantomData)
     }
 }

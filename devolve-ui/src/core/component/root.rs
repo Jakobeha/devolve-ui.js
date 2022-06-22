@@ -19,7 +19,7 @@ pub(in crate::core) trait VComponentRoot {
     type ViewData: VViewData;
 
     /// Marks the given path needs to be updated
-    fn mark_needs_update(self: Rc<Self>, path: &VComponentPath);
+    fn queue_needs_update(self: Rc<Self>, path: &VComponentPath);
     /// Mark the view as stale
     fn invalidate_view(self: Rc<Self>, view: &Box<VView<Self::ViewData>>);
     /// A flag for a separate thread or time. When set, this marks that the given path needs to be updated, like `mark_needs_update`
