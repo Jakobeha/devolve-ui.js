@@ -27,6 +27,7 @@ pub type Te1 = TextConstrArgs;
 pub type Bo2 = BorderConstrArgs;
 pub type HDi1 = HDividerConstrArgs;
 pub type VDi1 = VDividerConstrArgs;
+#[cfg(feature = "tui-images")]
 pub type So1 = SourceConstrArgs;
 
 impl Default for BoxConstrArgs {

@@ -1,6 +1,5 @@
 //! Random utility code which aren't really `devolve-ui` specific but needed by `devolve-ui`.
 
-#[cfg(feature = "serde")]
 pub mod float_ord;
 pub mod ident;
 pub mod io_write_2_fmt_write;

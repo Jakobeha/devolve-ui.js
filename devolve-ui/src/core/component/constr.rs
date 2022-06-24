@@ -22,7 +22,7 @@ pub fn make_component<
     Props: 'static,
     F: Fn(VComponentContext2<Props, ViewData>) -> VNode<ViewData> + 'static
 >(
-    c: &'a mut impl VComponentContext<'a, 'a0, ViewData=ViewData>,
+    c: &mut impl VComponentContext<'a, 'a0, ViewData=ViewData>,
     key: Str,
     props: Props,
     construct: F
@@ -158,7 +158,7 @@ pub macro make_component_macro {
 /// ```
 pub macro make_component(
     $vis:vis $name:ident,
-    $Props:ident $( < $( $T:ident $( : $TTy:ident $( + $TTyRest:ident )* )? ),* > )? $( where [ $( $more_bounds:tt )* ] )?
+    $Props:ident $( < $( $T:ident $( : $TTy:ident $( + $TTyRest:ident )* )? ),* > )? $( where ( $( $more_bounds:tt )* ) )?
     { $( $opt_prop_id:ident : $opt_prop_ty:ty = $opt_prop_default:expr ),* $( , )? }
     [ $( $req_prop_id:ident : $req_prop_ty:ty ),* $( , )? ]
 ) {

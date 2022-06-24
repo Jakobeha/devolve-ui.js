@@ -40,7 +40,9 @@ use crate::core::component::node::{NodeId, VComponentAndView, VNode};
 use crate::core::component::parent::VParent;
 use crate::core::component::path::{VComponentPath, VComponentRefResolvedPtr};
 use crate::core::component::root::VComponentRoot;
+#[cfg(feature = "logging")]
 use crate::core::logging::common::LogStart;
+#[cfg(feature = "logging")]
 use crate::core::logging::render_logger::{RenderLogger, RenderLoggerImpl};
 #[cfg(feature = "logging")]
 use crate::core::logging::update_logger::UpdateLogger;

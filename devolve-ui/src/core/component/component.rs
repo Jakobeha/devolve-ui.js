@@ -288,6 +288,7 @@ impl <ViewData: VViewData> VComponent<ViewData> {
         self.construct.local_context_changes().is_being_updated = false;
         self.head.is_being_updated = false;
 
+        #[cfg(feature = "logging")]
         VComponentHead::with_update_logger(&self.head.renderer, |logger| {
             logger.log_update(self.head.path().clone(), self.head.recursive_update_stack_trace.clone());
         });
