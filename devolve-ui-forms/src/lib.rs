@@ -68,7 +68,7 @@ impl <Props: Any, ViewData: VViewData, F1: Fn(&VEffectContext1<Props, ViewData>)
 
 static FOCUS_PROVIDER_CONTEXT: ContextIdSource<FocusContext> = ContextIdSource::new();
 
-pub fn focus_provider<Props: Any, ViewData: VViewData + Clone + 'static>((mut c, FocusProvider {
+pub fn focus_provider<ViewData: VViewData + Clone + 'static>((mut c, FocusProvider {
     content,
     enable_tab,
     _p
@@ -150,7 +150,7 @@ mod test {
     use std::io;
     #[allow(unused_imports)]
     use devolve_ui::core::component::constr::{_make_component_macro, make_component};
-    use devolve_ui::core::component::context::{VComponentContext2, VEffectContext2};
+    use devolve_ui::core::component::context::{VComponentContext1, VComponentContext2, VEffectContext2};
     use devolve_ui::core::component::node::VNode;
     use devolve_ui::core::misc::shorthand::d;
     use devolve_ui::core::renderer::renderer::Renderer;
@@ -160,7 +160,7 @@ mod test {
     #[cfg(feature = "tui-images")]
     use devolve_ui::view_data::tui::terminal_image::TuiImageFormat;
     use devolve_ui::view_data::tui::tui::HasTuiViewData;
-    use crate::{focus_provider, text_field};
+    use crate::{FocusProvider, focus_provider, text_field};
 
     make_component!(test_app, TestApp {} []);
 
@@ -170,7 +170,7 @@ mod test {
             height: smt!(100 %),
             ..d()
         }, d(), vec![
-            focus_provider!(c, (), {}, Box::new(|c| vbox(Vvw1 {
+            focus_provider!(c, (), {}, Box::new(move |mut c: VComponentContext1<'_, '_, FocusProvider<ViewData>, ViewData>| vbox(Vvw1 {
                 x: mt!(2 u),
                 y: mt!(2 u),
                 width: smt!(100 % - 4 u),
@@ -208,7 +208,7 @@ mod test {
                     override_value: Some("override".into()),
                     on_change: None as Option<Box<dyn Fn(VEffectContext2<TestApp, ViewData>, &str)>>
                 })
-            ])))
+            ])) as Box<dyn for<'r, 's> Fn(VComponentContext1<'r, 's, FocusProvider<ViewData>, ViewData>) -> VNode<ViewData> + 'static>)
         ])
     }
 
