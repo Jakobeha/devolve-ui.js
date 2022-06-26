@@ -11,7 +11,7 @@ use std::mem;
 use std::slice::Iter;
 use crate::core::component::context::{VComponentContext1, VDestructorContext2, VEffectContext2, with_destructor_context};
 use crate::core::view::view::VViewData;
-use crate::core::hooks::state_internal::use_non_updating_state;
+use crate::core::hooks::state_internal::InternalHooks;
 
 pub trait CollectionOfPartialEqs {
     type Item: PartialEq;
@@ -85,10 +85,7 @@ pub enum UseEffectRerun<Dependencies : CollectionOfPartialEqs> {
 
 pub type NoDependencies = Infallible;
 
-/// Runs a closure according to `rerun`. The closure should contain an effect,
-/// while the component's body should otherwise be a "pure" function based on its
-/// props and state hooks like `use_state`.
-pub fn use_effect<
+pub(super) fn _use_effect<
     'a,
     'a0: 'a,
     Props : Any,
@@ -99,16 +96,10 @@ pub fn use_effect<
     rerun: UseEffectRerun<NoDependencies>,
     effect: impl Fn(VEffectContext2<'_, '_, Props, ViewData>) -> Destructor + 'static
 ) {
-    use_effect_with_deps(c, rerun, effect);
+    _use_effect_with_deps(c, rerun, effect);
 }
 
-/// Runs a closure once on create. The closure should contain an effect,
-/// while the component's body should otherwise be a "pure" function based on its
-/// props and state hooks like `use_state`.
-///
-/// The behavior is exactly like `use_effect` and `use_effect_with_deps` when given `UseEffectRerun::OnCreate`.
-/// However, this function allows you to pass an `FnOnce` to `effect` since we statically know it will only be called once.
-pub fn use_effect_on_create<
+pub(super) fn _use_effect_on_create<
     'a,
     'a0: 'a,
     Props : Any,
@@ -119,19 +110,13 @@ pub fn use_effect_on_create<
     effect: impl FnOnce(VEffectContext2<'_, '_, Props, ViewData>) -> Destructor + 'static
 ) {
     let effect = RefCell::new(Some(effect));
-    use_effect(c, UseEffectRerun::OnCreate, move |c| {
+    _use_effect(c, UseEffectRerun::OnCreate, move |c| {
         let effect = effect.borrow_mut().take().expect("unexpected: use_effect_on_create's effect requested multiple times");
         effect(c)
     })
 }
 
-/// Runs a closure according to `rerun`. The closure should contain an effect,
-/// while the component's body should otherwise be a "pure" function based on its
-/// props and state hooks like `use_state`.
-///
-/// This function is actually the exact same as `use_effect`, but exposes the dependencies as a type parameter.
-/// Without the 2 versions, you would always have to specify dependencies on `use_effect` even if the enum variant didn't have them.
-pub fn use_effect_with_deps<
+pub(super) fn _use_effect_with_deps<
     'a,
     'a0: 'a,
     Props: Any,
@@ -165,8 +150,8 @@ pub fn use_effect_with_deps<
             // afterwards. However, Rust won't allow that, and I'm pretty sure it would cause undefined
             // behavior. Se we use mem::replace with an empty vector, which is cheap and satisfies the borrow checker
             // (see https://stackoverflow.com/questions/48141703/is-there-a-way-to-force-rust-to-let-me-use-a-possibly-moved-value)
-            let memo = use_non_updating_state(c, || mem::replace(&mut dependencies, Dependencies::empty()));
-            let destructor_index = use_non_updating_state::<i32, _>(c, || -1);
+            let memo = c.use_non_updating_state(|| mem::replace(&mut dependencies, Dependencies::empty()));
+            let destructor_index = c.use_non_updating_state::<i32>(|| -1);
             // This is not just to satisfy the borrow checker: we want to get the old dependencies
             // and then set the new ones, and mem::replace happens to be the perfect tool for this.
             let old_dependencies = mem::replace(memo.get_mut(c), dependencies);
@@ -197,8 +182,8 @@ pub fn use_effect_with_deps<
             }));
         },
         UseEffectRerun::OnPredicate(predicate) => {
-            let memo = use_non_updating_state(c, || false);
-            let destructor_index = use_non_updating_state::<i32, _>(c, || -1);
+            let memo = c.use_non_updating_state(|| false);
+            let destructor_index = c.use_non_updating_state::<i32>(|| -1);
             let old_predicate = mem::replace(memo.get_mut(c), predicate);
 
             c.effects.effects.push(Box::new(move |(mut c, props)| {
@@ -218,8 +203,8 @@ pub fn use_effect_with_deps<
             }))
         },
         UseEffectRerun::OnChangeAndPredicate { mut dependencies, predicate } => {
-            let memo = use_non_updating_state::<(Dependencies, bool), _>(c, || (mem::replace(&mut dependencies, Dependencies::empty()), false));
-            let destructor_index = use_non_updating_state::<i32, _>(c, || -1);
+            let memo = c.use_non_updating_state::<(Dependencies, bool)>(|| (mem::replace(&mut dependencies, Dependencies::empty()), false));
+            let destructor_index = c.use_non_updating_state::<i32>(|| -1);
             let (old_dependencies, old_predicate) = mem::replace(memo.get_mut(c), (dependencies, false));
 
             c.effects.effects.push(Box::new(move |(mut c, props)| {

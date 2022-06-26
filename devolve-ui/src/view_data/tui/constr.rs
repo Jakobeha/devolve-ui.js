@@ -19,16 +19,16 @@ pub struct BoxConstrArgs {
     pub extend: bool
 }
 
-pub type Vi1 = VViewConstrArgs;
-pub type HBo1 = BoxConstrArgs;
-pub type VBo1 = BoxConstrArgs;
-pub type ZBo1 = BoxConstrArgs;
-pub type Te1 = TextConstrArgs;
-pub type Bo2 = BorderConstrArgs;
-pub type HDi1 = HDividerConstrArgs;
-pub type VDi1 = VDividerConstrArgs;
+pub type Vvw1 = VViewConstrArgs;
+pub type Hbx1 = BoxConstrArgs;
+pub type Vbx1 = BoxConstrArgs;
+pub type Zbx1 = BoxConstrArgs;
+pub type Txt1 = TextConstrArgs;
+pub type Bor1 = BorderConstrArgs;
+pub type Hdv1 = HDividerConstrArgs;
+pub type Vdv1 = VDividerConstrArgs;
 #[cfg(feature = "tui-images")]
-pub type So1 = SourceConstrArgs;
+pub type Src1 = SourceConstrArgs;
 
 impl Default for BoxConstrArgs {
     fn default() -> Self {

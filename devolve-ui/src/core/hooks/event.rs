@@ -15,10 +15,11 @@ use std::rc::Rc;
 use std::time::{Duration, Instant};
 use crate::core::component::context::{VComponentContext1, VContext, VDestructorContext2, VEffectContext2, VPlainContext2, with_plain_context};
 use crate::core::component::root::VComponentRoot;
+use crate::core::hooks::BuiltinHooks;
 #[cfg(feature = "input")]
 use crate::core::renderer::input::{KeyEvent, MouseEvent, ResizeEvent};
-use crate::core::hooks::effect::{NoDependencies, UseEffectRerun, use_effect};
-use crate::core::hooks::state_internal::use_non_updating_state;
+use crate::core::hooks::effect::{NoDependencies, UseEffectRerun};
+use crate::core::hooks::state_internal::InternalHooks;
 use crate::core::renderer::listeners::RendererListenerId;
 use crate::core::view::view::VViewData;
 
@@ -29,7 +30,7 @@ fn _use_event_listener<'a, 'a0: 'a, Props: Any, Event: 'static, ViewData: VViewD
     unregister_listener: impl Fn(VDestructorContext2<'_, '_, Props, ViewData>, Rc<dyn VComponentRoot<ViewData=ViewData>>, RendererListenerId<Event>) + 'static
 ) {
     let unregister_listener = Rc::new(unregister_listener);
-    use_effect(c, rerun, move |(c, props)| {
+    c.use_effect(rerun, move |(c, props)| {
         let weak_renderer = c.component_imm().renderer();
         let renderer = weak_renderer.upgrade();
 
@@ -54,7 +55,7 @@ fn _use_event_listener<'a, 'a0: 'a, Props: Any, Event: 'static, ViewData: VViewD
 /// Register a function which will be called every time there is a tick event.
 /// The duration is subject to delta-time diff, so use absolute intervals if you want precise time.
 #[cfg(feature = "time")]
-fn _use_tick_listener<'a, 'a0: 'a, Props: Any, ViewData: VViewData + 'static>(
+fn _use_tick_listener2<'a, 'a0: 'a, Props: Any, ViewData: VViewData + 'static>(
     c: &mut VComponentContext1<'a, 'a0, Props, ViewData>,
     rerun: UseEffectRerun<NoDependencies>,
     listener: impl Fn(VPlainContext2<'_, '_, Props, ViewData>, &Duration) + 'static
@@ -77,27 +78,27 @@ fn _use_tick_listener<'a, 'a0: 'a, Props: Any, ViewData: VViewData + 'static>(
 /// Register a function which will be called every time there is a tick event.
 /// The duration is subject to delta-time diff, so use absolute intervals if you want precise time.
 #[cfg(feature = "time")]
-pub fn use_tick_listener<'a, 'a0: 'a, Props: Any, ViewData: VViewData + 'static>(
+pub(super) fn _use_tick_listener<'a, 'a0: 'a, Props: Any, ViewData: VViewData + 'static>(
     c: &mut VComponentContext1<'a, 'a0, Props, ViewData>,
     listener: impl Fn(VPlainContext2<'_, '_, Props, ViewData>, &Duration) + 'static
 ) {
-    _use_tick_listener(c, UseEffectRerun::OnCreate, listener)
+    _use_tick_listener2(c, UseEffectRerun::OnCreate, listener)
 }
 
 /// Register a function which will be called every time there is a tick event.
 /// The duration is subject to delta-time diff, so use absolute intervals if you want precise time.
 #[cfg(feature = "time")]
-pub fn use_tick_listener_when<'a, 'a0: 'a, Props: Any, ViewData: VViewData + 'static>(
+pub(super) fn _use_tick_listener_when<'a, 'a0: 'a, Props: Any, ViewData: VViewData + 'static>(
     c: &mut VComponentContext1<'a, 'a0, Props, ViewData>,
     predicate: bool,
     listener: impl Fn(VPlainContext2<'_, '_, Props, ViewData>, &Duration) + 'static
 ) {
-    _use_tick_listener(c, UseEffectRerun::OnPredicate(predicate), listener)
+    _use_tick_listener2(c, UseEffectRerun::OnPredicate(predicate), listener)
 }
 
 /// Register a function which will be called every time there is a key event (see `KeyEvent` for event types).
 #[cfg(feature = "input")]
-fn _use_key_listener<'a, 'a0: 'a, Props: Any, ViewData: VViewData + 'static>(
+fn _use_key_listener2<'a, 'a0: 'a, Props: Any, ViewData: VViewData + 'static>(
     c: &mut VComponentContext1<'a, 'a0, Props, ViewData>,
     rerun: UseEffectRerun<NoDependencies>,
     listener: impl Fn(VPlainContext2<'_, '_, Props, ViewData>, &KeyEvent) + 'static
@@ -119,26 +120,26 @@ fn _use_key_listener<'a, 'a0: 'a, Props: Any, ViewData: VViewData + 'static>(
 
 /// Register a function which will be called every time there is a key event (see `KeyEvent` for event types).
 #[cfg(feature = "input")]
-pub fn use_key_listener<'a, 'a0: 'a, Props: Any, ViewData: VViewData + 'static>(
+pub(super) fn _use_key_listener<'a, 'a0: 'a, Props: Any, ViewData: VViewData + 'static>(
     c: &mut VComponentContext1<'a, 'a0, Props, ViewData>,
     listener: impl Fn(VPlainContext2<'_, '_, Props, ViewData>, &KeyEvent) + 'static
 ) {
-    _use_key_listener(c, UseEffectRerun::OnCreate, listener)
+    _use_key_listener2(c, UseEffectRerun::OnCreate, listener)
 }
 
 /// Register a function which will be called every time there is a key event (see `KeyEvent` for event types).
 #[cfg(feature = "input")]
-pub fn use_key_listener_when<'a, 'a0: 'a, Props: Any, ViewData: VViewData + 'static>(
+pub(super) fn _use_key_listener_when<'a, 'a0: 'a, Props: Any, ViewData: VViewData + 'static>(
     c: &mut VComponentContext1<'a, 'a0, Props, ViewData>,
     predicate: bool,
     listener: impl Fn(VPlainContext2<'_, '_, Props, ViewData>, &KeyEvent) + 'static
 ) {
-    _use_key_listener(c, UseEffectRerun::OnPredicate(predicate), listener)
+    _use_key_listener2(c, UseEffectRerun::OnPredicate(predicate), listener)
 }
 
 /// Register a function which will be called every time there is a mouse event (see `MouseEvent` for event types).
 #[cfg(feature = "input")]
-fn _use_mouse_listener<'a, 'a0: 'a, Props: Any, ViewData: VViewData + 'static>(
+fn _use_mouse_listener2<'a, 'a0: 'a, Props: Any, ViewData: VViewData + 'static>(
     c: &mut VComponentContext1<'a, 'a0, Props, ViewData>,
     rerun: UseEffectRerun<NoDependencies>,
     listener: impl Fn(VPlainContext2<'_, '_, Props, ViewData>, &MouseEvent) + 'static
@@ -160,26 +161,26 @@ fn _use_mouse_listener<'a, 'a0: 'a, Props: Any, ViewData: VViewData + 'static>(
 
 /// Register a function which will be called every time there is a mouse event (see `MouseEvent` for event types).
 #[cfg(feature = "input")]
-pub fn use_mouse_listener<'a, 'a0: 'a, Props: Any, ViewData: VViewData + 'static>(
+pub(super) fn _use_mouse_listener<'a, 'a0: 'a, Props: Any, ViewData: VViewData + 'static>(
     c: &mut VComponentContext1<'a, 'a0, Props, ViewData>,
     listener: impl Fn(VPlainContext2<'_, '_, Props, ViewData>, &MouseEvent) + 'static
 ) {
-    _use_mouse_listener(c, UseEffectRerun::OnCreate, listener)
+    _use_mouse_listener2(c, UseEffectRerun::OnCreate, listener)
 }
 
 /// Register a function which will be called every time there is a mouse event (see `MouseEvent` for event types).
 #[cfg(feature = "input")]
-pub fn use_mouse_listener_when<'a, 'a0: 'a, Props: Any, ViewData: VViewData + 'static>(
+pub(super) fn _use_mouse_listener_when<'a, 'a0: 'a, Props: Any, ViewData: VViewData + 'static>(
     c: &mut VComponentContext1<'a, 'a0, Props, ViewData>,
     predicate: bool,
     listener: impl Fn(VPlainContext2<'_, '_, Props, ViewData>, &MouseEvent) + 'static
 ) {
-    _use_mouse_listener(c, UseEffectRerun::OnPredicate(predicate), listener)
+    _use_mouse_listener2(c, UseEffectRerun::OnPredicate(predicate), listener)
 }
 
 /// Register a function which will be called every time there is a resize (window or column) event (see `ResizeEvent` for event types).
 #[cfg(feature = "input")]
-fn _use_resize_listener<'a, 'a0: 'a, Props: Any, ViewData: VViewData + 'static>(
+fn _use_resize_listener2<'a, 'a0: 'a, Props: Any, ViewData: VViewData + 'static>(
     c: &mut VComponentContext1<'a, 'a0, Props, ViewData>,
     rerun: UseEffectRerun<NoDependencies>,
     listener: impl Fn(VPlainContext2<'_, '_, Props, ViewData>, &ResizeEvent) + 'static
@@ -202,21 +203,21 @@ fn _use_resize_listener<'a, 'a0: 'a, Props: Any, ViewData: VViewData + 'static>(
 
 /// Register a function which will be called every time there is a resize (window or column) event (see `ResizeEvent` for event types).
 #[cfg(feature = "input")]
-pub fn use_resize_listener<'a, 'a0: 'a, Props: Any, ViewData: VViewData + 'static>(
+pub(super) fn _use_resize_listener<'a, 'a0: 'a, Props: Any, ViewData: VViewData + 'static>(
     c: &mut VComponentContext1<'a, 'a0, Props, ViewData>,
     listener: impl Fn(VPlainContext2<'_, '_, Props, ViewData>, &ResizeEvent) + 'static
 ) {
-    _use_resize_listener(c, UseEffectRerun::OnCreate, listener)
+    _use_resize_listener2(c, UseEffectRerun::OnCreate, listener)
 }
 
 /// Register a function which will be called every time there is a resize (window or column) event (see `ResizeEvent` for event types).
 #[cfg(feature = "input")]
-pub fn use_resize_listener_when<'a, 'a0: 'a, Props: Any, ViewData: VViewData + 'static>(
+pub(super) fn _use_resize_listener_when<'a, 'a0: 'a, Props: Any, ViewData: VViewData + 'static>(
     c: &mut VComponentContext1<'a, 'a0, Props, ViewData>,
     predicate: bool,
     listener: impl Fn(VPlainContext2<'_, '_, Props, ViewData>, &ResizeEvent) + 'static
 ) {
-    _use_resize_listener(c, UseEffectRerun::OnPredicate(predicate), listener)
+    _use_resize_listener2(c, UseEffectRerun::OnPredicate(predicate), listener)
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -229,7 +230,7 @@ pub enum CallFirst {
 /// Note that the function can't be called exactly on the interval because the ticks may not line up,
 /// but it will be called as soon as possible when or after the tick and will not drift.
 #[cfg(feature = "time")]
-pub fn use_interval<'a, 'a0: 'a, Props: Any, ViewData: VViewData + 'static>(
+pub(super) fn _use_interval<'a, 'a0: 'a, Props: Any, ViewData: VViewData + 'static>(
     c: &mut VComponentContext1<'a, 'a0, Props, ViewData>,
     interval: Duration,
     call_first: CallFirst,
@@ -238,7 +239,7 @@ pub fn use_interval<'a, 'a0: 'a, Props: Any, ViewData: VViewData + 'static>(
     let listener = Rc::new(listener);
     let listener2 = listener.clone();
     if call_first == CallFirst::Immediately {
-        use_effect(c, UseEffectRerun::OnCreate, move |(mut c, props)| {
+        c.use_effect(UseEffectRerun::OnCreate, move |(mut c, props)| {
             with_plain_context((&mut c, props), |(c, props)| listener((c, props)));
             return |(_c, _props)| {};
         });
@@ -246,7 +247,7 @@ pub fn use_interval<'a, 'a0: 'a, Props: Any, ViewData: VViewData + 'static>(
     let listener = listener2;
 
     let last_call = Rc::new(RefCell::new(Instant::now()));
-    use_tick_listener(c, move |(mut c, props), _delta_time| {
+    c.use_tick_listener(move |(mut c, props), _delta_time| {
         let mut last_call = last_call.borrow_mut();
         let mut elapsed = last_call.elapsed();
         while elapsed >= interval {
@@ -262,16 +263,16 @@ pub fn use_interval<'a, 'a0: 'a, Props: Any, ViewData: VViewData + 'static>(
 /// Note that the function can't be called exactly on the interval because the ticks may not line up,
 /// but it will be called as soon as possible when or after the tick.
 #[cfg(feature = "time")]
-pub fn use_delay<'a, 'a0: 'a, Props: Any, ViewData: VViewData + 'static>(
+pub(super) fn _use_delay<'a, 'a0: 'a, Props: Any, ViewData: VViewData + 'static>(
     c: &mut VComponentContext1<'a, 'a0, Props, ViewData>,
     delay: Duration,
     listener: impl FnOnce(VPlainContext2<'_, '_, Props, ViewData>) + 'static
 ) {
     let listener = RefCell::new(Some(listener));
-    let called = use_non_updating_state(c, || false);
+    let called = c.use_non_updating_state(|| false);
     let start_time = Instant::now();
     let predicate = !*called.get(c);
-    use_tick_listener_when(c, !predicate, move |c, _delta_time| {
+    _use_tick_listener_when(c, !predicate, move |c, _delta_time| {
         let elapsed = start_time.elapsed();
         if elapsed >= delay {
             let listener = listener.borrow_mut().take().expect("broken invariant: somehow called the delayed listener twice");

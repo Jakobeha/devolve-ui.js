@@ -1,13 +1,47 @@
 //! Utilities to create terse constructors for your custom components,
 //! since creating `VComponent`s manually is very verbose.
 
+use std::any::Any;
 use std::fmt::Debug;
 use crate::core::component::component::{VComponent};
-use crate::core::component::context::{VComponentContext, VComponentContext2};
+use crate::core::component::context::{VComponentContext, VComponentContext1, VComponentContext2};
 use crate::core::component::node::VNode;
 use crate::core::component::parent::VParent;
 use crate::core::component::path::VComponentKey;
 use crate::core::view::view::VViewData;
+
+pub trait VComponentProps<ViewData: VViewData>: Any + Sized {
+    type Props: Any;
+    type RequiredArgs;
+
+    fn combine(optional: Self, required: Self::RequiredArgs) -> Self::Props;
+
+    fn construct_fn() -> fn(VComponentContext2<Self::Props, ViewData>) -> VNode<ViewData>;
+}
+
+pub trait VComponentConstrExtension<ViewData: VViewData + 'static> {
+    fn c<Str: TryInto<VComponentKey>, Constr: VComponentProps<ViewData>>(
+        &mut self,
+        key: Str,
+        component: impl FnOnce(&mut Self) -> Constr,
+        required_args: impl FnOnce(&mut Self) -> Constr::RequiredArgs
+    ) -> VNode<ViewData> where Str::Error: Debug;
+}
+
+impl <'a, 'a0: 'a, Props2: Any, ViewData: VViewData + 'static> VComponentConstrExtension<ViewData> for VComponentContext1<'a, 'a0, Props2, ViewData> {
+    fn c<Str: TryInto<VComponentKey>, Constr: VComponentProps<ViewData>>(
+        &mut self,
+        key: Str,
+        component: impl FnOnce(&mut Self) -> Constr,
+        required_args: impl FnOnce(&mut Self) -> Constr::RequiredArgs
+    ) -> VNode<ViewData> where Str::Error: Debug {
+        let component = component(self);
+        let required_args = required_args(self);
+        let props = Constr::combine(component, required_args);
+        make_component(self, key, props, Constr::construct_fn())
+    }
+}
+
 
 /// Creates the component and adds it to `c`.
 /// The component can't be returned because it is in `c`.
@@ -49,7 +83,7 @@ pub macro _make_component_macro(
     $vis macro $name(
         $d c:expr,
         $d key:expr,
-        { $d ( $d opt_field:ident : $d opt_field_value:expr ),* $d ( , )? }
+        { $d ( $d opt_field:ident : $d opt_field_value:expr ),* }
         $d ( , $d req_prop_id:expr )*
     ) { {
         let props = $Props {
@@ -103,7 +137,7 @@ pub macro _make_component_macro(
 /// make_component_macro!(pub app2, app_fn_with_weird_name, AppProps [ required_field1, required_field2 ]);
 /// ```
 ///
-/// Like `make_component` except you must define the props and defaults yourself.
+/// Like `make_component` except you must define the props, defaults, and trait yourself.
 /// This one only defines the macro.
 ///
 /// Pro tip: To get IntelliJ to understand this macro you must also import `_make_component_macro`
@@ -133,22 +167,21 @@ pub macro make_component_macro {
 /// Usage:
 ///
 /// ```
-/// use std::any::Any;
-/// use devolve_ui::core::component::constr::{_make_component_macro, make_component};
+/// use devolve_ui::core::component::constr::{_make_component_macro, make_component, VComponentConstrExtension};
 /// use devolve_ui::core::component::context::VComponentContext2;
 /// use devolve_ui::core::component::node::VNode;
-/// use devolve_ui::core::misc::shorthand::d;
+/// use devolve_ui::core::misc::shorthand::{d, pd};
 /// use devolve_ui::view_data::tui::constr::{vbox, text};
 /// use devolve_ui::view_data::tui::tui::{HasTuiViewData, TuiViewData};
 ///
 /// // Define
 ///
-/// make_component!(pub basic, Basic<TParam> where (TParam: Any) {
+/// make_component!(pub basic, Basic, Bc1 (TParam) where (ViewData: HasTuiViewData) {
 ///     optional_field: String = "default value".to_string(),
 ///     another_optional: usize = 1
 /// } [ required_field: String ] @ _p ViewData);
 ///
-/// fn basic<TParam: Any, ViewData: HasTuiViewData>((c, Bc1 { optional_field, another_optional, required_field, _p }): VComponentContext2<Bc1<TParam, ViewData>, ViewData>) -> VNode<ViewData> {
+/// fn basic<TParam, ViewData: HasTuiViewData>((c, Bc1 { optional_field, another_optional, required_field, _p }): VComponentContext2<Bc1<TParam, ViewData>, ViewData>) -> VNode<ViewData> {
 ///     vbox(d(), d(), vec![
 ///         text!({}, {}, format!("{} and {}", required_field, optional_field)),
 ///         text!({}, {}, "Hello world!".to_string())
@@ -158,39 +191,78 @@ pub macro make_component_macro {
 /// // Use
 ///
 /// fn pass_this_to_renderer_construct<ViewData: HasTuiViewData>((mut c, ()): VComponentContext2<(), ViewData>) -> VNode<ViewData> {
-///     basic!((), {
+///     c.c((), |c| Basic {
 ///         optional_field: "overridden value".to_string(),
-///     }, "required value".to_string())
+///         ..d()
+///     }, |c| "required value".to_string())
 /// }
 /// ```
 pub macro make_component(
-    $vis:vis $name:ident,
-    $Props:ident $( < $( $T:ident $( : $TTy:tt $( + $TTyRest:tt )* )? ),* > )? $( where ( $( $more_bounds:tt )* ) )?
+    $vis:vis $name:ident, $Name:ident,
+    $Props:ident $( ($($tt2:tt)*) )? $( where ( $( $tt3:tt )* ) )?
     { $( $opt_prop_id:ident : $opt_prop_ty:ty = $opt_prop_default:expr ),* $( , )? }
     [ $( $req_prop_id:ident : $req_prop_ty:ty ),* $( , )? ]
+    @ $_p:ident $ViewData:ident
 ) {
-    $vis struct $Props $( < $( $T $( : $TTy $( + $TTyRest )* )? ),* > )? $( where $( $more_bounds )* )? {
+    $vis struct $Name <$($($tt2)* ,)? $ViewData: $crate::core::view::view::VViewData + 'static> $( where $($tt3)* )? {
         $( pub $opt_prop_id : $opt_prop_ty, )*
-        $( pub $req_prop_id : $req_prop_ty, )*
+        pub $_p: std::marker::PhantomData<($( $($tt2)* , )? $ViewData, )>
     }
 
-    impl $( < $( $T $( : $TTy $( + $TTyRest )* )? ),* > )? $crate::core::misc::partial_default::PartialDefault for $Props $( < $( $T ),* > )? $( where $( $more_bounds )* )? {
+    $vis struct $Props <$($($tt2)* ,)? $ViewData: $crate::core::view::view::VViewData + 'static> $( where $($tt3)* )? {
+        $( pub $opt_prop_id : $opt_prop_ty, )*
+        $( pub $req_prop_id : $req_prop_ty, )*
+        pub $_p: std::marker::PhantomData<($( $($tt2)* , )? $ViewData, )>
+    }
+
+    impl <$($($tt2)* ,)? $ViewData: $crate::core::view::view::VViewData + 'static> $crate::core::misc::partial_default::PartialDefault for $Props <$($($tt2)* ,)? $ViewData> $( where $($tt3)* )? {
         type RequiredArgs = ( $( $req_prop_ty, )* );
 
         fn partial_default(($( $req_prop_id, )*): Self::RequiredArgs) -> Self {
             Self {
                 $( $opt_prop_id : $opt_prop_default, )*
                 $( $req_prop_id, )*
+                $_p: std::marker::PhantomData
             }
         }
     }
 
-    _make_component_macro!(
+    impl <$($($tt2)* ,)? $ViewData: $crate::core::view::view::VViewData + 'static> std::default::Default for $Name <$($($tt2)* ,)? $ViewData> $( where $($tt3)* )? {
+        fn default() -> Self {
+            Self {
+                $( $opt_prop_id : $opt_prop_default, )*
+                $_p: std::marker::PhantomData
+            }
+        }
+    }
+
+    impl <
+        'a, 'a0: 'a,
+        $( $($tt2)* , )?
+        $ViewData: $crate::core::view::view::VViewData + 'static
+    > $crate::core::component::constr::VComponentProps<$ViewData> for $Name <$( $($tt2)* ,)? $ViewData> $( where $($tt3)* )? {
+        type Props = $Props <$( $($tt2)* , )? $ViewData>;
+        type RequiredArgs = ( $( $req_prop_ty ),* );
+
+        fn combine($Name { $( $opt_prop_id, )* $_p }: Self, ( $( $req_prop_id ),* ): Self::RequiredArgs) -> Self::Props {
+            Self::Props {
+                $( $opt_prop_id, )*
+                $( $req_prop_id, )*
+                $_p: std::marker::PhantomData
+            }
+        }
+
+        fn construct_fn() -> fn($crate::core::component::context::VComponentContext2<Self::Props, $ViewData>) -> $crate::core::component::node::VNode<$ViewData> {
+            $name
+        }
+    }
+
+    /* _make_component_macro!(
         ($) @
         $vis $name,
         $name,
         $Props
-    );
+    ); */
 }
 
 #[cfg(test)]
@@ -198,7 +270,7 @@ pub macro make_component(
 mod tests {
     use crate::core::component::context::VComponentContext2;
     #[allow(unused_imports)]
-    use crate::core::component::constr::{_make_component_macro, make_component, make_component_macro};
+    use crate::core::component::constr::{_make_component_macro, make_component, make_component_macro, make_component_trait};
     use crate::core::component::node::VNode;
     use crate::core::misc::shorthand::pd;
     use crate::core::renderer::renderer::Renderer;
@@ -229,11 +301,11 @@ mod tests {
         renderer.root(|(mut c, ())| my_component2!(&mut c, "key", { text: "Override text" }));
     }
 
-    make_component!(pub my_component, MyComponentProps<ViewData: HasTuiViewData + Clone> {
+    make_component!(pub my_component, _p, MyComponent<ViewData> where (ViewData: HasTuiViewData + Clone) {
         title: String = String::from("Untitled")
     } [children: Vec<VNode<ViewData>>]);
 
-    fn my_component<ViewData: HasTuiViewData + Clone + 'static>((_c, MyComponentProps { title, children }): VComponentContext2<MyComponentProps<ViewData>, ViewData>) -> VNode<ViewData> {
+    fn my_component<ViewData: HasTuiViewData + Clone + 'static>((_c, MyComponent { title, children, _p }): VComponentContext2<MyComponentProps<ViewData>, ViewData>) -> VNode<ViewData> {
         vbox!({ width: smt!(100%) }, {}, vec![
             text!({}, {}, title.clone()),
             vbox!({}, {}, children.clone())
@@ -241,10 +313,21 @@ mod tests {
     }
 
     #[test]
-    fn test_component() {
+    fn test_component_macro() {
         let renderer = Renderer::new(TuiEngine::new(TuiConfig::default()));
         renderer.root(|(mut c, ())| my_component!(&mut c, "key", { title: "Override title".to_owned() }, vec![
             text!({}, {}, "Hello world!".to_owned()),
         ]));
+    }
+
+    #[test]
+    fn test_component_trait() {
+        let renderer = Renderer::new(TuiEngine::new(TuiConfig::default()));
+        renderer.root(|(mut c, ())| c.node("key", MyComponentProps {
+            title: "Override title".to_owned(),
+            ..pd(vec![
+                text!({}, {}, "Hello world!".to_owned()),
+            ])
+        }));
     }
 }

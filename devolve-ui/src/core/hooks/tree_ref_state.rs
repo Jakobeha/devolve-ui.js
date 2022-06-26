@@ -23,7 +23,7 @@ use crate::core::component::context::{VComponentContext, VContext};
 use crate::core::component::path::VComponentPath;
 use crate::core::component::update_details::UpdateDetails;
 use crate::core::data::obs_ref::st::{ObsRef, ObsRefableRoot, SubCtx};
-use crate::core::hooks::state_internal::use_non_updating_state;
+use crate::core::hooks::state_internal::InternalHooks;
 use crate::core::misc::map_lock_result::MappableLockResult;
 use crate::core::view::view::VViewData;
 
@@ -33,7 +33,7 @@ pub struct TreeRefState<T: ObsRefableRoot<VContextSubCtx<ViewData>>, ViewData: V
 #[derive(Debug)]
 pub struct TreeAccess<'a, T: ObsRefableRoot<VContextSubCtx<ViewData>>, ViewData: VViewData + 'static>(MutexGuard<'a, T::ObsRefImpl>, PhantomData<ViewData>);
 
-pub fn use_tree_ref_state<'a, 'a0: 'a, T: ObsRefableRoot<VContextSubCtx<ViewData>> + 'static, ViewData: VViewData + 'static>(
+pub(super) fn _use_tree_ref_state<'a, 'a0: 'a, T: ObsRefableRoot<VContextSubCtx<ViewData>> + 'static, ViewData: VViewData + 'static>(
     c: &mut impl VComponentContext<'a, 'a0, ViewData=ViewData>,
     get_initial: impl FnOnce() -> T
 ) -> TreeRefState<T, ViewData> {
@@ -43,7 +43,7 @@ pub fn use_tree_ref_state<'a, 'a0: 'a, T: ObsRefableRoot<VContextSubCtx<ViewData
         .upgrade()
         .expect("use_tree_ref_state called in context with nil renderer")
         .needs_update_notifier();
-    let state = use_non_updating_state(c, || {
+    let state = c.use_non_updating_state(|| {
         let obs_ref = get_initial().into_obs_ref();
         obs_ref.after_mutate(Box::new(move |_root, referenced_paths, triggered_path| {
             for referenced_path in referenced_paths {

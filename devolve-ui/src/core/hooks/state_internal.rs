@@ -13,7 +13,17 @@ pub struct NonUpdatingState<T: Any, ViewData: VViewData> {
     phantom: PhantomData<(T, ViewData)>
 }
 
-pub fn use_non_updating_state<'a, 'a0: 'a, T: Any, ViewData: VViewData + 'a>(
+pub trait InternalHooks <'a, 'a0: 'a, ViewData: VViewData + 'a> {
+    fn use_non_updating_state<T: Any>(&mut self, initial_state: impl FnOnce() -> T) -> NonUpdatingState<T, ViewData>;
+}
+
+impl <'a, 'a0: 'a, ViewData: VViewData + 'a, Context: VComponentContext<'a, 'a0, ViewData=ViewData>> InternalHooks<'a, 'a0, ViewData> for Context {
+    fn use_non_updating_state<T: Any>(&mut self, initial_state: impl FnOnce() -> T) -> NonUpdatingState<T, ViewData> {
+        _use_non_updating_state(self, initial_state)
+    }
+}
+
+fn _use_non_updating_state<'a, 'a0: 'a, T: Any, ViewData: VViewData + 'a>(
     c: &mut impl VComponentContext<'a, 'a0, ViewData=ViewData>,
     initial_state: impl FnOnce() -> T
 ) -> NonUpdatingState<T, ViewData> {
@@ -32,6 +42,7 @@ pub fn use_non_updating_state<'a, 'a0: 'a, T: Any, ViewData: VViewData + 'a>(
         phantom: PhantomData
     }
 }
+
 
 impl <T: Any, ViewData: VViewData> NonUpdatingState<T, ViewData> {
     pub fn get<'a: 'b, 'b>(&self, c: &'b impl VContext<'a, ViewData=ViewData>) -> &'b T where ViewData: 'b {

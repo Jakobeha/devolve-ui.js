@@ -4,12 +4,12 @@ use std::any::Any;
 use std::borrow::Cow;
 use std::collections::BTreeSet;
 use std::marker::PhantomData;
+#[allow(unused_imports)]
 use devolve_ui::core::component::constr::{_make_component_macro, make_component};
 use devolve_ui::core::component::context::{VComponentContext1, VComponentContext2, VEffectContext1, VEffectContext2};
 use devolve_ui::core::component::node::VNode;
-use devolve_ui::core::hooks::context::{ContextIdSource, use_consume, use_provide};
-use devolve_ui::core::hooks::event::use_key_listener_when;
-use devolve_ui::core::hooks::state::use_state;
+use devolve_ui::core::hooks::context::ContextIdSource;
+use devolve_ui::core::hooks::BuiltinHooks;
 use devolve_ui::core::misc::shorthand::d;
 use devolve_ui::core::renderer::input::KeyCode;
 use devolve_ui::core::view::layout::macros::{mt, smt};
@@ -18,17 +18,17 @@ use devolve_ui::view_data::attrs::BorderStyle;
 use devolve_ui::view_data::tui::constr::*;
 use devolve_ui::view_data::tui::tui::HasTuiViewData;
 
-make_component!(pub focus_provider, FocusProviderProps<ViewData: VViewData> {
-    enable_tab: bool = false,
+make_component!(pub focus_provider, FocusProvider<ViewData: VViewData + Clone> {
+    enable_tab: bool = false
 } [content: VNode<ViewData>]);
 
-make_component!(pub text_field, TextFieldProps<Props: Any, ViewData: VViewData> {
+make_component!(pub text_field, TextField<Props: Any, ViewData: VViewData + HasTuiViewData> {
     initial_value: Cow<'static, str> = "".into(),
     placeholder: Cow<'static, str> = "".into(),
     is_enabled: bool = true,
     override_value: Option<String> = None,
     on_change: Option<Box<dyn Fn(VEffectContext2<Props, ViewData>, &str)>> = None,
-    phantom: PhantomData<(Props, ViewData)> = PhantomData
+    _p: PhantomData<(Props, ViewData, )> = PhantomData
 } []);
 
 #[derive(Default)]
@@ -67,13 +67,13 @@ impl <Props: Any, ViewData: VViewData, F1: Fn(&VEffectContext1<Props, ViewData>)
 
 static FOCUS_PROVIDER_CONTEXT: ContextIdSource<FocusContext> = ContextIdSource::new();
 
-pub fn focus_provider<ViewData: VViewData + Clone + 'static>((mut c, FocusProviderProps {
+pub fn focus_provider<ViewData: VViewData + Clone + 'static>((mut c, FocusProvider {
     content,
     enable_tab
-}): VComponentContext2<FocusProviderProps<ViewData>, ViewData>) -> VNode<ViewData> {
-    let focus_context = use_provide(&mut c, &FOCUS_PROVIDER_CONTEXT, || Box::new(FocusContext::default()));
+}): VComponentContext2<FocusProvider<ViewData>, ViewData>) -> VNode<ViewData> {
+    let focus_context = c.use_provide(&FOCUS_PROVIDER_CONTEXT, || Box::new(FocusContext::default()));
 
-    use_key_listener_when(&mut c, *enable_tab, move |(mut c, FocusProviderProps { content, enable_tab }), event| {
+    c.use_key_listener_when(*enable_tab, move |(mut c, FocusProvider { content, enable_tab }), event| {
         match event.code {
             KeyCode::Tab => {
                 let focus_context = focus_context.get_mut(&mut c);
@@ -101,7 +101,7 @@ pub fn focus_provider<ViewData: VViewData + Clone + 'static>((mut c, FocusProvid
 }
 
 pub fn use_focus<Props: Any, ViewData: VViewData + 'static>(c: &mut VComponentContext1<Props, ViewData>) -> Box<dyn LocalFocus<Props=Props, ViewData=ViewData>> {
-    let focus_context = use_consume(c, &FOCUS_PROVIDER_CONTEXT);
+    let focus_context = c.use_consume(&FOCUS_PROVIDER_CONTEXT);
     let my_id = focus_context.get(c).next_free_id;
     focus_context.get_mut(c).next_free_id += 1;
     focus_context.get_mut(c).focusable_ids.insert(my_id);
@@ -114,28 +114,28 @@ pub fn use_focus<Props: Any, ViewData: VViewData + 'static>(c: &mut VComponentCo
     })
 }
 
-pub fn text_field<Props: Any, ViewData: HasTuiViewData + 'static>((mut c, TextFieldProps { initial_value, placeholder, is_enabled, override_value, on_change, phantom }): VComponentContext2<TextFieldProps<Props, ViewData>, ViewData>) -> VNode<ViewData> {
+pub fn text_field<Props: Any, ViewData: HasTuiViewData + 'static>((mut c, TextField { initial_value, placeholder, is_enabled, override_value, on_change, _p }): VComponentContext2<TextField<Props, ViewData>, ViewData>) -> VNode<ViewData> {
     let mut focus = use_focus(&mut c);
-    let mut value = use_state(&mut c, || initial_value.to_string());
+    let mut value = c.use_state(|| initial_value.to_string());
 
-    use_key_listener_when(&mut c, *is_enabled, |mut c, key| {
+    c.use_key_listener_when(*is_enabled, |(mut c, props), key| {
         todo!("change text on key events");
     });
 
     let txt = format!("{}█", override_value.as_ref().unwrap_or_else(|| value.get(&c)));
 
-    zbox(Vi1 {
+    zbox(Vvw1 {
         width: smt!(16 u),
         ..d()
     }, d(), vec![
-        text(Vi1 {
+        text(Vvw1 {
             x: mt!(1 u),
             y: mt!(1 u),
             width: smt!(prev - 2 u),
             height: smt!(1 u),
             ..d()
         }, d(), txt),
-        border(Vi1 {
+        border(Vvw1 {
             width: smt!(100 %),
             height: smt!(100 %),
             ..d()
@@ -146,6 +146,7 @@ pub fn text_field<Props: Any, ViewData: HasTuiViewData + 'static>((mut c, TextFi
 #[cfg(test)]
 mod test {
     use std::io;
+    #[allow(unused_imports)]
     use devolve_ui::core::component::constr::{_make_component_macro, make_component};
     use devolve_ui::core::component::context::{VComponentContext2, VEffectContext2};
     use devolve_ui::core::component::node::VNode;
@@ -153,57 +154,57 @@ mod test {
     use devolve_ui::core::renderer::renderer::Renderer;
     use devolve_ui::core::view::layout::macros::{mt, smt};
     use devolve_ui::engines::tui::tui::{TuiConfig, TuiEngine};
-    use devolve_ui::view_data::tui::constr::{VBo1, vbox, Vi1, zbox};
+    use devolve_ui::view_data::tui::constr::{Vbx1, vbox, Vvw1, zbox};
     #[cfg(feature = "tui-images")]
     use devolve_ui::view_data::tui::terminal_image::TuiImageFormat;
     use devolve_ui::view_data::tui::tui::HasTuiViewData;
-    use crate::{focus_provider, FocusProviderProps, text_field};
+    use crate::{focus_provider, text_field};
 
-    make_component!(test_app, TestAppProps {} []);
+    make_component!(test_app, TestApp {} []);
 
-    fn test_app<ViewData: HasTuiViewData + Clone + 'static>((mut c, TestAppProps {}): VComponentContext2<TestAppProps, ViewData>) -> VNode<ViewData> {
-        zbox(Vi1 {
+    fn test_app<ViewData: HasTuiViewData + Clone + 'static>((mut c, TestApp {}): VComponentContext2<TestApp, ViewData>) -> VNode<ViewData> {
+        zbox(Vvw1 {
             width: smt!(100 %),
             height: smt!(100 %),
             ..d()
         }, d(), vec![
-            focus_provider!(&mut c, (), {}, vbox(Vi1 {
+            focus_provider!(c, (), {}, vbox(Vvw1 {
                 x: mt!(2 u),
                 y: mt!(2 u),
                 width: smt!(100 % - 4 u),
                 height: smt!(100 % - 4 u),
                 ..d()
-            }, VBo1 {
+            }, Vbx1 {
                 gap: mt!(1 u),
                 ..d()
             }, vec![
-                text_field!(&mut c, 1, {
+                text_field!(c, 1, {
                     initial_value: "".into(),
                     placeholder: "field 1".into(),
                     is_enabled: true,
                     override_value: None,
-                    on_change: None as Option<Box<dyn Fn(VEffectContext2<TestAppProps, ViewData>, &str)>>
+                    on_change: None as Option<Box<dyn Fn(VEffectContext2<TestApp, ViewData>, &str)>>
                 }),
-                text_field!(&mut c, 2, {
+                text_field!(c, 2, {
                     initial_value: "field 2".into(),
                     placeholder: "field 2".into(),
                     is_enabled: true,
                     override_value: None,
-                    on_change: None as Option<Box<dyn Fn(VEffectContext2<TestAppProps, ViewData>, &str)>>
+                    on_change: None as Option<Box<dyn Fn(VEffectContext2<TestApp, ViewData>, &str)>>
                 }),
-                text_field!(&mut c, 3, {
+                text_field!(c, 3, {
                     initial_value: "".into(),
                     placeholder: "field 3".into(),
                     is_enabled: true,
                     override_value: None,
-                    on_change: None as Option<Box<dyn Fn(VEffectContext2<TestAppProps, ViewData>, &str)>>
+                    on_change: None as Option<Box<dyn Fn(VEffectContext2<TestApp, ViewData>, &str)>>
                 }),
-                text_field!(&mut c, 4, {
+                text_field!(c, 4, {
                     initial_value: "".into(),
                     placeholder: "field 4".into(),
                     is_enabled: false,
                     override_value: Some("override".into()),
-                    on_change: None as Option<Box<dyn Fn(VEffectContext2<TestAppProps, ViewData>, &str)>>
+                    on_change: None as Option<Box<dyn Fn(VEffectContext2<TestApp, ViewData>, &str)>>
                 })
             ]))
         ])
@@ -220,7 +221,7 @@ mod test {
             #[cfg(feature = "tui-images")]
             image_format: TuiImageFormat::FallbackColor
         }));
-        renderer.root(|(mut c, ())| test_app!(&mut c, (), {}));
+        renderer.root(|(mut c, ())| test_app!(c, (), {}));
         renderer.resume_blocking();
     }
 }

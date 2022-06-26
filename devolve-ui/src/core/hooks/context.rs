@@ -42,7 +42,7 @@ pub struct ContextState<T: Any, ViewData: VViewData> {
     phantom: PhantomData<ViewData>
 }
 
-pub fn use_provide<'a, 'a0: 'a, T: Any, ViewData: VViewData + 'a>(
+pub(super) fn _use_provide<'a, 'a0: 'a, T: Any, ViewData: VViewData + 'a>(
     c: &mut impl VComponentContext<'a, 'a0, ViewData=ViewData>,
     id: ContextId<T>,
     get_initial: impl FnOnce() -> Box<T>
@@ -57,7 +57,7 @@ pub fn use_provide<'a, 'a0: 'a, T: Any, ViewData: VViewData + 'a>(
     }
 }
 
-pub fn use_consume<'a, 'a0: 'a, T: Any, ViewData: VViewData + 'a>(
+pub(super) fn _use_consume<'a, 'a0: 'a, T: Any, ViewData: VViewData + 'a>(
     c: &mut impl VComponentContext<'a, 'a0, ViewData=ViewData>,
     id: ContextId<T>
 ) -> ContextState<T, ViewData> {

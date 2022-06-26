@@ -19,7 +19,7 @@ use std::sync::{Arc, LockResult, Mutex, MutexGuard, TryLockResult};
 use crate::core::renderer::stale_data::NeedsUpdateFlag;
 use crate::core::component::context::VComponentContext;
 use crate::core::component::update_details::{UpdateBacktrace, UpdateDetails};
-use crate::core::hooks::state_internal::use_non_updating_state;
+use crate::core::hooks::state_internal::InternalHooks;
 use crate::core::misc::map_lock_result::MappableLockResult;
 use crate::core::view::view::VViewData;
 
@@ -45,11 +45,11 @@ pub struct AtomicAccessMut<'a, T: Any, ViewData: VViewData> {
     phantom: PhantomData<ViewData>
 }
 
-pub fn use_atomic_ref_state<'a, 'a0: 'a, T: Any, ViewData: VViewData + 'a>(
+pub(super) fn _use_atomic_ref_state<'a, 'a0: 'a, T: Any, ViewData: VViewData + 'a>(
     c: &mut impl VComponentContext<'a, 'a0, ViewData=ViewData>,
     get_initial: impl FnOnce() -> T
 ) -> AtomicRefState<T, ViewData> {
-    let state = use_non_updating_state(c, || Arc::new(Mutex::new(get_initial())));
+    let state = c.use_non_updating_state(|| Arc::new(Mutex::new(get_initial())));
     let flag = c.component().needs_update_flag();
     AtomicRefState {
         data: state.get(c).clone(),
