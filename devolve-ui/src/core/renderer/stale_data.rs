@@ -2,7 +2,7 @@
 //! You don't use these directly, instead they are used through classes like `AtomicRefState`.
 use std::collections::HashMap;
 use std::sync::{Arc, Weak};
-use crate::core::component::component::VComponent;
+use crate::core::component::component::{VComponent, VComponentContexts};
 use crate::core::component::path::{VComponentPath, VComponentRefResolved};
 use crate::core::component::update_details::UpdateDetails;
 use crate::core::misc::is_thread_safe::{TsMutex, TsMutexGuard, TsNotifyFlag};
@@ -79,7 +79,7 @@ impl NeedsUpdateFlag {
     /// Set this component needs update
     pub fn set(&self, details: UpdateDetails) -> StaleDataResult<()> {
         if let Some(stale_data) = self.stale_data.upgrade() {
-            stale_data.queue_path_for_update_with_details(&self.path, details)?;
+            stale_data.queue_path_for_update(&self.path, details)?;
             stale_data.needs_rerender.set();
         }
         Ok(())
@@ -94,7 +94,7 @@ impl NeedsUpdateNotifier {
     /// Set this component needs update
     pub fn set(&self, path: &VComponentPath, details: UpdateDetails) -> StaleDataResult<()> {
         if let Some(stale_data) = self.0.upgrade() {
-            stale_data.queue_path_for_update_with_details(path, details)?;
+            stale_data.queue_path_for_update(path, details)?;
             stale_data.needs_rerender.set();
         }
         Ok(())
@@ -115,7 +115,7 @@ impl <const IS_THREAD_SAFE: bool> StaleData<IS_THREAD_SAFE> {
 
     /// Also should set `needs_rerender` since that is implied by needing to update;
     /// however this function doesn't, `Renderer` which calls this does.
-    pub(super) fn queue_path_for_update_with_details(&self, path: &VComponentPath, details: UpdateDetails) -> StaleDataResult<()> {
+    pub(super) fn queue_path_for_update(&self, path: &VComponentPath, details: UpdateDetails) -> StaleDataResult<()> {
         let mut needs_update = self.needs_update_lock()?;
         let detailss = match needs_update.get_mut(path) {
             None => needs_update.try_insert(path.clone(), Vec::new()).unwrap(),
@@ -125,25 +125,13 @@ impl <const IS_THREAD_SAFE: bool> StaleData<IS_THREAD_SAFE> {
         Ok(())
     }
 
-    /// Also should set `needs_rerender` since that is implied by needing to update;
-    /// however this function doesn't, `Renderer` which calls this does.
-    pub(super) fn queue_path_for_update_no_details(&self, path: &VComponentPath) -> StaleDataResult<()> {
-        let mut needs_update = self.needs_update_lock()?;
-        if needs_update.get(path).is_none() {
-            needs_update.insert(path.clone(), Vec::new());
-        }
-        Ok(())
-    }
-
     /// Transfer all pending updates to components and clear update queue.
     pub(super) fn apply_updates<ViewData: VViewData>(&self, root_component: &mut Box<VComponent<ViewData>>) -> StaleDataResult<()> {
         let mut local_lock = self.needs_update_lock()?;
         for (path, detailss) in local_lock.drain() {
             // Component may no longer exist so we need to check for some
-            if let Some(VComponentRefResolved { parent_contexts: _parent_contexts, component: child_component }) = root_component.down_path_mut(&path, Vec::new()) {
-                for details in detailss {
-                    child_component.head.pending_update(details);
-                }
+            if let Some(VComponentRefResolved { parent_contexts, component: child_component }) = root_component.down_path_mut(&path, Vec::new()) {
+                child_component.update(&mut VComponentContexts::from_iter(parent_contexts), detailss.into_iter());
             }
         }
         Ok(())

@@ -45,6 +45,7 @@ use crate::core::component::node::{NodeId, VComponentAndView, VNode};
 use crate::core::component::parent::VParent;
 use crate::core::component::path::{VComponentPath, VComponentRefResolvedPtr};
 use crate::core::component::root::VComponentRoot;
+use crate::core::component::update_details::UpdateDetails;
 #[cfg(feature = "logging")]
 use crate::core::logging::common::LogStart;
 #[cfg(feature = "logging")]
@@ -379,11 +380,6 @@ impl <Engine: RenderEngine> Renderer<Engine> where Engine::RenderLayer: VRenderL
         // Set root component
         let mut self_root_component = self.root_component.borrow_mut();
         *self_root_component = root_component;
-
-        // Update
-        if let Some(self_root_component) = self_root_component.as_mut() {
-            self_root_component.update(&mut VComponentContexts::new())
-        }
 
         // Rerender
         if self.is_visible.get() {
@@ -986,8 +982,8 @@ impl <Engine: RenderEngine> Renderer<Engine> where Engine::ViewData: Serialize +
 impl <Engine: RenderEngine> VComponentRoot for Renderer<Engine> {
     type ViewData = Engine::ViewData;
 
-    fn queue_needs_update(self: Rc<Self>, path: &VComponentPath) {
-        self.local_stale_data.queue_path_for_update_no_details(path).unwrap();
+    fn queue_needs_update(self: Rc<Self>, path: &VComponentPath, details: UpdateDetails) {
+        self.local_stale_data.queue_path_for_update(path, details).unwrap();
         self.set_needs_rerender();
     }
 

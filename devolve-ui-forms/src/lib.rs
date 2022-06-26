@@ -18,9 +18,10 @@ use devolve_ui::view_data::attrs::BorderStyle;
 use devolve_ui::view_data::tui::constr::*;
 use devolve_ui::view_data::tui::tui::HasTuiViewData;
 
-make_component!(pub focus_provider, FocusProvider<ViewData: VViewData + Clone> {
-    enable_tab: bool = false
-} [content: VNode<ViewData>]);
+make_component!(pub focus_provider, FocusProvider<ViewData: VViewData + Clone + 'static> {
+    enable_tab: bool = false,
+    _p: PhantomData<ViewData> = PhantomData
+} [content: Box<dyn Fn(VComponentContext1<FocusProvider<ViewData>, ViewData>) -> VNode<ViewData>>]);
 
 make_component!(pub text_field, TextField<Props: Any, ViewData: VViewData + HasTuiViewData> {
     initial_value: Cow<'static, str> = "".into(),
@@ -67,13 +68,14 @@ impl <Props: Any, ViewData: VViewData, F1: Fn(&VEffectContext1<Props, ViewData>)
 
 static FOCUS_PROVIDER_CONTEXT: ContextIdSource<FocusContext> = ContextIdSource::new();
 
-pub fn focus_provider<ViewData: VViewData + Clone + 'static>((mut c, FocusProvider {
+pub fn focus_provider<Props: Any, ViewData: VViewData + Clone + 'static>((mut c, FocusProvider {
     content,
-    enable_tab
+    enable_tab,
+    _p
 }): VComponentContext2<FocusProvider<ViewData>, ViewData>) -> VNode<ViewData> {
     let focus_context = c.use_provide(&FOCUS_PROVIDER_CONTEXT, || Box::new(FocusContext::default()));
 
-    c.use_key_listener_when(*enable_tab, move |(mut c, FocusProvider { content, enable_tab }), event| {
+    c.use_key_listener_when(*enable_tab, move |(mut c, FocusProvider { content, enable_tab, _p }), event| {
         match event.code {
             KeyCode::Tab => {
                 let focus_context = focus_context.get_mut(&mut c);
@@ -97,7 +99,7 @@ pub fn focus_provider<ViewData: VViewData + Clone + 'static>((mut c, FocusProvid
         }
     });
 
-    content.clone()
+    content(c)
 }
 
 pub fn use_focus<Props: Any, ViewData: VViewData + 'static>(c: &mut VComponentContext1<Props, ViewData>) -> Box<dyn LocalFocus<Props=Props, ViewData=ViewData>> {
@@ -168,7 +170,7 @@ mod test {
             height: smt!(100 %),
             ..d()
         }, d(), vec![
-            focus_provider!(c, (), {}, vbox(Vvw1 {
+            focus_provider!(c, (), {}, Box::new(|c| vbox(Vvw1 {
                 x: mt!(2 u),
                 y: mt!(2 u),
                 width: smt!(100 % - 4 u),
@@ -206,7 +208,7 @@ mod test {
                     override_value: Some("override".into()),
                     on_change: None as Option<Box<dyn Fn(VEffectContext2<TestApp, ViewData>, &str)>>
                 })
-            ]))
+            ])))
         ])
     }
 

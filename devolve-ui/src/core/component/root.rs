@@ -7,6 +7,7 @@ use std::time::Duration;
 #[cfg(feature = "logging")]
 use crate::core::component::mode::VMode;
 use crate::core::component::path::{VComponentPath, VComponentRefResolved, VComponentRefResolvedPtr};
+use crate::core::component::update_details::UpdateDetails;
 #[cfg(feature = "logging")]
 use crate::core::logging::update_logger::UpdateLogger;
 #[cfg(feature = "input")]
@@ -19,7 +20,7 @@ pub(in crate::core) trait VComponentRoot {
     type ViewData: VViewData;
 
     /// Marks the given path needs to be updated
-    fn queue_needs_update(self: Rc<Self>, path: &VComponentPath);
+    fn queue_needs_update(self: Rc<Self>, path: &VComponentPath, details: UpdateDetails);
     /// Mark the view as stale
     fn invalidate_view(self: Rc<Self>, view: &Box<VView<Self::ViewData>>);
     /// A flag for a separate thread or time. When set, this marks that the given path needs to be updated, like `mark_needs_update`

@@ -90,6 +90,16 @@ impl UpdateStack {
         self.last_open_or_make().add(details);
     }
 
+    pub(super) fn add_all_to_last(&mut self, details: impl Iterator<Item=UpdateDetails>) {
+        let mut last_open_or_make = None;
+        for details in details {
+            if last_open_or_make.is_none() {
+                last_open_or_make = Some(self.last_open_or_make());
+            }
+            last_open_or_make.as_mut().unwrap().add(details);
+        }
+    }
+
     pub(super) fn append_to_last(&mut self, details: &mut Vec<UpdateDetails>) {
         if !details.is_empty() {
             self.last_open_or_make().append(details);
@@ -100,10 +110,6 @@ impl UpdateStack {
         if let Some(last) = self.last_open() {
             last.close();
         }
-    }
-
-    pub(super) fn clear(&mut self) {
-        self.0.clear();
     }
 
     pub(super) fn is_empty(&self) -> bool {

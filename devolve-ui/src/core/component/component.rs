@@ -26,6 +26,7 @@ use std::collections::HashMap;
 use std::marker::PhantomData;
 use std::rc::{Rc, Weak};
 use std::fmt::{Debug, Formatter};
+use std::iter::once;
 use std::mem;
 use crate::core::component::context::{VComponentContext1, VComponentContext2, VDestructorContext1, VDestructorContext2, VEffectContext1, VEffectContext2};
 use crate::core::component::path::{VComponentKey, VComponentPath, VComponentRef, VComponentRefResolved};
@@ -60,9 +61,8 @@ pub struct VComponentHead<ViewData: VViewData> {
 
     pub(in crate::core) h: VComponentStateData,
 
-    is_being_updated: bool,
+    local_update_stack: Option<UpdateStack>,
     is_fresh: bool,
-    recursive_update_stack_trace: UpdateStack,
 }
 
 pub(in crate::core) struct VComponentStateData {
@@ -74,11 +74,10 @@ pub(in crate::core) struct VComponentStateData {
 
 #[derive(Debug)]
 pub struct ContextPendingUpdates {
-    pub update_details: Vec<UpdateDetails>,
+    pub update_details: Option<Vec<UpdateDetails>>,
     // These next 2 properties are redundant but to VComponentHead but because we don't pass it
     // in associated data, we need them. Otherwise we need some annoying code restructuring
-    pub path: VComponentPath,
-    pub is_being_updated: bool
+    pub path: VComponentPath
 }
 
 pub type VComponentLocalContexts = HashMap<AnonContextId, Box<dyn Any>>;
@@ -181,11 +180,10 @@ impl <ViewData: VViewData + 'static> VComponent<ViewData> {
                                 phantom: PhantomData
                             }));
                             found_child.head.is_fresh = true;
-                            found_child.head.pending_update(UpdateDetails::Reuse {
+                            found_child.update(contexts, once(UpdateDetails::Reuse {
                                 key,
                                 backtrace: UpdateBacktrace::here()
-                            });
-                            found_child.update(contexts);
+                            }));
                             // When we return this it will be added back to parent.children
                             return Action::Reuse(found_child)
                         }
@@ -202,7 +200,11 @@ impl <ViewData: VViewData + 'static> VComponent<ViewData> {
             Action::Reuse(found_child) => found_child,
             Action::Create(parent, props, construct) => {
                 let mut component = Self::create(parent, key, props, construct);
-                component.update(contexts);
+                // Create = needs update
+                component.update(contexts, once(UpdateDetails::CreateNew {
+                    key,
+                    backtrace: UpdateBacktrace::here()
+                }));
                 component
             }
         }
@@ -229,17 +231,8 @@ impl <ViewData: VViewData + 'static> VComponent<ViewData> {
                     // consumed_contexts: HashMap::new(),
                 },
 
-                is_being_updated: false,
                 is_fresh: true,
-                // Create = needs update
-                recursive_update_stack_trace: {
-                    let mut stack = UpdateStack::new();
-                    stack.add_to_last(UpdateDetails::CreateNew {
-                        key,
-                        backtrace: UpdateBacktrace::here()
-                    });
-                    stack
-                }
+                local_update_stack: None
             },
             construct: Box::new(VComponentConstructImpl {
                 props,
@@ -254,20 +247,26 @@ impl <ViewData: VViewData> VComponent<ViewData> {
     /// Run pending updates on this component.
     /// If there are any pending updates, updates will also be run on children.
     /// Otherwise they won't but also this should never be called if there are no pending updates.
-    pub(in crate::core) fn update(mut self: &mut Box<Self>, contexts: &mut VComponentContexts<'_>) {
-        self.head.is_being_updated = true;
-        self.construct.local_context_changes().is_being_updated = true;
+    pub(in crate::core) fn update(mut self: &mut Box<Self>, contexts: &mut VComponentContexts<'_>, initial_updates: impl Iterator<Item=UpdateDetails>) {
+        assert!(!self.head.is_being_updated(), "why is local_update_stack not empty when calling update? Are we calling it nested?");
+        assert!(!self.construct.local_context_changes().is_being_updated(), "why is construct's local_update_stack not empty when calling update? Are we calling it nested?");
+
+        let mut update_stack = UpdateStack::new();
+        update_stack.add_all_to_last(initial_updates);
+        self.head.local_update_stack = Some(update_stack);
+        self.construct.local_context_changes().update_details = Some(Vec::new());
+
         loop {
             // Update stack trace stuff
 
-            self.head.recursive_update_stack_trace.append_to_last(&mut self.construct.local_context_changes().update_details);
-            if !self.head.recursive_update_stack_trace.has_pending() {
+            let local_update_stack = self.head.local_update_stack.as_mut().unwrap();
+            local_update_stack.append_to_last(self.construct.local_context_changes().update_details.as_mut().unwrap());
+            if !local_update_stack.has_pending() {
                 break
             }
 
-            self.head.recursive_update_stack_trace.close_last();
-            let recursive_update_stack_trace = &self.head.recursive_update_stack_trace;
-            assert!(recursive_update_stack_trace.len() < VMode::max_recursive_updates_before_loop_detected(), "update loop detected:\n{}", recursive_update_stack_trace);
+            local_update_stack.close_last();
+            assert!(local_update_stack.len() < VMode::max_recursive_updates_before_loop_detected(), "update loop detected:\n{}", local_update_stack);
 
             // Actual update stuff
 
@@ -285,20 +284,22 @@ impl <ViewData: VViewData> VComponent<ViewData> {
             self.clear_fresh_and_remove_stale_children(contexts);
             self.run_effects(contexts);
         }
-        self.construct.local_context_changes().is_being_updated = false;
-        self.head.is_being_updated = false;
 
-        #[cfg(feature = "logging")]
-        VComponentHead::with_update_logger(&self.head.renderer, |logger| {
-            logger.log_update(self.head.path().clone(), self.head.recursive_update_stack_trace.clone());
-        });
+        assert!(!self.head.local_update_stack.as_ref().unwrap().has_pending());
+        assert!(self.construct.local_context_changes().update_details.as_ref().unwrap().is_empty());
+        self.construct.local_context_changes().update_details = None;
+        let local_update_stack = self.head.local_update_stack.take().unwrap();
 
-        if self.head.recursive_update_stack_trace.is_empty() {
+        if local_update_stack.is_empty() {
             eprintln!("WARNING: component at path {} updated but it had no pending updates", self.head.path());
         } else {
-            self.head.recursive_update_stack_trace.clear();
             self.head.invalidate_view();
         }
+
+        #[cfg(feature = "logging")]
+        VComponentHead::with_update_logger(&self.head.renderer, move |logger| {
+            logger.log_update(self.head.path().clone(), local_update_stack);
+        });
     }
 
     /// Destroy the component: run destructors and invalidate + children
@@ -380,9 +381,14 @@ impl <ViewData: VViewData> VComponentHead<ViewData> {
     /// Mark that the component has a pending update.
     /// `details` is used for the debug message if we detect an infinite loop.
     pub(in crate::core) fn pending_update(&mut self, details: UpdateDetails) {
-        self.recursive_update_stack_trace.add_to_last(details);
-        if let Some(renderer) = self.renderer.upgrade() {
-            renderer.queue_needs_update(self.path());
+        if let Some(local_update_stack) = &mut self.local_update_stack { // is_being_updated
+            local_update_stack.add_to_last(details);
+        } else {
+            if let Some(renderer) = self.renderer.upgrade() {
+                renderer.queue_needs_update(self.path(), details);
+            } else {
+                eprintln!("WARNING: Component at path {} got pending update {} but no renderer", self.path(), details);
+            }
         }
     }
 
@@ -426,12 +432,6 @@ impl <ViewData: VViewData> VComponentHead<ViewData> {
         }
     }
 
-    /// Child component with the given key
-    #[allow(clippy::needless_lifetimes)]
-    pub(super) fn child_mut<'a>(&'a mut self, key: &VComponentKey) -> Option<&'a mut Box<VComponent<ViewData>>> {
-        self.children.get_mut(key)
-    }
-
     /// Add a new child component.
     pub(super) fn add_child(&mut self, child: Box<VComponent<ViewData>>) -> &Box<VComponent<ViewData>> {
         let key = *child.head.key();
@@ -456,6 +456,12 @@ impl <ViewData: VViewData> VComponentHead<ViewData> {
         self.node.is_none()
     }
 
+    /// Is the component being updated? If so pending updates will be added to the local update queue,
+    /// otherwise they go to the root update queue.
+    pub(in crate::core) fn is_being_updated(&self) -> bool {
+        self.local_update_stack.is_some()
+    }
+
     /// Gets the components root child view and that view's actual component:
     /// If the `node` is another component, recurses, and otherwise the component will be `self`.
     #[allow(clippy::needless_lifetimes)]
@@ -475,7 +481,7 @@ impl <ViewData: VViewData> VComponentHead<ViewData> {
     }
 
     #[cfg(feature = "logging")]
-    // Would use self and self.renderer instead, but we need to simultanoeusly borrow recursive_update_stack_trace
+    // Would use self and self.renderer instead, but we need to simultanoeusly borrow local_update_stack
     fn with_update_logger(renderer: &Weak<dyn VComponentRoot<ViewData=ViewData>>, action: impl FnOnce(&mut UpdateLogger<ViewData>)) {
         if VMode::is_logging() {
             if let Some(renderer) = renderer.upgrade() {
@@ -544,8 +550,9 @@ impl <Props: Any, ViewData: VViewData, F: Fn(VComponentContext2<'_, '_, Props, V
                 let update_details = &contexts.top_mut().unwrap().1.update_details;
                 // If we have pending updates, we break, because immediately after this function ends
                 // we run the pending updates and then call run_effects again to run remanining effects.
-                // This is so effects don't have stale data.
-                if component.recursive_update_stack_trace.has_pending() || !update_details.is_empty() {
+                // This is so effects don't have stale data (?).
+                if component.local_update_stack.is_some_and(|local_update_stack| local_update_stack.has_pending()) ||
+                    update_details.is_some_and(|update_details| update_details.is_empty()) {
                     break
                 }
 
@@ -622,21 +629,27 @@ impl <Props: Any, ViewData: VViewData> VComponentConstructState<Props, ViewData>
 impl ContextPendingUpdates {
     fn new(path: VComponentPath) -> Self {
         ContextPendingUpdates {
-            update_details: Vec::new(),
+            update_details: None,
             path,
-            is_being_updated: false
         }
     }
 
-    pub(in crate::core) fn pending_update<ViewData: VViewData>(&mut self, update_details: UpdateDetails, renderer: Weak<dyn VComponentRoot<ViewData=ViewData>>) {
-        self.update_details.push(update_details);
-        if !self.is_being_updated {
+    pub(in crate::core) fn pending_update<ViewData: VViewData>(&mut self, details: UpdateDetails, renderer: Weak<dyn VComponentRoot<ViewData=ViewData>>) {
+        if let Some(update_details) = &mut self.update_details { // is_being_updated
+            update_details.push(details);
+        } else {
             // This happens when we've got a context update from an async update.
             // Otherwise the parent is being updated, and we've got a context update from a child update from a parent update.
             if let Some(renderer) = renderer.upgrade() {
-                renderer.queue_needs_update(&self.path)
+                renderer.queue_needs_update(&self.path, details)
+            } else {
+                eprintln!("WARNING: Component (from context so path unknown) got update with no renderer: {}", details);
             }
         }
+    }
+
+    pub(in crate::core) fn is_being_updated(&self) -> bool {
+        self.update_details.is_some()
     }
 }
 
@@ -675,12 +688,10 @@ impl <ViewData: VViewData + Debug> Debug for VComponentHead<ViewData> {
             .field("id", &self.id)
             .field("path", &self.path)
             .field("is_fresh", &self.is_fresh)
-            .field("is_being_created", &self.is_being_created())
-            .field("is_being_updated", &self.is_being_updated)
-            .field("recursive_update_stack_trace", &self.recursive_update_stack_trace)
+            .field("local_update_stack", &self.local_update_stack)
+            .field("node", &self.node)
             .field("#h.state", &self.h.state.len())
             .field("h.next_state_index", &self.h.next_state_index)
-            .field("node", &self.node)
             .finish_non_exhaustive()
     }
 }

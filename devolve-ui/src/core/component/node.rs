@@ -3,7 +3,7 @@
 
 use std::fmt;
 use std::fmt::{Display, Formatter};
-use crate::core::component::component::{VComponent, VComponentContexts, VComponentHead};
+use crate::core::component::component::VComponentHead;
 use crate::core::component::path::VComponentKey;
 use crate::core::view::view::{VView, VViewData};
 #[cfg(feature = "logging")]
@@ -32,13 +32,6 @@ pub enum VNode<ViewData: VViewData> {
 enum VNodeResolvedHead<'c, 'v, ViewData: VViewData> {
     Component(&'c VComponentHead<ViewData>),
     View(&'v Box<VView<ViewData>>)
-}
-
-// Lifetimes must be different for `VNode::update`
-#[derive(Debug)]
-enum VNodeResolvedMut<'c, 'v, ViewData: VViewData> {
-    Component(&'c mut Box<VComponent<ViewData>>),
-    View(&'v mut Box<VView<ViewData>>)
 }
 
 // Lifetimes don't need to be different here. Might want to rename this type
@@ -78,30 +71,6 @@ impl <ViewData: VViewData> VNode<ViewData> {
         }
     }
 
-    fn resolve_mut<'c, 'v>(&'v mut self, parent: &'c mut VComponentHead<ViewData>) -> VNodeResolvedMut<'c, 'v, ViewData> {
-        match self {
-            VNode::Component { id: _id, key } => VNodeResolvedMut::Component(parent.child_mut(key).expect("VNode::resolve failed: component not in parent")),
-            VNode::View(view) => VNodeResolvedMut::View(view)
-        }
-    }
-
-    // Lifetimes must be different here because we borrow parent in resolve_mut and in the VNodeResolvedMut::View case.
-    // This is OK because the lifetime in VNodeResolvedMut::View's view is different than that in parent
-    pub fn update(&mut self, parent: &mut VComponentHead<ViewData>, contexts: &mut VComponentContexts<'_>) {
-        match self.resolve_mut(parent) {
-            VNodeResolvedMut::Component(component) => {
-                component.update(contexts);
-            },
-            VNodeResolvedMut::View(view) => {
-                if let Some((children, _)) = view.d.children_mut() {
-                    for child in children {
-                        child.update(parent, contexts);
-                    }
-                }
-            }
-        }
-    }
-
     pub fn component_and_view<'a>(&'a self, parent: &'a VComponentHead<ViewData>) -> VComponentAndView<'a, ViewData> {
         match self.resolve(parent) {
             VNodeResolvedHead::Component(component) => component.component_and_view(),
@@ -116,12 +85,3 @@ impl <ViewData: VViewData> VNode<ViewData> {
         }
     }
 }
-
-/* impl <'c, 'v, ViewData: VViewData> VNodeResolved<'c, 'v, ViewData> {
-    pub fn view(&self) -> &VComponentAndView<ViewData> {
-        match self {
-            VNodeResolved::Component(component) => component.view(),
-            VNodeResolved::View(view) => view
-        }
-    }
-} */
