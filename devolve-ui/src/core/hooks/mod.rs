@@ -38,11 +38,12 @@ pub mod event;
 mod state_internal;
 
 pub trait BuiltinHooks <'a, 'a0: 'a, Props: Any, ViewData: VViewData + 'static> {
-    fn use_state<T: Any>(&mut self, initial_state: impl FnOnce() -> T) -> State<T, ViewData>;
-    fn use_provide<T: Any>(&mut self, id: ContextId<T>, get_initial: impl FnOnce() -> Box<T>) -> ContextState<T, ViewData>;
+    fn use_state<T: Any>(&mut self, get_initial: impl FnOnce(&mut Self) -> T) -> State<T, ViewData>;
+    fn use_provide<T: Any>(&mut self, id: ContextId<T>, get_initial: impl FnOnce(&mut Self) -> Box<T>) -> ContextState<T, ViewData>;
     fn use_consume<T: Any>(&mut self,id: ContextId<T>) -> ContextState<T, ViewData>;
-    fn use_atomic_ref_state<T: Any>(&mut self, get_initial: impl FnOnce() -> T) -> AtomicRefState<T, ViewData>;
-    fn use_tree_ref_state<T: ObsRefableRoot<VContextSubCtx<ViewData>> + 'static>(&mut self, get_initial: impl FnOnce() -> T) -> TreeRefState<T, ViewData> where ViewData: 'static;
+    fn use_atomic_ref_state<T: Any>(&mut self, get_initial: impl FnOnce(&mut Self) -> T) -> AtomicRefState<T, ViewData>;
+    #[cfg(feature = "obs-ref")]
+    fn use_tree_ref_state<T: ObsRefableRoot<VContextSubCtx<ViewData>> + 'static>(&mut self, get_initial: impl FnOnce(&mut Self) -> T) -> TreeRefState<T, ViewData> where ViewData: 'static;
     /// Runs a closure according to `rerun`. The closure should contain an effect,
     /// while the component's body should otherwise be a "pure" function based on its
     /// props and state hooks like `use_state`.
@@ -91,18 +92,18 @@ pub trait BuiltinHooks <'a, 'a0: 'a, Props: Any, ViewData: VViewData + 'static> 
     fn use_resize_listener(&mut self, listener: impl Fn(VPlainContext2<'_, '_, Props, ViewData>, &ResizeEvent) + 'static);
     #[cfg(feature = "input")]
     fn use_resize_listener_when(&mut self, predicate: bool, listener: impl Fn(VPlainContext2<'_, '_, Props, ViewData>, &ResizeEvent) + 'static);
-    #[cfg(feature = "input")]
+    #[cfg(feature = "time")]
     fn use_interval(&mut self, interval: Duration, call_first: CallFirst, listener: impl Fn(VPlainContext2<'_, '_, Props, ViewData>) + 'static);
     #[cfg(feature = "time")]
     fn use_delay(&mut self, delay: Duration, listener: impl FnOnce(VPlainContext2<'_, '_, Props, ViewData>) + 'static);
 }
 
 impl <'a, 'a0: 'a, Props: Any, ViewData: VViewData + 'static> BuiltinHooks<'a, 'a0, Props, ViewData> for VComponentContext1<'a, 'a0, Props, ViewData> {
-    fn use_state<T: Any>(&mut self, initial_state: impl FnOnce() -> T) -> State<T, ViewData> {
-        _use_state(self, initial_state)
+    fn use_state<T: Any>(&mut self, get_initial: impl FnOnce(&mut Self) -> T) -> State<T, ViewData> {
+        _use_state(self, get_initial)
     }
 
-    fn use_provide<T: Any>(&mut self, id: ContextId<T>, get_initial: impl FnOnce() -> Box<T>) -> ContextState<T, ViewData> {
+    fn use_provide<T: Any>(&mut self, id: ContextId<T>, get_initial: impl FnOnce(&mut Self) -> Box<T>) -> ContextState<T, ViewData> {
         _use_provide(self, id, get_initial)
     }
 
@@ -110,11 +111,12 @@ impl <'a, 'a0: 'a, Props: Any, ViewData: VViewData + 'static> BuiltinHooks<'a, '
         _use_consume(self, id)
     }
 
-    fn use_atomic_ref_state<T: Any>(&mut self, get_initial: impl FnOnce() -> T) -> AtomicRefState<T, ViewData> {
+    fn use_atomic_ref_state<T: Any>(&mut self, get_initial: impl FnOnce(&mut Self) -> T) -> AtomicRefState<T, ViewData> {
         _use_atomic_ref_state(self, get_initial)
     }
 
-    fn use_tree_ref_state<T: ObsRefableRoot<VContextSubCtx<ViewData>> + 'static>(&mut self, get_initial: impl FnOnce() -> T) -> TreeRefState<T, ViewData> where ViewData: 'static {
+    #[cfg(feature = "obs-ref")]
+    fn use_tree_ref_state<T: ObsRefableRoot<VContextSubCtx<ViewData>> + 'static>(&mut self, get_initial: impl FnOnce(&mut Self) -> T) -> TreeRefState<T, ViewData> where ViewData: 'static {
         _use_tree_ref_state(self, get_initial)
     }
 

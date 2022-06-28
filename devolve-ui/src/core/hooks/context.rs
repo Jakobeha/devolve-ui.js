@@ -42,14 +42,16 @@ pub struct ContextState<T: Any, ViewData: VViewData> {
     phantom: PhantomData<ViewData>
 }
 
-pub(super) fn _use_provide<'a, 'a0: 'a, T: Any, ViewData: VViewData + 'a>(
-    c: &mut impl VComponentContext<'a, 'a0, ViewData=ViewData>,
+pub(super) fn _use_provide<'a, 'a0: 'a, T: Any, ViewData: VViewData + 'a, Ctx: VComponentContext<'a, 'a0, ViewData=ViewData>>(
+    c: &mut Ctx,
     id: ContextId<T>,
-    get_initial: impl FnOnce() -> Box<T>
+    get_initial: impl FnOnce(&mut Ctx) -> Box<T>
 ) -> ContextState<T, ViewData> {
     let local_contexts = c.local_contexts();
     if !local_contexts.contains_key(&id.into()) {
-        local_contexts.insert(id.into(), get_initial());
+        let initial_state = get_initial(c);
+        let conflict = c.local_contexts().insert(id.into(), initial_state);
+        assert!(conflict.is_none(), "use_provide inside another use_provide.get_initial with the same id, what are you doing?")
     }
     ContextState {
         id,

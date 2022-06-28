@@ -104,14 +104,17 @@ pub fn focus_provider<ViewData: VViewData + Clone + 'static>((mut c, FocusProvid
 
 pub fn use_focus<Props: Any, ViewData: VViewData + 'static>(c: &mut VComponentContext1<Props, ViewData>) -> Box<dyn LocalFocus<Props=Props, ViewData=ViewData>> {
     let focus_context = c.use_consume(&FOCUS_PROVIDER_CONTEXT);
-    let my_id = focus_context.get(c).next_free_id;
-    focus_context.get_mut(c).next_free_id += 1;
-    focus_context.get_mut(c).focusable_ids.insert(my_id);
+    let my_id = c.use_state(|c| {
+        let my_id = focus_context.get(c).next_free_id;
+        focus_context.get_mut(c).next_free_id += 1;
+        focus_context.get_mut(c).focusable_ids.insert(my_id);
+        my_id
+    });
 
     // TODO: Make LocalFocusImpl store focus_context and my_id, then make it not a Box<dyn>
     Box::new(LocalFocusImpl {
-        is_focused: move |c| focus_context.get(c).focused_id == Some(my_id),
-        focus: move |mut c| focus_context.get_mut(c).focused_id = Some(my_id),
+        is_focused: move |c| focus_context.get(c).focused_id == Some(*my_id.get(c)),
+        focus: move |mut c| focus_context.get_mut(c).focused_id = Some(*my_id.get(c)),
         phantom: PhantomData
     })
 }

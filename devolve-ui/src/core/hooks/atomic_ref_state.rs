@@ -45,11 +45,11 @@ pub struct AtomicAccessMut<'a, T: Any, ViewData: VViewData> {
     phantom: PhantomData<ViewData>
 }
 
-pub(super) fn _use_atomic_ref_state<'a, 'a0: 'a, T: Any, ViewData: VViewData + 'a>(
-    c: &mut impl VComponentContext<'a, 'a0, ViewData=ViewData>,
-    get_initial: impl FnOnce() -> T
+pub(super) fn _use_atomic_ref_state<'a, 'a0: 'a, T: Any, ViewData: VViewData + 'a, Ctx: VComponentContext<'a, 'a0, ViewData=ViewData>>(
+    c: &mut Ctx,
+    get_initial: impl FnOnce(&mut Ctx) -> T
 ) -> AtomicRefState<T, ViewData> {
-    let state = c.use_non_updating_state(|| Arc::new(Mutex::new(get_initial())));
+    let state = c.use_non_updating_state(|c| Arc::new(Mutex::new(get_initial(c))));
     let flag = c.component().needs_update_flag();
     AtomicRefState {
         data: state.get(c).clone(),

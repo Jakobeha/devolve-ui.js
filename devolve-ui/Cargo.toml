@@ -19,7 +19,7 @@ input = ["bitflags"]
 logging = ["serde", "arrayvec/serde", "serde_json", "chrono"]
 tui = ["libc", "crossterm", "lazy_static", "unicode-width"]
 tui-images = ["tui", "semver", "sixel-sys", "png", "base64"]
-debug = ["backtrace"]
+debug = []
 
 [package.metadata.docs.rs]
 cargo-args = ["-Zunstable-options", "-Zrustdoc-scrape-examples=examples"]

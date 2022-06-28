@@ -926,17 +926,20 @@ pub struct RendererViewForEngineInTick<'a, Engine: RenderEngine + 'static>(&'a R
 #[cfg(feature = "time")]
 impl <'a, Engine: RenderEngine + 'static> RendererViewForEngineInTick<'a, Engine> {
     /// Send a key event to listeners.
+    #[cfg(feature = "input")]
     pub fn send_key_event(&self, event: &KeyEvent) {
         self.0.send_key_event(event)
     }
 
     /// Send a mouse event to listeners.
+    #[cfg(feature = "input")]
     pub fn send_mouse_event(&self, event: &MouseEvent) {
         self.0.send_mouse_event(event)
     }
 
     /// Send a resize event to listeners.
     /// If running, this *will* trigger a rerender.
+    #[cfg(feature = "input")]
     pub fn send_resize_event(&self, event: &ResizeEvent) {
         self.0.send_resize_event(event)
     }

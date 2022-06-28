@@ -14,27 +14,31 @@ pub struct NonUpdatingState<T: Any, ViewData: VViewData> {
 }
 
 pub trait InternalHooks <'a, 'a0: 'a, ViewData: VViewData + 'a> {
-    fn use_non_updating_state<T: Any>(&mut self, initial_state: impl FnOnce() -> T) -> NonUpdatingState<T, ViewData>;
+    fn use_non_updating_state<T: Any>(&mut self, get_initial: impl FnOnce(&mut Self) -> T) -> NonUpdatingState<T, ViewData>;
 }
 
 impl <'a, 'a0: 'a, ViewData: VViewData + 'a, Context: VComponentContext<'a, 'a0, ViewData=ViewData>> InternalHooks<'a, 'a0, ViewData> for Context {
-    fn use_non_updating_state<T: Any>(&mut self, initial_state: impl FnOnce() -> T) -> NonUpdatingState<T, ViewData> {
-        _use_non_updating_state(self, initial_state)
+    fn use_non_updating_state<T: Any>(&mut self, get_initial: impl FnOnce(&mut Self) -> T) -> NonUpdatingState<T, ViewData> {
+        _use_non_updating_state(self, get_initial)
     }
 }
 
-fn _use_non_updating_state<'a, 'a0: 'a, T: Any, ViewData: VViewData + 'a>(
-    c: &mut impl VComponentContext<'a, 'a0, ViewData=ViewData>,
-    initial_state: impl FnOnce() -> T
+fn _use_non_updating_state<'a, 'a0: 'a, T: Any, ViewData: VViewData + 'a, Ctx: VComponentContext<'a, 'a0, ViewData=ViewData>>(
+    c: &mut Ctx,
+    get_initial: impl FnOnce(&mut Ctx) -> T
 ) -> NonUpdatingState<T, ViewData> {
-    let c = c.component();
-    let index = c.h.next_state_index;
-    c.h.next_state_index += 1;
-    if c.is_being_created() {
-        if c.h.state.len() != index {
-            panic!("unaligned hooks: state length ({}) != state index ({})", c.h.state.len(), index);
+    let component = c.component();
+    let index = component.h.next_state_index;
+    component.h.next_state_index += 1;
+    if component.is_being_created() {
+        if component.h.state.len() != index {
+            panic!("unaligned hooks: state length ({}) != state index ({})", component.h.state.len(), index);
         }
-        c.h.state.push(Box::new(initial_state()));
+        let initial_state = Box::new(get_initial(c));
+        if component.h.state.len() != index {
+            panic!("you called a state hook in the get_initial of another state hook. This is not allowed, although you also probably don't want to nest hooks in get_initial anyways");
+        }
+        component.h.state.push(initial_state);
     }
 
     NonUpdatingState {

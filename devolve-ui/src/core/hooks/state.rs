@@ -22,11 +22,11 @@ use crate::core::hooks::state_internal::{NonUpdatingState, InternalHooks};
 #[derive(Debug)]
 pub struct State<T: Any, ViewData: VViewData>(NonUpdatingState<T, ViewData>);
 
-pub(super) fn _use_state<'a, 'a0: 'a, T: Any, ViewData: VViewData + 'a, F: FnOnce() -> T>(
-    c: &mut impl VComponentContext<'a, 'a0, ViewData=ViewData>,
-    initial_state: F
+pub(super) fn _use_state<'a, 'a0: 'a, T: Any, ViewData: VViewData + 'a, Ctx: VComponentContext<'a, 'a0, ViewData=ViewData>>(
+    c: &mut Ctx,
+    get_initial: impl FnOnce(&mut Ctx) -> T
 ) -> State<T, ViewData> {
-    State(c.use_non_updating_state(initial_state))
+    State(c.use_non_updating_state(get_initial))
 }
 
 impl <T: Any, ViewData: VViewData> State<T, ViewData> {

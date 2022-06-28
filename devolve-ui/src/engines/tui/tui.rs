@@ -10,6 +10,7 @@ use std::io::{Read, Stdin, stdin, Stdout, stdout, Write};
 #[cfg(target_family = "unix")]
 use std::os::unix::io::{AsRawFd, RawFd};
 use std::str::Lines;
+#[cfg(feature = "input")]
 use std::time::Duration;
 use unicode_width::UnicodeWidthChar;
 use crate::core::renderer::engine::RenderEngine;
@@ -407,7 +408,7 @@ impl <Input: Read, Output: Write> RenderEngine for TuiEngine<Input, Output> {
     }
 
     fn on_resize(&mut self, callback: Box<dyn Fn() + Send + Sync>) {
-        #[cfg(target_family = "unix")]
+        #[cfg(all(target_family = "unix", not(miri)))]
         unsafe {
             SIGWINCH_CALLBACKS.write().expect("coudln't add resize callback for some reason").push(callback);
             signal(SIGWINCH, sigwinch_handler());

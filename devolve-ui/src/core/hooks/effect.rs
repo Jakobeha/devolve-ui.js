@@ -150,8 +150,8 @@ pub(super) fn _use_effect_with_deps<
             // afterwards. However, Rust won't allow that, and I'm pretty sure it would cause undefined
             // behavior. Se we use mem::replace with an empty vector, which is cheap and satisfies the borrow checker
             // (see https://stackoverflow.com/questions/48141703/is-there-a-way-to-force-rust-to-let-me-use-a-possibly-moved-value)
-            let memo = c.use_non_updating_state(|| mem::replace(&mut dependencies, Dependencies::empty()));
-            let destructor_index = c.use_non_updating_state::<i32>(|| -1);
+            let memo = c.use_non_updating_state(|_| mem::replace(&mut dependencies, Dependencies::empty()));
+            let destructor_index = c.use_non_updating_state::<i32>(|_| -1);
             // This is not just to satisfy the borrow checker: we want to get the old dependencies
             // and then set the new ones, and mem::replace happens to be the perfect tool for this.
             let old_dependencies = mem::replace(memo.get_mut(c), dependencies);
@@ -182,8 +182,8 @@ pub(super) fn _use_effect_with_deps<
             }));
         },
         UseEffectRerun::OnPredicate(predicate) => {
-            let memo = c.use_non_updating_state(|| false);
-            let destructor_index = c.use_non_updating_state::<i32>(|| -1);
+            let memo = c.use_non_updating_state(|_| false);
+            let destructor_index = c.use_non_updating_state::<i32>(|_| -1);
             let old_predicate = mem::replace(memo.get_mut(c), predicate);
 
             c.effects.effects.push(Box::new(move |(mut c, props)| {
@@ -203,8 +203,8 @@ pub(super) fn _use_effect_with_deps<
             }))
         },
         UseEffectRerun::OnChangeAndPredicate { mut dependencies, predicate } => {
-            let memo = c.use_non_updating_state::<(Dependencies, bool)>(|| (mem::replace(&mut dependencies, Dependencies::empty()), false));
-            let destructor_index = c.use_non_updating_state::<i32>(|| -1);
+            let memo = c.use_non_updating_state::<(Dependencies, bool)>(|_| (mem::replace(&mut dependencies, Dependencies::empty()), false));
+            let destructor_index = c.use_non_updating_state::<i32>(|_| -1);
             let (old_dependencies, old_predicate) = mem::replace(memo.get_mut(c), (dependencies, false));
 
             c.effects.effects.push(Box::new(move |(mut c, props)| {

@@ -8,4 +8,4 @@ license = "Apache-2.0"
 edition = "2021"
 
 [dependencies]
-devolve-ui = { path = "../devolve-ui", features = ["tui"] }
+devolve-ui = { path = "../devolve-ui", default-features = false, features = ["tui", "time-blocking", "input", "logging"] }

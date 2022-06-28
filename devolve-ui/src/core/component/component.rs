@@ -28,6 +28,7 @@ use std::rc::{Rc, Weak};
 use std::fmt::{Debug, Formatter};
 use std::iter::once;
 use std::mem;
+use std::mem::MaybeUninit;
 use crate::core::component::context::{VComponentContext1, VComponentContext2, VDestructorContext1, VDestructorContext2, VEffectContext1, VEffectContext2};
 use crate::core::component::path::{VComponentKey, VComponentPath, VComponentRef, VComponentRefResolved};
 use crate::core::component::root::VComponentRoot;
@@ -101,19 +102,10 @@ pub(super) trait VComponentConstruct: Debug {
     fn run_permanent_destructors(&mut self, component: &mut VComponentHead<Self::ViewData>, contexts: &mut VComponentContexts<'_>);
 }
 
-pub trait VComponentReconstruct {
+pub(super) trait VComponentReconstruct {
     type ViewData: VViewData;
 
-    fn check_downcast(&self, id: TypeId) -> bool;
-}
-
-trait VComponentReconstruct2: VComponentReconstruct {
-    type Props: Any;
-
-    fn complete(
-        self: Box<Self>,
-        s: VComponentConstructState<Self::Props, Self::ViewData>
-    ) -> Box<dyn VComponentConstruct<ViewData=Self::ViewData>>;
+    unsafe fn _complete(self: Box<Self>, props_id: TypeId, s: *mut ()) -> Box<dyn VComponentConstruct<ViewData=Self::ViewData>>;
 }
 
 /// Part of the component with data whose size depends on `Props`. This is the compile-time sized implementation
@@ -266,7 +258,10 @@ impl <ViewData: VViewData> VComponent<ViewData> {
             }
 
             local_update_stack.close_last();
-            assert!(local_update_stack.len() < VMode::max_recursive_updates_before_loop_detected(), "update loop detected:\n{}", local_update_stack);
+            if local_update_stack.len() == VMode::max_recursive_updates_before_loop_detected() {
+                eprintln!("update loop detected:\n{}", local_update_stack);
+                panic!("update loop detected");
+            }
 
             // Actual update stuff
 
@@ -297,9 +292,12 @@ impl <ViewData: VViewData> VComponent<ViewData> {
         }
 
         #[cfg(feature = "logging")]
-        VComponentHead::with_update_logger(&self.head.renderer, move |logger| {
-            logger.log_update(self.head.path().clone(), local_update_stack);
-        });
+        {
+            let path = self.head.path().clone();
+            VComponentHead::with_update_logger(&self.head.renderer, move |logger| {
+                logger.log_update(path, local_update_stack);
+            });
+        }
     }
 
     /// Destroy the component: run destructors and invalidate + children
@@ -501,19 +499,11 @@ impl <ViewData: VViewData> dyn VComponentConstruct<ViewData=ViewData> {
     }
 }
 
-impl <ViewData: VViewData> dyn VComponentReconstruct<ViewData=ViewData> {
-    fn force_downcast<Props: Any>(self: Box<Self>) -> Box<dyn VComponentReconstruct2<Props=Props, ViewData=ViewData>> {
-        assert!(self.check_downcast(TypeId::of::<Props>()), "component reused with different type of props");
-        unsafe { mem::transmute(self) }
-    }
-}
-
 impl <Props: Any, ViewData: VViewData, F: Fn(VComponentContext2<'_, '_, Props, ViewData>) -> VNode<ViewData> + 'static> VComponentConstruct for VComponentConstructImpl<Props, ViewData, F> {
     type ViewData = ViewData;
 
     fn reuse(self: Box<Self>, reconstruct: Box<dyn VComponentReconstruct<ViewData=ViewData>>) -> Box<dyn VComponentConstruct<ViewData=ViewData>> {
-        let reconstruct = reconstruct.force_downcast::<Props>();
-        reconstruct.complete(self.s)
+        reconstruct.complete::<Props>(self.s)
     }
 
     fn props(&self) -> &dyn Any {
@@ -592,21 +582,23 @@ impl <Props: Any, ViewData: VViewData, F: Fn(VComponentContext2<'_, '_, Props, V
     }
 }
 
-impl <Props: Any, ViewData: VViewData, F: Fn(VComponentContext2<'_, '_, Props, ViewData>) -> VNode<ViewData> + 'static> VComponentReconstruct for VComponentReconstructImpl<Props, ViewData, F> {
-    type ViewData = ViewData;
-
-    fn check_downcast(&self, id: TypeId) -> bool {
-        id == TypeId::of::<Props>()
+impl <ViewData: VViewData> dyn VComponentReconstruct<ViewData=ViewData> {
+    fn complete<Props: Any>(self: Box<Self>, s: VComponentConstructState<Props, ViewData>) -> Box<dyn VComponentConstruct<ViewData=ViewData>> {
+        let mut s = MaybeUninit::new(s);
+        let s = &mut s as *mut _ as *mut ();
+        unsafe { self._complete(TypeId::of::<Props>(), s) }
     }
 }
 
-impl <Props: Any, ViewData: VViewData + 'static, F: Fn(VComponentContext2<'_, '_, Props, ViewData>) -> VNode<ViewData> + 'static> VComponentReconstruct2 for VComponentReconstructImpl<Props, ViewData, F> {
-    type Props = Props;
+impl <Props: Any, ViewData: VViewData + 'static, F: Fn(VComponentContext2<'_, '_, Props, ViewData>) -> VNode<ViewData> + 'static> VComponentReconstruct for VComponentReconstructImpl<Props, ViewData, F> {
+    type ViewData = ViewData;
 
-    fn complete(
-        self: Box<Self>,
-        s: VComponentConstructState<Props, ViewData>
-    ) -> Box<dyn VComponentConstruct<ViewData=ViewData>> {
+    unsafe fn _complete(self: Box<Self>, props_id: TypeId, s: *mut ()) -> Box<dyn VComponentConstruct<ViewData=ViewData>> {
+        assert_eq!(props_id, TypeId::of::<Props>(), "props type mismatch (expected != actual)");
+        let s: VComponentConstructState<Props, ViewData> = mem::replace(
+            &mut *(s as *mut MaybeUninit<VComponentConstructState<Props, ViewData>>),
+            MaybeUninit::uninit()
+        ).assume_init();
         Box::new(VComponentConstructImpl {
             props: self.props,
             construct: self.construct,
