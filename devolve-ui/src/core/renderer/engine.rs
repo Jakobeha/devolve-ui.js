@@ -17,6 +17,7 @@ use crate::core::view::view::{VView, VViewData};
 use crate::core::renderer::render::VRender;
 #[cfg(feature = "time")]
 use crate::core::renderer::renderer::RendererViewForEngineInTick;
+use crate::core::renderer::traceback::RenderTraceback;
 use crate::core::view::layout::err::LayoutError;
 
 #[cfg(feature = "input")]
@@ -62,7 +63,8 @@ pub trait RenderEngine {
         bounds: &BoundingBox,
         column_size: &Size,
         view: &Box<VView<Self::ViewData>>,
-        rendered_children: VRender<Self::RenderLayer>
+        rendered_children: VRender<Self::RenderLayer>,
+        traceback: &RenderTraceback<Self::ViewData>,
     ) -> Result<VRender<Self::RenderLayer>, LayoutError>;
 
     /// Called each tick when the renderer `is_running`. This is where you can send inputs to the renderer.

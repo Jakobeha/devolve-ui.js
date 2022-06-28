@@ -104,7 +104,7 @@ impl <T: Serialize + Debug> GenericLogger<T> {
     pub fn log(&mut self, data: T) {
         let result = self.do_log(data);
         if let Err(err) = result {
-            eprintln!("Error logging: {:?}", err);
+            log::warn!("Error logging: {:?}", err);
         }
     }
 }

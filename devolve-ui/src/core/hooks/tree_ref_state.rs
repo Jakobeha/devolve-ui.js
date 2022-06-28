@@ -52,7 +52,7 @@ pub(super) fn _use_tree_ref_state<'a, 'a0: 'a, T: ObsRefableRoot<VContextSubCtx<
                     origin: triggered_path.to_owned()
                 });
                 if result.is_err() {
-                    eprintln!("failed to set needs update flag from {} for {}", triggered_path, referenced_path);
+                    log::warn!("failed to set needs update flag from {} for {}", triggered_path, referenced_path);
                 }
             }
         }));

@@ -128,7 +128,7 @@ impl <'a, T: Any, ViewData: VViewData> Drop for AtomicAccessMut<'a, T, ViewData>
         };
         let result = self.flag.set(details);
         if result.is_err() {
-            eprintln!("error updating from AtomicRefState: {:?}", result.unwrap_err());
+            log::warn!("error updating from AtomicRefState: {:?}", result.unwrap_err());
         }
     }
 }

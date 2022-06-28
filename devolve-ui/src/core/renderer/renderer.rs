@@ -66,6 +66,7 @@ use crate::core::renderer::listeners::{RendererListener, RendererListenerId, Ren
 use crate::core::renderer::render::{VRender, VRenderLayer};
 use crate::core::renderer::running::RcRunning;
 use crate::core::renderer::stale_data::{NeedsRerenderFlag, NeedsUpdateFlag, LocalStaleData, SharedStaleData, NeedsUpdateNotifier};
+use crate::core::renderer::traceback::RenderTraceback;
 
 #[derive(Debug)]
 struct CachedRender<Layer> {
@@ -153,23 +154,55 @@ impl <Engine: RenderEngine> Renderer<Engine> {
     /// renderer.resume().await;
     /// ```
     ///
-    /// Start a renderer which re-renders on a background thread.
-    /// You can stop the renderer by closing the thread, or calling `escape.upgrade.expect("renderer was already stopped").set()`.
+    /// Start a renderer which re-renders on the main thread.
+    /// You can stop the renderer by calling `escape.lock().expect("renderer thread crashed").upgrade().expect("renderer already stopped and got freed").set()`.
     /// ```
     /// use devolve_ui::core::renderer::renderer::Renderer;
     /// use devolve_ui::core::misc::notify_flag::NotifyFlag;
     /// use std::time::Duration;
     /// use std::thread;
-    /// use std::sync::Weak;
+    /// use std::sync::{Arc, Mutex, Weak};
     ///
-    /// let mut escape: Weak<NotifyFlag> = Weak::new();
+    /// let mut escape: Arc<Mutex<Weak<NotifyFlag>>> = Arc::new(Mutex::new(Weak::new()));
+    /// let escape2 = escape.clone();
     /// thread::spawn(move || {
+    ///     let escape = escape2;
+    /// 
+    ///     thread::sleep(Duration::from_secs(10));
+    /// 
+    ///     escape.lock().expect("renderer thread crashed").upgrade().expect("renderer already stopped and got freed").set();
+    /// });
+    /// 
+    /// let renderer = Renderer::new(TODOEngine);
+    /// renderer.root(|(c, ())| todo_component!(c, "root", ...));
+    /// renderer.set_interval_between_frames(Duration::from_millis(25)); // optional
+    /// renderer.show();
+    /// renderer.resume_blocking_with_escape(|e| *escape.lock().unwrap() = e);
+    /// ```
+    /// 
+    /// Start a renderer which re-renders on a background thread.
+    /// You can stop the renderer by closing the thread, or calling `escape.lock().expect("renderer thread crashed").upgrade().expect("renderer already stopped and got freed").set()`.
+    /// ```
+    /// use devolve_ui::core::renderer::renderer::Renderer;
+    /// use devolve_ui::core::misc::notify_flag::NotifyFlag;
+    /// use std::time::Duration;
+    /// use std::thread;
+    /// use std::sync::{Arc, Mutex, Weak};
+    ///
+    /// let mut escape: Arc<Mutex<Weak<NotifyFlag>>> = Arc::new(Mutex::new(Weak::new()));
+    /// let escape2 = escape.clone();
+    /// thread::spawn(move || {
+    ///     let escape = escape2;
+    /// 
     ///     let renderer = Renderer::new(TODOEngine);
     ///     renderer.root(|(c, ())| todo_component!(c, "root", ...));
     ///     renderer.set_interval_between_frames(Duration::from_millis(25)); // optional
     ///     renderer.show();
-    ///     renderer.resume_blocking_with_escape(|e| escape = e);
+    ///     renderer.resume_blocking_with_escape(|e| *escape.lock().unwrap() = e);
     /// });
+    /// 
+    /// thread::sleep(Duration::from_secs(10));
+    /// escape.lock().expect("renderer thread crashed").upgrade().expect("renderer already stopped and got freed").set();
     /// ```
     ///
     /// Start a renderer which re-renders manually (renders once, then can be re-rendered via `renderer.rerender()`)
@@ -273,7 +306,7 @@ impl <Engine: RenderEngine> Renderer<Engine> {
     fn pull_shared_stale_data(self: &Rc<Self>) {
         let result = self.local_stale_data.append(&self.shared_stale_data);
         if result.is_err() {
-            eprintln!("Error pulling update/rerender data from other threads: {:?}", result.unwrap_err());
+            log::warn!("error pulling update/rerender data from other threads: {:?}", result.unwrap_err());
         }
     }
 
@@ -439,7 +472,8 @@ impl <Engine: RenderEngine> Renderer<Engine> where Engine::RenderLayer: VRenderL
             None,
             0,
             0,
-            &mut render_borrows
+            &mut render_borrows,
+            RenderTraceback::root(),
         );
 
         let mut engine = render_borrows.engine;
@@ -482,7 +516,8 @@ impl <Engine: RenderEngine> Renderer<Engine> where Engine::RenderLayer: VRenderL
         prev_sibling: Option<&Rectangle>,
         parent_depth: usize,
         sibling_index: usize,
-        r: &mut RenderBorrows<'_, Engine>
+        r: &mut RenderBorrows<'_, Engine>,
+        traceback: RenderTraceback<Engine::ViewData>
     ) -> VRender<Engine::RenderLayer> {
         self.cached_render_view_or(
             (c, view),
@@ -490,14 +525,16 @@ impl <Engine: RenderEngine> Renderer<Engine> where Engine::RenderLayer: VRenderL
             parent_bounds,
             prev_sibling,
             r,
-            |(c, view), parent_bounds, prev_sibling, r| {
+            traceback,
+            |(c, view), parent_bounds, prev_sibling, r, traceback| {
                 self.force_render_view(
                     (c, view),
                     parent_bounds,
                     prev_sibling,
                     parent_depth,
                     sibling_index,
-                    r
+                    r,
+                    traceback
                 )
             }
         )
@@ -514,11 +551,13 @@ impl <Engine: RenderEngine> Renderer<Engine> where Engine::RenderLayer: VRenderL
         parent_bounds: &ParentBounds,
         prev_sibling: Option<&Rectangle>,
         r: &mut RenderBorrows<'_, Engine>,
+        traceback: RenderTraceback<Engine::ViewData>,
         do_render: impl FnOnce(
             VComponentAndView<'_, Engine::ViewData>,
             &ParentBounds,
             Option<&Rectangle>,
-            &mut RenderBorrows<'_, Engine>
+            &mut RenderBorrows<'_, Engine>,
+            RenderTraceback<Engine::ViewData>
         ) -> VRender<Engine::RenderLayer>
     ) -> VRender<Engine::RenderLayer> {
         // Try cached
@@ -548,7 +587,8 @@ impl <Engine: RenderEngine> Renderer<Engine> where Engine::RenderLayer: VRenderL
             (c, view),
             parent_bounds,
             prev_sibling,
-            r
+            r,
+            traceback
         );
 
         self.cache_view(view, parent_id, parent_bounds, prev_sibling, render.clone(), r);
@@ -577,15 +617,19 @@ impl <Engine: RenderEngine> Renderer<Engine> where Engine::RenderLayer: VRenderL
         prev_sibling: Option<&Rectangle>,
         parent_depth: usize,
         sibling_index: usize,
-        r: &mut RenderBorrows<'_, Engine>
+        r: &mut RenderBorrows<'_, Engine>,
+        mut traceback: RenderTraceback<Engine::ViewData>
     ) -> VRender<Engine::RenderLayer> {
+        traceback.add_view(view);
+
         // Get bounds
         let bounds_result = view.bounds.resolve(parent_bounds, prev_sibling, parent_depth, sibling_index);
         if let Err(error) = bounds_result {
-            eprintln!("Error resolving bounds for view {}: {}", view.id(), error);
+            log::warn!("error resolving bounds for view {}\n  Error: {}\n{}", view.id(), error, traceback);
             return VRender::new();
         }
         let (mut bounding_box, child_store) = bounds_result.unwrap();
+        traceback.add_resolved_bounds(&bounding_box);
 
         // Render children
         let mut rendered_children: VRender<Engine::RenderLayer> = VRender::new();
@@ -607,7 +651,8 @@ impl <Engine: RenderEngine> Renderer<Engine> where Engine::RenderLayer: VRenderL
                     child_prev_sibling.as_ref(),
                     child_parent_depth,
                     child_sibling_index,
-                    r
+                    r,
+                    traceback.child(child_prev_sibling.as_ref())
                 );
                 child_prev_sibling = child_render.rect().cloned();
                 rendered_children.merge(child_render);
@@ -622,14 +667,20 @@ impl <Engine: RenderEngine> Renderer<Engine> where Engine::RenderLayer: VRenderL
             height: rendered_children.height()
         }); */
         if bounding_box.width.is_some_and(|width| width <= 0f32) || bounding_box.height.is_some_and(|height| height <= 0f32) {
-            eprintln!("Warning: view has zero or negative dimensions: {} has width={}, height={}", view.id(), bounding_box.width.unwrap_or(f32::NAN), bounding_box.height.unwrap_or(f32::NAN));
+            log::warn!(
+                "view has zero or negative dimensions: {} has width={}, height={}\n{}",
+                view.id(),
+                bounding_box.width.unwrap_or(f32::NAN),
+                bounding_box.height.unwrap_or(f32::NAN),
+                traceback
+            );
         }
 
 
         // Render this view
-        let render_result = r.engine.make_render(&bounding_box, &parent_bounds.column_size, view, rendered_children);
+        let render_result = r.engine.make_render(&bounding_box, &parent_bounds.column_size, view, rendered_children, &traceback);
         render_result.unwrap_or_else(|error| {
-            eprintln!("Error rendering view {}: {}", view.id(), error);
+            log::warn!("error rendering view {}\n  Error: {}\n{}", view.id(), error, traceback);
             VRender::new()
         })
     }

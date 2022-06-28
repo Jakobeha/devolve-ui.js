@@ -6,6 +6,11 @@ use crate::core::misc::ident::Ident;
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "serde", serde(transparent))]
+pub struct SizeMeasurement(Option<Measurement>);
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct Measurement {
     adds: [Measurement1; Measurement::MAX_NUM_ADDS],
     pub store: Option<Ident>
@@ -72,6 +77,44 @@ pub enum MeasurementUnit {
 pub struct TooManyAddsError;
 
 pub type MeasurementResult = Result<Measurement, TooManyAddsError>;
+
+impl SizeMeasurement {
+    pub const AUTO: Self = SizeMeasurement(None);
+
+    pub fn from_option(option: Option<Measurement>) -> Self {
+        SizeMeasurement(option)
+    }
+
+    pub fn is_auto(&self) -> bool {
+        self.0.is_none()
+    }
+
+    pub fn as_option(&self) -> Option<&Measurement> {
+        self.0.as_ref()
+    }
+
+    pub fn into_option(self) -> Option<Measurement> {
+        self.0
+    }
+}
+
+impl From<Measurement> for SizeMeasurement {
+    fn from(measurement: Measurement) -> Self {
+        SizeMeasurement(Some(measurement))
+    }
+}
+
+impl From<Option<Measurement>> for SizeMeasurement {
+    fn from(option: Option<Measurement>) -> Self {
+        Self::from_option(option)
+    }
+}
+
+impl Into<Option<Measurement>> for SizeMeasurement {
+    fn into(self) -> Option<Measurement> {
+        self.into_option()
+    }
+}
 
 impl Measurement {
     pub const MAX_NUM_ADDS: usize = 5;
@@ -158,8 +201,22 @@ impl TryFrom<Vec<Measurement1>> for Measurement {
 }
 
 // region Display impls
+impl Display for SizeMeasurement {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self.as_option() {
+            None => write!(f, "auto"),
+            Some(measurement) => write!(f, "{}", measurement)
+        }
+    }
+}
+
 impl Display for Measurement {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        let has_spaces = self.store.is_some() || self.adds.iter().filter(|add| !add.is_blank()).count() > 1;
+        if has_spaces {
+            write!(f, "(")?;
+        }
+
         if let Some(store) = self.store {
             write!(f, "{} = ", store)?;
         }
@@ -178,9 +235,14 @@ impl Display for Measurement {
                 }
             }
         }
+
         if !written {
             write!(f, "0")?;
         }
+        if has_spaces {
+            write!(f, ")")?;
+        }
+
         Ok(())
     }
 }

@@ -3,7 +3,7 @@
 
 use crate::core::component::node::VNode;
 use crate::core::view::layout::bounds::{Bounds, LayoutPosition};
-use crate::core::view::layout::measurement::Measurement;
+use crate::core::view::layout::measurement::{Measurement, SizeMeasurement};
 use crate::core::view::view::{VView, VViewData};
 
 /// Arguments for a less verbose constructor
@@ -13,8 +13,8 @@ pub struct VViewConstrArgs {
     pub x: Measurement,
     pub y: Measurement,
     pub z: i32,
-    pub width: Option<Measurement>,
-    pub height: Option<Measurement>,
+    pub width: SizeMeasurement,
+    pub height: SizeMeasurement,
     pub anchor_x: f32,
     pub anchor_y: f32,
     pub is_visible: bool,

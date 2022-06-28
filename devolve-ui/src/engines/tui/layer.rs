@@ -1,3 +1,5 @@
+//! This module defines tui render layers and provides the code to render them.
+
 // Thanks to http://xn--rpa.cc/irl/term.html for explaining obscure terminal escape codes and behaviors
 use std::io;
 use std::iter;
@@ -298,7 +300,13 @@ impl RenderLayer {
 
                 // Reset colors (termctl will also print the buffer)
                 termctl!(style::ResetColor)?;
-                // Instead of writing a newline, we move the position explicitly
+
+                // Technically we don't have to write a newline because we move the position explicitly
+                // HOWEVER some renderers (e.g. opening in a text editor) don't handle terminal escapes,
+                // even in the case where we only expect to print to actual terminals.
+                // Since it costs almost nothing to print newlines anyways, fixes confusing issues,
+                // and makes debugging simple outputs easier, we do so.
+                output.write_char('\n').map_err(|e| io::Error::new(io::ErrorKind::Other, e))?;
             }
 
             // Just to make sure

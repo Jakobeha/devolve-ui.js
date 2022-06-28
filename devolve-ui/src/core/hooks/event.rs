@@ -35,7 +35,7 @@ fn _use_event_listener<'a, 'a0: 'a, Props: Any, Event: 'static, ViewData: VViewD
         let renderer = weak_renderer.upgrade();
 
         if renderer.is_none() {
-            eprintln!("can't use event on this component because it has no renderer");
+            log::warn!("can't use event on this component because it has no renderer");
         }
 
         let listener_id = match renderer {

@@ -1,3 +1,6 @@
+//! This module provides the tui render engine, which converts tui views into layers and gets tui render info.
+//! Basically everything except rendering the layers themselves.
+
 use crossterm::terminal;
 #[cfg(target_family = "unix")]
 use std::sync::RwLock;
@@ -15,6 +18,7 @@ use std::time::Duration;
 use unicode_width::UnicodeWidthChar;
 use crate::core::renderer::engine::RenderEngine;
 use crate::core::renderer::render::VRender;
+use crate::core::renderer::traceback::RenderTraceback;
 use crate::core::view::color::{Color, PackedColor};
 use crate::core::view::layout::err::LayoutError;
 use crate::core::view::layout::geom::{BoundingBox, Rectangle, Size};
@@ -123,7 +127,7 @@ impl <Input: Read, Output: Write> TuiEngine<Input, Output> {
         }
     }
 
-    fn render_text(&self, bounds: &BoundingBox, color: &Option<Color>, wrap_mode: &TextWrapMode, lines: Lines<'_>) -> RenderLayer {
+    fn render_text(&self, bounds: &BoundingBox, color: &Option<Color>, wrap_mode: &TextWrapMode, lines: Lines<'_>, traceback: &RenderTraceback<TuiViewData>) -> RenderLayer {
         let width = bounds.width.map_or(usize::MAX, |width| f32::round(width) as usize);
         let height = bounds.height.map_or(usize::MAX, |height| f32::round(height) as usize);
 
@@ -194,7 +198,7 @@ impl <Input: Read, Output: Write> TuiEngine<Input, Output> {
                                     continue;
                                 }
                                 TextWrapMode::Undefined => {
-                                    eprintln!("text extended past width but wrap is undefined")
+                                    log::warn!("text extended past width but wrap is undefined\n{}", traceback);
                                 }
                             }
                         }
@@ -458,7 +462,8 @@ impl <Input: Read, Output: Write> RenderEngine for TuiEngine<Input, Output> {
         #[allow(unused)] // Will be unused unless #[cfg(feature = "tui-images")] is enabled
         column_size: &Size,
         view: &Box<VView<Self::ViewData>>,
-        mut render: VRender<RenderLayer>
+        mut render: VRender<RenderLayer>,
+        traceback: &RenderTraceback<Self::ViewData>
     ) -> Result<VRender<RenderLayer>, LayoutError> {
         match &view.d {
             TuiViewData::Box {
@@ -473,7 +478,7 @@ impl <Input: Read, Output: Write> RenderEngine for TuiEngine<Input, Output> {
                     let rect = match bounds.as_rectangle() {
                         Ok(rect) => Some(rect),
                         Err(layout_error) => {
-                            eprintln!("layout error getting rect to clip view {}: {}", view.id(), layout_error);
+                            log::warn!("layout error getting rect to clip view {}: {}", view.id(), layout_error);
                             None
                         }
                     };
@@ -493,7 +498,7 @@ impl <Input: Read, Output: Write> RenderEngine for TuiEngine<Input, Output> {
                     height: lines.clone().count() as f32
                 });
                 let rect = bounds.as_rectangle().expect("didn't expect a layout error would be possible here after with_default_size");
-                let layer = self.render_text(&bounds, color, wrap_mode, lines);
+                let layer = self.render_text(&bounds, color, wrap_mode, lines, traceback);
                 render.insert(bounds.z, Some(&rect), layer);
             }
             TuiViewData::Color { color } => {
@@ -533,10 +538,10 @@ impl <Input: Read, Output: Write> RenderEngine for TuiEngine<Input, Output> {
         #[cfg(feature = "input")]
         if self.is_listening_for_input {
             match crossterm::event::poll(Duration::from_secs(0)) {
-                Err(error) => eprintln!("error polling for terminal input: {}", error),
+                Err(error) => log::warn!("error polling for terminal input: {}", error),
                 Ok(false) => {},
                 Ok(true) => match crossterm::event::read() {
-                    Err(error) => eprintln!("error reading terminal input after (successfully) polling: {}", error),
+                    Err(error) => log::warn!("error reading terminal input after (successfully) polling: {}", error),
                     Ok(event) => self.process_event(engine, event.into())
                 }
             }

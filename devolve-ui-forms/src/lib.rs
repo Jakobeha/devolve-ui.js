@@ -131,12 +131,13 @@ pub fn text_field<Props: Any, ViewData: HasTuiViewData + 'static>((mut c, TextFi
 
     zbox(Vvw1 {
         width: smt!(16 u),
+        height: smt!(3 u),
         ..d()
     }, d(), vec![
         text(Vvw1 {
             x: mt!(1 u),
             y: mt!(1 u),
-            width: smt!(prev - 2 u),
+            width: smt!(100% - 2 u),
             height: smt!(1 u),
             ..d()
         }, d(), txt),
@@ -151,37 +152,60 @@ pub fn text_field<Props: Any, ViewData: HasTuiViewData + 'static>((mut c, TextFi
 #[cfg(test)]
 mod test {
     use std::io;
+    use std::io::{ErrorKind, Read};
+    use std::thread;
+    use std::sync::{Arc, Mutex, Weak as WeakArc};
+    use std::sync::mpsc::{channel, Receiver, TryRecvError};
+    use std::time::Duration;
     #[allow(unused_imports)]
     use devolve_ui::core::component::constr::{_make_component_macro, make_component};
     use devolve_ui::core::component::context::{VComponentContext1, VComponentContext2, VEffectContext2};
     use devolve_ui::core::component::node::VNode;
     use devolve_ui::core::misc::shorthand::d;
+    use devolve_ui::core::misc::notify_flag::NotifyFlag;
     use devolve_ui::core::renderer::renderer::Renderer;
     use devolve_ui::core::view::layout::macros::{mt, smt};
     use devolve_ui::engines::tui::tui::{TuiConfig, TuiEngine};
-    use devolve_ui::view_data::tui::constr::{Vbx1, vbox, Vvw1, zbox};
+    use devolve_ui::view_data::tui::constr::*;
+    use devolve_ui::view_data::attrs::BorderStyle;
     #[cfg(feature = "tui-images")]
     use devolve_ui::view_data::tui::terminal_image::TuiImageFormat;
     use devolve_ui::view_data::tui::tui::HasTuiViewData;
     use crate::{FocusProvider, focus_provider, text_field};
+    use test_log::test;
 
     make_component!(test_app, TestApp {} []);
 
+    struct ReadReciever(Receiver<u8>);
+
+    impl Read for ReadReciever {
+        fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
+            let mut num = 0;
+            loop {
+                match self.0.try_recv() {
+                    Err(TryRecvError::Empty) => break,
+                    Err(TryRecvError::Disconnected) => Err(io::Error::new(ErrorKind::BrokenPipe, TryRecvError::Disconnected))?,
+                    Ok(byte) => buf[num] = byte
+                }
+                num += 1;
+
+            }
+            Ok(num)
+        }
+    }
+
     fn test_app<ViewData: HasTuiViewData + Clone + 'static>((mut c, TestApp {}): VComponentContext2<TestApp, ViewData>) -> VNode<ViewData> {
-        zbox(Vvw1 {
+        zbox!({
             width: smt!(100 %),
-            height: smt!(100 %),
-            ..d()
-        }, d(), vec![
-            focus_provider!(c, (), {}, Box::new(move |mut c: VComponentContext1<'_, '_, FocusProvider<ViewData>, ViewData>| vbox(Vvw1 {
-                x: mt!(2 u),
+            height: smt!(100 %)
+        }, {}, vec![
+            focus_provider!(c, (), {}, Box::new(move |mut c: VComponentContext1<'_, '_, FocusProvider<ViewData>, ViewData>| vbox!({
+                x: mt!(4 u),
                 y: mt!(2 u),
-                width: smt!(100 % - 4 u),
-                height: smt!(100 % - 4 u),
-                ..d()
-            }, Vbx1 {
-                gap: mt!(1 u),
-                ..d()
+                width: smt!(100 % - 8 u),
+                height: smt!(100 % - 4 u)
+            }, {
+                gap: mt!(1 u)
             }, vec![
                 text_field!(c, 1, {
                     initial_value: "".into(),
@@ -211,14 +235,40 @@ mod test {
                     override_value: Some("override".into()),
                     on_change: None as Option<Box<dyn Fn(VEffectContext2<TestApp, ViewData>, &str)>>
                 })
-            ])) as Box<dyn for<'r, 's> Fn(VComponentContext1<'r, 's, FocusProvider<ViewData>, ViewData>) -> VNode<ViewData> + 'static>)
+            ])) as Box<dyn for<'r, 's> Fn(VComponentContext1<'r, 's, FocusProvider<ViewData>, ViewData>) -> VNode<ViewData> + 'static>),
+            border!({
+                width: smt!(100 %),
+                height: smt!(100 %)
+            }, {}, BorderStyle::Rounded)
         ])
     }
 
     #[test]
     pub fn test() {
+        let mut escape: Arc<Mutex<WeakArc<NotifyFlag>> >= Arc::new(Mutex::new(WeakArc::new()));
+        let escape2 = escape.clone();
+
+        let (tx, rx) = channel();
+        thread::spawn(move || {
+            let escape = escape2;
+
+            thread::sleep(Duration::from_secs(5));
+            tx.send(b'h').unwrap();
+            thread::sleep(Duration::from_secs(1));
+            tx.send(b'e').unwrap();
+            thread::sleep(Duration::from_secs(1));
+            tx.send(b'l').unwrap();
+            thread::sleep(Duration::from_secs(1));
+            tx.send(b'l').unwrap();
+            thread::sleep(Duration::from_secs(1));
+            tx.send(b'o').unwrap();
+            thread::sleep(Duration::from_secs(5));
+
+            escape.lock().expect("renderer thread crashed").upgrade().expect("renderer already stopped").set();
+        });
+
         let renderer = Renderer::new(TuiEngine::new(TuiConfig {
-            input: io::stdin(),
+            input: ReadReciever(rx),
             output: io::stdout(),
             raw_mode: true,
             #[cfg(target_family = "unix")]
@@ -228,6 +278,6 @@ mod test {
         }));
         renderer.root(|(mut c, ())| test_app!(c, (), {}));
         renderer.show();
-        renderer.resume_blocking();
+        renderer.resume_blocking_with_escape(|e| *escape.lock().unwrap() = e);
     }
 }

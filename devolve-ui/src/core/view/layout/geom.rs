@@ -1,3 +1,4 @@
+use std::fmt::{Display, Formatter};
 use crate::core::misc::option_f32::OptionF32;
 use crate::core::view::layout::err::{LayoutError, LayoutResult};
 #[cfg(feature = "serde")]
@@ -116,7 +117,7 @@ impl Rectangle {
     }
 
     pub fn height(&self) -> f32 {
-        self.bottom + self.top
+        self.bottom - self.top
     }
 
     pub fn union(lhs: Option<&Rectangle>, rhs: Option<&Rectangle>) -> Option<Rectangle> {
@@ -154,5 +155,47 @@ impl Rectangle {
         } else {
             None
         }
+    }
+}
+
+// region Display impls
+impl Display for BoundingBox {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self.as_rectangle() {
+            Err(_) => write!(
+                f,
+                "[{}] {:>8} {:>8} @ {},{}",
+                f64::floor(self.z),
+                Pos { x: self.x, y: self.y },
+                Size { width: self.width.unwrap_or(f32::NAN), height: self.height.unwrap_or(f32::NAN) },
+                self.anchor_x,
+                self.anchor_y
+            ),
+            Ok(rect) => write!(f, "[{}] {} @ {},{}", f64::floor(self.z), rect, self.anchor_x, self.anchor_y)
+        }
+    }
+}
+
+impl Display for Pos {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{},{}", self.x, self.y)
+    }
+}
+
+impl Display for Size {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}x{}", self.width, self.height)
+    }
+}
+
+impl Display for Rectangle {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "{:>8} to {:>8} ({:>8})",
+            Pos { x: self.left, y: self.top },
+            Pos { x: self.right, y: self.bottom },
+            Size { width: self.width(), height: self.height() }
+        )
     }
 }

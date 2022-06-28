@@ -1,7 +1,8 @@
 use std::collections::HashMap;
+use std::fmt::{Display, Formatter};
 use crate::core::view::layout::err::{LayoutError, LayoutResult};
 use crate::core::view::layout::geom::{BoundingBox, Rectangle};
-use crate::core::view::layout::measurement::{Measurement, MeasurementUnit};
+use crate::core::view::layout::measurement::{Measurement, MeasurementUnit, SizeMeasurement};
 use crate::core::view::layout::parent_bounds::{DimsStore, LayoutDirection, ParentBounds};
 #[cfg(feature = "serde")]
 use serde::{Serialize, Deserialize};
@@ -19,8 +20,8 @@ pub struct Bounds {
     pub z: i32,
     pub anchor_x: f32,
     pub anchor_y: f32,
-    pub width: Option<Measurement>,
-    pub height: Option<Measurement>
+    pub width: SizeMeasurement,
+    pub height: SizeMeasurement
 }
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
@@ -65,8 +66,8 @@ impl Bounds {
             z: self.z as f64 + parent_bounds.bounding_box.z - f64::floor(parent_bounds.bounding_box.z) + (((parent_depth + 1) as f64 * -MAX_CHILDREN_EXPECTED_LOG2).exp2() * (sibling_index + 1) as f64),
             anchor_x: self.anchor_x,
             anchor_y: self.anchor_y,
-            width: self.width.as_ref().map(|width| Self::reify_x(parent_bounds, &prev_sibling.map(|r| r.width()).into(), Some(&mut store.width), &width).map_err(|err| err.add_dimension("width"))).transpose()?.into(),
-            height: self.height.as_ref().map(|height| Self::reify_y(parent_bounds, &prev_sibling.map(|r| r.height()).into(), Some(&mut store.height), &height).map_err(|err| err.add_dimension("height"))).transpose()?.into()
+            width: self.width.as_option().map(|width| Self::reify_x(parent_bounds, &prev_sibling.map(|r| r.width()).into(), Some(&mut store.width), &width).map_err(|err| err.add_dimension("width"))).transpose()?.into(),
+            height: self.height.as_option().map(|height| Self::reify_y(parent_bounds, &prev_sibling.map(|r| r.height()).into(), Some(&mut store.height), &height).map_err(|err| err.add_dimension("height"))).transpose()?.into()
         };
         Ok((bounding_box, store))
     }
@@ -194,8 +195,8 @@ impl Default for Bounds {
             z: 0,
             anchor_x: 0f32,
             anchor_y: 0f32,
-            width: None,
-            height: None
+            width: SizeMeasurement::AUTO,
+            height: SizeMeasurement::AUTO
         }
     }
 }
@@ -206,3 +207,42 @@ impl Default for LayoutPosition1D {
         LayoutPosition1D::Relative
     }
 }
+
+// region Display impls
+impl Display for Bounds {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
+        write!(
+            f,
+            "[{} {}] {},{} {}x{} @ {},{}",
+            self.z,
+            self.layout,
+            self.x,
+            self.y,
+            self.width,
+            self.height,
+            self.anchor_x,
+            self.anchor_y
+        )
+    }
+}
+
+impl Display for LayoutPosition {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
+        if self.x == self.y {
+            write!(f, "{}", self.x)
+        } else {
+            write!(f, "{},{}", self.x, self.y)
+        }
+    }
+}
+
+impl Display for LayoutPosition1D {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
+        write!(f, "{}", match self {
+            LayoutPosition1D::Relative => "r",
+            LayoutPosition1D::LocalAbsolute => "la",
+            LayoutPosition1D::GlobalAbsolute => "ga"
+        })
+    }
+}
+// endregion

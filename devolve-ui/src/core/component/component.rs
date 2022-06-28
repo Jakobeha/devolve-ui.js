@@ -259,7 +259,7 @@ impl <ViewData: VViewData> VComponent<ViewData> {
 
             local_update_stack.close_last();
             if local_update_stack.len() == VMode::max_recursive_updates_before_loop_detected() {
-                eprintln!("update loop detected:\n{}", local_update_stack);
+                log::error!("update loop detected:\n{}", local_update_stack);
                 panic!("update loop detected");
             }
 
@@ -286,7 +286,7 @@ impl <ViewData: VViewData> VComponent<ViewData> {
         let local_update_stack = self.head.local_update_stack.take().unwrap();
 
         if local_update_stack.is_empty() {
-            eprintln!("WARNING: component at path {} updated but it had no pending updates", self.head.path());
+            log::warn!("component at path {} updated but it had no pending updates", self.head.path());
         } else {
             self.head.invalidate_view();
         }
@@ -385,7 +385,7 @@ impl <ViewData: VViewData> VComponentHead<ViewData> {
             if let Some(renderer) = self.renderer.upgrade() {
                 renderer.queue_needs_update(self.path(), details);
             } else {
-                eprintln!("WARNING: Component at path {} got pending update {} but no renderer", self.path(), details);
+                log::warn!("component at path {} got pending update {} but no renderer", self.path(), details);
             }
         }
     }
@@ -635,7 +635,7 @@ impl ContextPendingUpdates {
             if let Some(renderer) = renderer.upgrade() {
                 renderer.queue_needs_update(&self.path, details)
             } else {
-                eprintln!("WARNING: Component (from context so path unknown) got update with no renderer: {}", details);
+                log::warn!("component (from context so path unknown) got update with no renderer: {}", details);
             }
         }
     }

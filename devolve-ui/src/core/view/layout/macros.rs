@@ -181,8 +181,8 @@ pub macro mt {
 }
 
 pub macro smt {
-    (auto) => { None as Option<$crate::core::view::layout::measurement::Measurement> },
-    ($($rest:tt)*) => { Some(mt!($($rest)*)) }
+    (auto) => { $crate::core::view::layout::measurement::SizeMeasurement::AUTO },
+    ($($rest:tt)*) => { $crate::core::view::layout::measurement::SizeMeasurement::from(mt!($($rest)*)) }
 }
 
 #[cfg(test)]
@@ -203,24 +203,24 @@ mod test {
         assert_eq!(mt!(prev / 2).to_string(), "0.5*prev");
         assert_eq!(mt!(load(ident)).to_string(), "load(ident)");
         assert_eq!(mt!(2 * load(ident)).to_string(), "2*load(ident)");
-        assert_eq!(mt!(1 px + 5 %).to_string(), "1px + 5%");
-        assert_eq!(mt!(1 px - 5 %).to_string(), "1px - 5%");
-        assert_eq!(mt!(1 px + 5 u + 12 %).to_string(), "1px + 5 + 12%");
-        assert_eq!(mt!(1 px + 5 u - 12 %).to_string(), "1px + 5 - 12%");
-        assert_eq!(mt!({foo} px + {bar} u - {baz} %).to_string(), "1{foo}px + 5{bar} - 12{baz}%");
-        assert_eq!(mt!(1 px - 5 u + 12 %).to_string(), "1px - 5 + 12%");
-        assert_eq!(mt!(1 px - 5 u - 12 %).to_string(), "1px - 5 - 12%");
-        assert_eq!(mt!(1 px - 4 * load(ident) - 12 % + prev).to_string(), "1px - 4*load(ident) - 12% + prev");
-        assert_eq!(mt!(1 px - {foo} * load(ident) - 12 % + prev).to_string(), "1px - 1{foo}*load(ident) - 12% + prev");
-        assert_eq!(mt!(1 px - {bar} * load(ident) - 12 % + prev).to_string(), "1px - 5{bar}*load(ident) - 12% + prev");
-        assert_eq!(mt!(-4 u + 12 px - -12 u + -4 * prev - -8 * prev).to_string(), "-4 + 12px + 12 - 4*prev + 8*prev");
-        assert_eq!(mt!(foo = load(bar)).to_string(), "foo = load(bar)");
-        assert_eq!(mt!(foo = -4 u + 12 px - -12 u + -4 * prev - -8 * prev).to_string(), "foo = -4 + 12px + 12 - 4*prev + 8*prev");
+        assert_eq!(mt!(1 px + 5 %).to_string(), "(1px + 5%)");
+        assert_eq!(mt!(1 px - 5 %).to_string(), "(1px - 5%)");
+        assert_eq!(mt!(1 px + 5 u + 12 %).to_string(), "(1px + 5 + 12%)");
+        assert_eq!(mt!(1 px + 5 u - 12 %).to_string(), "(1px + 5 - 12%)");
+        assert_eq!(mt!({foo} px + {bar} u - {baz} %).to_string(), "(1{foo}px + 5{bar} - 12{baz}%)");
+        assert_eq!(mt!(1 px - 5 u + 12 %).to_string(), "(1px - 5 + 12%)");
+        assert_eq!(mt!(1 px - 5 u - 12 %).to_string(), "(1px - 5 - 12%)");
+        assert_eq!(mt!(1 px - 4 * load(ident) - 12 % + prev).to_string(), "(1px - 4*load(ident) - 12% + prev)");
+        assert_eq!(mt!(1 px - {foo} * load(ident) - 12 % + prev).to_string(), "(1px - 1{foo}*load(ident) - 12% + prev)");
+        assert_eq!(mt!(1 px - {bar} * load(ident) - 12 % + prev).to_string(), "(1px - 5{bar}*load(ident) - 12% + prev)");
+        assert_eq!(mt!(-4 u + 12 px - -12 u + -4 * prev - -8 * prev).to_string(), "(-4 + 12px + 12 - 4*prev + 8*prev)");
+        assert_eq!(mt!(foo = load(bar)).to_string(), "(foo = load(bar))");
+        assert_eq!(mt!(foo = -4 u + 12 px - -12 u + -4 * prev - -8 * prev).to_string(), "(foo = -4 + 12px + 12 - 4*prev + 8*prev)");
     }
 
     #[test]
     fn test_size_measurements() {
-        assert_eq!(smt!(foo = -4 u + 12 px - -12 u + -4 * prev - -8 * prev).unwrap().to_string(), "foo = -4 + 12px + 12 - 4*prev + 8*prev");
+        assert_eq!(smt!(foo = -4 u + 12 px - -12 u + -4 * prev - -8 * prev).unwrap().to_string(), "(foo = -4 + 12px + 12 - 4*prev + 8*prev)");
         assert!(smt!(auto).is_none());
     }
 }

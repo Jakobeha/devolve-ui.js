@@ -9,3 +9,7 @@ edition = "2021"
 
 [dependencies]
 devolve-ui = { path = "../devolve-ui", default-features = false, features = ["tui", "time-blocking", "input", "logging"] }
+
+[dev-dependencies]
+test-log = "0.2.10"
+env_logger = "0.9.0"
