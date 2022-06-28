@@ -3,13 +3,9 @@
 
 use crossterm::terminal;
 #[cfg(target_family = "unix")]
-use std::sync::RwLock;
-#[cfg(target_family = "unix")]
-use lazy_static::lazy_static;
-#[cfg(target_family = "unix")]
-use libc::{c_int, c_void, ioctl, sighandler_t, signal, SIGWINCH, TIOCGWINSZ, winsize};
+use libc::{ioctl, TIOCGWINSZ, winsize};
 use std::io;
-use std::io::{Read, Stdin, stdin, Stdout, stdout, Write};
+use std::io::{ErrorKind, Read, Stdin, stdin, Stdout, stdout, Write};
 #[cfg(target_family = "unix")]
 use std::os::unix::io::{AsRawFd, RawFd};
 use std::str::Lines;
@@ -38,25 +34,18 @@ use crate::core::renderer::engine::InputListeners;
 #[cfg(feature = "time")]
 use crate::core::renderer::renderer::RendererViewForEngineInTick;
 #[cfg(all(feature = "time", feature = "input"))]
-use crate::core::renderer::input::{Event, ResizeEvent};
+use crate::core::renderer::input::{Event, KeyCode, KeyEvent, ResizeEvent};
 
-#[cfg(target_family = "unix")]
-lazy_static! {
-    static ref SIGWINCH_CALLBACKS: RwLock<Vec<Box<dyn Fn() + Send + Sync>>> = RwLock::new(Vec::new());
-}
-
-#[cfg(target_family = "unix")]
-extern "C" fn sigwinch_handler_body(_: c_int) {
-    if let Ok(callbacks) = (&SIGWINCH_CALLBACKS as &RwLock<Vec<Box<dyn Fn() + Send + Sync>>>).read() {
-        for callback in callbacks.iter() {
-            callback();
-        }
-    }
-}
-
-#[cfg(target_family = "unix")]
-fn sigwinch_handler() -> sighandler_t {
-    sigwinch_handler_body as extern "C" fn(c_int) as *mut c_void as sighandler_t
+/// Raw mode? Read from stdin or tty?
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum TuiInputMode {
+    /// Raw mode + read using crossterm.
+    /// This is the only mode where events like backspaces, arrow keys, etc. are read.
+    /// This is the only mode which supports mouse and resize events as well.
+    Raw,
+    /// Read u8 chars from stdin. Also called "cbreak" or "rare" mode (https://en.wikipedia.org/wiki/Terminal_mode).
+    /// This is not intended for reading large amounts of data, it's mainly intended for mocking.
+    ReadAscii,
 }
 
 #[derive(Debug)]
@@ -65,7 +54,7 @@ pub struct TuiConfig<Input: Read, Output: Write> {
     pub output: Output,
     #[cfg(target_family = "unix")]
     pub termios_fd: Option<RawFd>,
-    pub raw_mode: bool,
+    pub input_mode: TuiInputMode,
     #[cfg(feature = "tui-images")]
     pub image_format: TuiImageFormat
 }
@@ -95,8 +84,9 @@ impl Default for TuiConfig<Stdin, Stdout> {
         TuiConfig {
             input,
             output,
+            #[cfg(target_family = "unix")]
             termios_fd: Some(fd),
-            raw_mode: true,
+            input_mode: TuiInputMode::Raw,
             #[cfg(feature = "tui-images")]
             image_format: TuiImageFormat::infer_from_env()
         }
@@ -116,8 +106,8 @@ fn do_io<R>(action: impl FnOnce() -> io::Result<R>) -> R {
     }
 }
 
-// TODO: Remove when implementing render_ functions
-#[allow(unused_variables)]
+const ASCII_BUF_SIZE: usize = 8;
+
 impl <Input: Read, Output: Write> TuiEngine<Input, Output> {
     pub fn new(config: TuiConfig<Input, Output>) -> Self {
         TuiEngine {
@@ -372,6 +362,37 @@ impl <Input: Read, Output: Write> TuiEngine<Input, Output> {
 
 #[cfg(all(feature = "time", feature = "input"))]
 impl <Input: Read, Output: Write> TuiEngine<Input, Output> {
+    fn poll_crossterm<Root: RenderEngine>(&mut self, engine: RendererViewForEngineInTick<'_, Root>) {
+        // Crossterm event
+        match crossterm::event::poll(Duration::from_secs(0)) {
+            Err(error) => log::warn!("error polling for terminal input: {}", error),
+            Ok(false) => {},
+            Ok(true) => match crossterm::event::read() {
+                Err(error) => log::warn!("error reading terminal input after (successfully) polling: {}", error),
+                Ok(event) => self.process_event(engine, event.into())
+            }
+        }
+    }
+
+    fn poll_ascii<Root: RenderEngine>(&mut self, engine: RendererViewForEngineInTick<'_, Root>) {
+        loop {
+            let mut buf = [0u8; ASCII_BUF_SIZE];
+            match self.config.input.read(&mut buf) {
+                Ok(num_read) => {
+                    for i in 0..num_read {
+                        let char = buf[i] as char;
+                        engine.send_key_event(&KeyEvent::from(KeyCode::char(char)));
+                    }
+                    if num_read < ASCII_BUF_SIZE {
+                        break
+                    }
+                }
+                Err(io_err) if io_err.kind() == ErrorKind::WouldBlock => break,
+                Err(io_err) => log::warn!("error reading ascii from input: {}", io_err)
+            }
+        }
+    }
+
     fn process_event<Root: RenderEngine>(&mut self, engine: RendererViewForEngineInTick<'_, Root>, event: Event) {
         match event {
             Event::Key(key) => engine.send_key_event(&key),
@@ -412,16 +433,12 @@ impl <Input: Read, Output: Write> RenderEngine for TuiEngine<Input, Output> {
         ParentBounds::typical_root(size, column_size, DimsStore::new())
     }
 
-    fn on_resize(&mut self, callback: Box<dyn Fn() + Send + Sync>) {
-        #[cfg(all(target_family = "unix", not(miri)))]
-        unsafe {
-            SIGWINCH_CALLBACKS.write().expect("coudln't add resize callback for some reason").push(callback);
-            signal(SIGWINCH, sigwinch_handler());
-        }
-    }
-
     fn start_rendering(&mut self) {
         do_io(|| {
+            if self.config.input_mode == TuiInputMode::Raw {
+                // Enter raw mode
+                terminal::enable_raw_mode()?;
+            }
             // Enter TUI mode
             write!(self.config.output, "\x1b[?1049h")?;
             // Clear scrollback
@@ -440,6 +457,10 @@ impl <Input: Read, Output: Write> RenderEngine for TuiEngine<Input, Output> {
             write!(self.config.output, "\x1b[2J")?;
             // Exit TUI mode
             write!(self.config.output, "\x1b[?1049l")?;
+            if self.config.input_mode == TuiInputMode::Raw {
+                // Exit raw mode
+                terminal::disable_raw_mode()?;
+            }
             Ok(())
         })
     }
@@ -537,13 +558,9 @@ impl <Input: Read, Output: Write> RenderEngine for TuiEngine<Input, Output> {
     fn tick<Root: RenderEngine>(&mut self, engine: RendererViewForEngineInTick<'_, Root>) {
         #[cfg(feature = "input")]
         if self.is_listening_for_input {
-            match crossterm::event::poll(Duration::from_secs(0)) {
-                Err(error) => log::warn!("error polling for terminal input: {}", error),
-                Ok(false) => {},
-                Ok(true) => match crossterm::event::read() {
-                    Err(error) => log::warn!("error reading terminal input after (successfully) polling: {}", error),
-                    Ok(event) => self.process_event(engine, event.into())
-                }
+            match self.config.input_mode {
+                TuiInputMode::Raw => self.poll_crossterm(engine),
+                TuiInputMode::ReadAscii => self.poll_ascii(engine),
             }
         }
     }

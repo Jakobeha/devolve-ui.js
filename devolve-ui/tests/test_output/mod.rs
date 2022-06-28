@@ -16,7 +16,7 @@ use devolve_ui::core::component::context::VComponentContext2;
 use devolve_ui::core::component::node::VNode;
 use devolve_ui::core::renderer::renderer::{Renderer, RendererOverrides};
 use devolve_ui::core::view::layout::geom::Size;
-use devolve_ui::engines::tui::tui::{TuiConfig, TuiEngine};
+use devolve_ui::engines::tui::tui::{TuiConfig, TuiEngine, TuiInputMode};
 use devolve_ui::view_data::tui::tui::TuiViewData;
 use devolve_ui::view_data::tui::terminal_image::TuiImageFormat;
 
@@ -65,7 +65,7 @@ pub fn assert_render_snapshot(
     let mut config = TuiConfig {
         input: io::empty(),
         output: output.clone(),
-        raw_mode: true,
+        input_mode: TuiInputMode::ReadAscii,
         #[cfg(target_family = "unix")]
         termios_fd: None,
         image_format: TuiImageFormat::FallbackColor

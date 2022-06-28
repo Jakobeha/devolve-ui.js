@@ -220,7 +220,7 @@ impl <Engine: RenderEngine> Renderer<Engine> {
     }
 
     pub fn new_with_overrides(engine: Engine, overrides: RendererOverrides) -> Rc<Self> {
-        let renderer = Rc::new(Renderer {
+        Rc::new(Renderer {
             engine: RefCell::new(engine),
             overrides,
             is_visible: Cell::new(false),
@@ -243,12 +243,7 @@ impl <Engine: RenderEngine> Renderer<Engine> {
             update_logger: RefCell::new(None),
             #[cfg(feature = "logging")]
             render_logger: RefCell::new(None)
-        });
-        let needs_rerender_flag = renderer.needs_rerender_flag();
-        renderer.engine.borrow_mut().on_resize(Box::new(move || {
-            needs_rerender_flag.set()
-        }));
-        renderer
+        })
     }
 
     /// If the renderer currently rendering. If not visible, then there's never a need to rerender.

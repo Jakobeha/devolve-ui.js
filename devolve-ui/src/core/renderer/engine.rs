@@ -41,8 +41,6 @@ pub trait RenderEngine {
 
     /// Get the dimensions of the root window, "column size" (text size), and other info.
     fn get_root_dimensions(&self) -> ParentBounds;
-    /// Register the callback for when the view resizes. May be deprecated as there are other ways to send resize events.
-    fn on_resize(&mut self, callback: Box<dyn Fn() + Send + Sync>);
 
     /// Called before the `Renderer` is made visible.
     fn start_rendering(&mut self);

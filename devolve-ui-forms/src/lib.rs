@@ -165,7 +165,7 @@ mod test {
     use devolve_ui::core::misc::notify_flag::NotifyFlag;
     use devolve_ui::core::renderer::renderer::Renderer;
     use devolve_ui::core::view::layout::macros::{mt, smt};
-    use devolve_ui::engines::tui::tui::{TuiConfig, TuiEngine};
+    use devolve_ui::engines::tui::tui::{TuiConfig, TuiEngine, TuiInputMode};
     use devolve_ui::view_data::tui::constr::*;
     use devolve_ui::view_data::attrs::BorderStyle;
     #[cfg(feature = "tui-images")]
@@ -270,7 +270,7 @@ mod test {
         let renderer = Renderer::new(TuiEngine::new(TuiConfig {
             input: ReadReciever(rx),
             output: io::stdout(),
-            raw_mode: true,
+            input_mode: TuiInputMode::ReadAscii,
             #[cfg(target_family = "unix")]
             termios_fd: None,
             #[cfg(feature = "tui-images")]
