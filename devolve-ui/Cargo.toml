@@ -8,6 +8,7 @@ license = "Apache-2.0"
 keywords = ["ui", "tui", "terminal"]
 categories = ["command-line-interface", "gui"]
 edition = "2021"
+rust = "1.64"
 
 [features]
 # Include debug features by default
