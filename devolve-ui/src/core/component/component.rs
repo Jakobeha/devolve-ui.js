@@ -542,7 +542,7 @@ impl <Props: Any, ViewData: VViewData, F: Fn(VComponentContext2<'_, '_, Props, V
                 // we run the pending updates and then call run_effects again to run remanining effects.
                 // This is so effects don't have stale data (?).
                 if component.local_update_stack.is_some_and(|local_update_stack| local_update_stack.has_pending()) ||
-                    update_details.is_some_and(|update_details| update_details.is_empty()) {
+                    update_details.is_some_and(|update_details| !update_details.is_empty()) {
                     break
                 }
 

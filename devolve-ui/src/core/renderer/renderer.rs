@@ -154,6 +154,7 @@ impl <Engine: RenderEngine> Renderer<Engine> {
     /// renderer.resume().await;
     /// ```
     ///
+    /// TODO fix race condition and turn Arc<Mutex<WeakArc<NotifyFlag>>> into something more concise
     /// Start a renderer which re-renders on the main thread.
     /// You can stop the renderer by calling `escape.lock().expect("renderer thread crashed").upgrade().expect("renderer already stopped and got freed").set()`.
     /// ```
