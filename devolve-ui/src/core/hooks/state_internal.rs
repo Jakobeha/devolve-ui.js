@@ -35,6 +35,7 @@ fn _use_non_updating_state<'a, 'a0: 'a, T: Any, ViewData: VViewData + 'a, Ctx: V
             panic!("unaligned hooks: state length ({}) != state index ({})", component.h.state.len(), index);
         }
         let initial_state = Box::new(get_initial(c));
+        let component = c.component();
         if component.h.state.len() != index {
             panic!("you called a state hook in the get_initial of another state hook. This is not allowed, although you also probably don't want to nest hooks in get_initial anyways");
         }

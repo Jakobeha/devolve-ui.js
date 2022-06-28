@@ -17,7 +17,7 @@ pub struct NodeId(usize);
 
 impl Display for NodeId {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        write!(f, "{}", self.0)
+        write!(f, "#{}", self.0)
     }
 }
 

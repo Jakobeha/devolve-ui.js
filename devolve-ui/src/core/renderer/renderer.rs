@@ -900,9 +900,11 @@ impl <Engine: RenderEngine> Renderer<Engine> where Engine::RenderLayer: VRenderL
             .enable_time()
             .build()
             .unwrap();
-        let running = self.resume();
-        set_escape(Arc::downgrade(running.is_done()));
-        async_runtime.block_on(running);
+        async_runtime.block_on(async {
+            let running = self.resume();
+            set_escape(Arc::downgrade(running.is_done()));
+            running.await
+        });
     }
 
     /// Starts running the renderer on the current thread, blocking permanently.

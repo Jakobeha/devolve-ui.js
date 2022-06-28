@@ -53,14 +53,22 @@ pub union TsRwLockWriteGuard<'a, T, const IS_THREAD_SAFE: bool> {
 // endregion
 
 // region unsafe send / sync impls
+// suspicious_auto_trait_impls: I'm pretty sure these are ok because, from the issue;
+//   "The builtin impl for the self type of that explicit impl applies for at least one concrete type rejected by the where-clauses of the explicit impl".
+//   `Send` will never normally apply to `TsRwLock`, `TsMutex`, or `TsNotifyFlag`. Also the body is empty.
+//   `!Send` is also applied to the other case anyways.
+
 unsafe impl <T: Send> Send for TsRc<T, true> {}
 unsafe impl <T: Sync> Sync for TsRc<T, true> {}
 unsafe impl <T: Send> Send for TsWeak<T, true> {}
 unsafe impl <T: Sync> Sync for TsWeak<T, true> {}
+#[allow(suspicious_auto_trait_impls)]
 unsafe impl <T: Send> Send for TsRwLock<T, true> {}
 unsafe impl <T: Send> Sync for TsRwLock<T, true> {}
+#[allow(suspicious_auto_trait_impls)]
 unsafe impl <T: Send> Send for TsMutex<T, true> {}
 unsafe impl <T: Send> Sync for TsMutex<T, true> {}
+#[allow(suspicious_auto_trait_impls)]
 unsafe impl Send for TsNotifyFlag<true> {}
 unsafe impl Sync for TsNotifyFlag<true> {}
 impl <T> !Send for TsRc<T, false> {}

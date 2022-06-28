@@ -73,7 +73,7 @@ pub fn focus_provider<ViewData: VViewData + Clone + 'static>((mut c, FocusProvid
     enable_tab,
     _p
 }): VComponentContext2<FocusProvider<ViewData>, ViewData>) -> VNode<ViewData> {
-    let focus_context = c.use_provide(&FOCUS_PROVIDER_CONTEXT, || Box::new(FocusContext::default()));
+    let focus_context = c.use_provide(&FOCUS_PROVIDER_CONTEXT, |_| Box::new(FocusContext::default()));
 
     c.use_key_listener_when(*enable_tab, move |(mut c, FocusProvider { content, enable_tab, _p }), event| {
         match event.code {
@@ -121,7 +121,7 @@ pub fn use_focus<Props: Any, ViewData: VViewData + 'static>(c: &mut VComponentCo
 
 pub fn text_field<Props: Any, ViewData: HasTuiViewData + 'static>((mut c, TextField { initial_value, placeholder, is_enabled, override_value, on_change, _p }): VComponentContext2<TextField<Props, ViewData>, ViewData>) -> VNode<ViewData> {
     let mut focus = use_focus(&mut c);
-    let mut value = c.use_state(|| initial_value.to_string());
+    let mut value = c.use_state(|_| initial_value.to_string());
 
     c.use_key_listener_when(*is_enabled, |(mut c, props), key| {
         todo!("change text on key events");
@@ -227,6 +227,7 @@ mod test {
             image_format: TuiImageFormat::FallbackColor
         }));
         renderer.root(|(mut c, ())| test_app!(c, (), {}));
+        renderer.show();
         renderer.resume_blocking();
     }
 }

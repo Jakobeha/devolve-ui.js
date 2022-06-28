@@ -388,10 +388,11 @@ impl <Input: Read, Output: Write> RenderEngine for TuiEngine<Input, Output> {
     type RenderLayer = RenderLayer;
 
     fn get_root_dimensions(&self) -> ParentBounds {
-        let size = if let Ok((width, height)) = terminal::size() {
-            Size { width: width as f32, height: height as f32 }
-        } else {
-            DEFAULT_SIZE
+        let size = match terminal::size() {
+            // This is wrong, idk why it happens
+            Ok((0, 0)) => DEFAULT_SIZE,
+            Ok((width, height)) => Size { width: width as f32, height: height as f32 },
+            Err(_) => DEFAULT_SIZE
         };
         let mut column_size: Size = self.inferred_column_size;
         #[cfg(target_family = "unix")]
