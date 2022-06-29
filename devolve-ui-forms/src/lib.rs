@@ -11,7 +11,7 @@ use devolve_ui::core::component::node::VNode;
 use devolve_ui::core::hooks::context::ContextIdSource;
 use devolve_ui::core::hooks::BuiltinHooks;
 use devolve_ui::core::misc::shorthand::d;
-use devolve_ui::core::renderer::input::KeyCode;
+use devolve_ui::core::renderer::input::{KeyCode, KeyModifiers};
 use devolve_ui::core::view::layout::macros::{mt, smt};
 use devolve_ui::core::view::view::VViewData;
 use devolve_ui::view_data::attrs::BorderStyle;
@@ -122,12 +122,64 @@ pub fn use_focus<Props: Any, ViewData: VViewData + 'static>(c: &mut VComponentCo
 pub fn text_field<Props: Any, ViewData: HasTuiViewData + 'static>((mut c, TextField { initial_value, placeholder, is_enabled, override_value, on_change, _p }): VComponentContext2<TextField<Props, ViewData>, ViewData>) -> VNode<ViewData> {
     let mut focus = use_focus(&mut c);
     let mut value = c.use_state(|_| initial_value.to_string());
+    let mut cursor = c.use_state(|_| 0);
 
-    c.use_key_listener_when(*is_enabled, |(mut c, props), key| {
-        todo!("change text on key events");
+    c.use_key_listener_when(*is_enabled, move |(mut c, props), key| {
+        if KeyModifiers::SHIFT.contains(key.modifiers) {
+            let cursor_ = *cursor.get(&c);
+            let is_shift = key.modifiers.contains(KeyModifiers::SHIFT);
+            match key.code {
+                KeyCode::Backspace => {
+                    if cursor_ != 0 {
+                        value.get_mut(&mut c).remove(cursor_);
+                        *cursor.get_mut(&mut c) -= 1;
+                    }
+                }
+                KeyCode::Delete => {
+                    if cursor_ < value.get(&c).len() {
+                        value.get_mut(&mut c).remove(cursor_);
+                    }
+                }
+                KeyCode::Left => {
+                    if cursor_ > 0 {
+                        *cursor.get_mut(&mut c) -= 1;
+                    }
+                }
+                KeyCode::Right => {
+                    if cursor_ < value.get(&c).len() {
+                        *cursor.get_mut(&mut c) += 1;
+                    }
+                }
+                KeyCode::Down => {
+                    if cursor_ < value.get(&c).len() {
+                        *cursor.get_mut(&mut c) = value.get(&c).len();
+                    }
+                }
+                KeyCode::Up => {
+                    if cursor_ > 0 {
+                        *cursor.get_mut(&mut c) = 0;
+                    }
+                }
+                KeyCode::CharAsLowercase(mut char) => {
+                    if is_shift {
+                        char = char.to_uppercase().next().unwrap();
+                    }
+                    value.get_mut(&mut c).insert(cursor_, char);
+                    *cursor.get_mut(&mut c) += 1;
+                }
+                _ => {}
+            }
+        }
     });
 
-    let txt = format!("{}█", override_value.as_ref().unwrap_or_else(|| value.get(&c)));
+    let mut txt = override_value.as_ref().unwrap_or_else(|| value.get(&c)).clone();
+    let cursor = *cursor.get(&c);
+    if cursor < txt.len() {
+        txt.remove(cursor);
+        txt.insert(cursor, '█');
+    } else {
+        txt.push('█');
+    }
 
     zbox(Vvw1 {
         width: smt!(16 u),
@@ -161,7 +213,6 @@ mod test {
     use devolve_ui::core::component::constr::{_make_component_macro, make_component};
     use devolve_ui::core::component::context::{VComponentContext1, VComponentContext2, VEffectContext2};
     use devolve_ui::core::component::node::VNode;
-    use devolve_ui::core::misc::shorthand::d;
     use devolve_ui::core::misc::notify_flag::NotifyFlag;
     use devolve_ui::core::renderer::renderer::Renderer;
     use devolve_ui::core::view::layout::macros::{mt, smt};
