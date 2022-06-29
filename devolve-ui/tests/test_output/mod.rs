@@ -12,6 +12,7 @@ use std::io::{ErrorKind, Read, Write};
 use std::os::unix::ffi::OsStrExt;
 use std::rc::Rc;
 use std::path::PathBuf;
+use std::string::FromUtf8Error;
 use std::sync::{Arc, Weak as WeakArc, Mutex};
 use std::sync::mpsc::{channel, Receiver, Sender, TryRecvError};
 use devolve_ui::core::component::context::VComponentContext2;
@@ -35,8 +36,8 @@ impl TestOutput {
         }
     }
 
-    fn snapshot_buf(&self) -> Vec<u8> {
-        self.buf.borrow().clone()
+    fn snapshot(&self) -> Result<String, FromUtf8Error> {
+        String::from_utf8(self.buf.borrow().clone())
     }
 }
 
@@ -50,12 +51,11 @@ impl Clone for TestOutput {
 
 impl Write for TestOutput {
     fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
-        self.buf.borrow_mut().extend_from_slice(buf);
-        Ok(buf.len())
+        self.buf.borrow_mut().write(buf)
     }
 
     fn flush(&mut self) -> io::Result<()> {
-        Ok(())
+        self.buf.borrow_mut().flush()
     }
 }
 
@@ -163,18 +163,27 @@ fn assert_render<TestInput: Read + 'static>(
 
     let test_output_dir = PathBuf::from(format!("{}/test-output/snapshots", env!("CARGO_MANIFEST_DIR")));
     assert!(test_output_dir.exists(), "test output dir doesn't exist! {}", test_output_dir.display());
-    let actual_dir = PathBuf::from(format!("{}/{}-actual.txt", test_output_dir.display(), test_name));
-    let expected_dir = PathBuf::from(format!("{}/{}-expected.txt", test_output_dir.display(), test_name));
-    let mut actual_file = File::options().write(true).create(true).open(actual_dir).expect("failed to open file for actual output");
-    let mut expected_file = File::options().read(true).open(expected_dir).expect("failed to open expected output - create the file if it doesn't exist!");
+    let actual_path = PathBuf::from(format!("{}/{}-actual.txt", test_output_dir.display(), test_name));
+    let expected_path = PathBuf::from(format!("{}/{}-expected.txt", test_output_dir.display(), test_name));
+    let mut actual_file = File::options().write(true).create(true).open(actual_path).expect("failed to open file for actual output");
+    let mut expected_file = File::options().read(true).open(expected_path).expect("failed to open expected output - create the file if it doesn't exist!");
 
-    let actual = output.snapshot_buf();
-    let mut expected = Vec::new();
-    actual_file.write_all(&actual).expect("failed to write actual output");
-    expected_file.read_to_end(&mut expected).expect("failed to read expected output");
-    assert_eq!(
-        OsStr::from_bytes(&actual),
-        OsStr::from_bytes(&expected),
-        "actual (left) != expected (right)"
-    );
+    let actual = output.snapshot().expect("output corrupted (not value utf8)");
+    let mut expected = String::new();
+
+    log::info!("Output:\n---\n{}\n---", actual);
+
+    write!(actual_file, "{}", actual).expect("failed to write actual output");
+    expected_file.read_to_string(&mut expected).expect("failed to read expected output");
+
+    // Sanity
+    drop(actual_file);
+    let actual_path2 = PathBuf::from(format!("{}/{}-actual.txt", test_output_dir.display(), test_name));
+    let mut read_from_actual = File::options().read(true).open(actual_path2).expect("failed to open file e just wrote to!");
+    let mut actual_read = String::new();
+    read_from_actual.read_to_string(&mut actual_read).expect("failed to read file e just wrote to!");
+    assert_eq!(&actual, &actual_read, "wtf - actual output is different from what we just wrote to!");
+    //
+
+    assert_eq!(&actual, &expected, "actual (left) != expected (right)");
 }

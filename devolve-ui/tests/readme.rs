@@ -19,6 +19,7 @@ use devolve_ui::view_data::tui::terminal_image::{Source, HandleAspectRatio, TuiI
 use devolve_ui::view_data::attrs::BorderStyle;
 use devolve_ui::view_data::tui::constr::{border, hbox, source, text, zbox};
 use devolve_ui::core::hooks::event::CallFirst;
+use test_log::test;
 
 mod test_output;
 
@@ -33,12 +34,12 @@ pub fn header<ViewData: HasTuiViewData + 'static>((mut c, HeaderProps { name }):
         *counter.get_mut(&mut c) += 1;
     });
 
-    zbox!({ width: smt!(34 u) }, {}, vec![
+    zbox!({ width: smt!(34 u), height: smt!(3 u) }, {}, vec![
         zbox!({ x: mt!(2 u), y: mt!(1 u), width: smt!(100% - 4 u) }, {}, vec![
             text!({}, { color: Some(Color::yellow()) }, format!("Hello {}", name)),
             text!({ x: mt!(100%), anchor_x: 1f32 }, { color: Some(Color::yellow()) }, format!("{} seconds", counter.get(&mut c)))
         ]),
-        border!({ width: smt!(100%), height: smt!(prev) }, { color: Some(Color::yellow()) }, BorderStyle::Rounded)
+        border!({ width: smt!(100%), height: smt!(100%) }, { color: Some(Color::yellow()) }, BorderStyle::Rounded)
     ])
 }
 
@@ -48,7 +49,7 @@ pub fn readme<ViewData: HasTuiViewData + 'static>((mut c, ReadmeProps { name }):
             header!(c, "header", {}, name.clone()),
             source!({ width: smt!(34 u) }, { handle_aspect_ratio: HandleAspectRatio::Stretch }, Source::Path(PathBuf::from(format!("{}/test-resources/assets/dog.png", env!("CARGO_MANIFEST_DIR")))))
         ]),
-        border!({ width: smt!(100%), height: smt!(prev) }, { color: Some(Color::blue()) }, BorderStyle::Rounded)
+        border!({ width: smt!(100%), height: smt!(prev + 2 u) }, { color: Some(Color::blue()) }, BorderStyle::Rounded)
     ])
 }
 

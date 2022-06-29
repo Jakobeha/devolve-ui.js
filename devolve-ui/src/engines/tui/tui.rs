@@ -34,7 +34,7 @@ use crate::core::renderer::engine::InputListeners;
 #[cfg(feature = "time")]
 use crate::core::renderer::renderer::RendererViewForEngineInTick;
 #[cfg(all(feature = "time", feature = "input"))]
-use crate::core::renderer::input::{Event, KeyCode, KeyEvent, ResizeEvent};
+use crate::core::renderer::input::{Event, KeyEvent, ResizeEvent};
 
 /// Raw mode? Read from stdin or tty?
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -383,7 +383,7 @@ impl <Input: Read, Output: Write> TuiEngine<Input, Output> {
                 Ok(num_read) => {
                     for i in 0..num_read {
                         let char = buf[i] as char;
-                        engine.send_key_event(&KeyEvent::from(KeyCode::char(char)));
+                        engine.send_key_event(&KeyEvent::from(char));
                     }
                     if num_read < ASCII_BUF_SIZE {
                         break

@@ -6,10 +6,11 @@ use std::collections::BTreeSet;
 use std::marker::PhantomData;
 #[allow(unused_imports)]
 use devolve_ui::core::component::constr::{_make_component_macro, make_component};
-use devolve_ui::core::component::context::{VComponentContext1, VComponentContext2, VEffectContext1, VEffectContext2};
+use devolve_ui::core::component::context::{VComponentContext1, VComponentContext2, VContext, VEffectContext1, VEffectContext2};
 use devolve_ui::core::component::node::VNode;
-use devolve_ui::core::hooks::context::ContextIdSource;
+use devolve_ui::core::hooks::context::{ContextIdSource, ContextState};
 use devolve_ui::core::hooks::BuiltinHooks;
+use devolve_ui::core::hooks::state::State;
 use devolve_ui::core::misc::shorthand::d;
 use devolve_ui::core::renderer::input::{KeyCode, KeyModifiers};
 use devolve_ui::core::view::layout::macros::{mt, smt};
@@ -19,7 +20,7 @@ use devolve_ui::view_data::tui::constr::*;
 use devolve_ui::view_data::tui::tui::HasTuiViewData;
 
 make_component!(pub focus_provider, FocusProvider<ViewData: VViewData + Clone + 'static> {
-    enable_tab: bool = false,
+    enable_tab: bool = true,
     _p: PhantomData<ViewData> = PhantomData
 } [content: Box<dyn Fn(VComponentContext1<FocusProvider<ViewData>, ViewData>) -> VNode<ViewData>>]);
 
@@ -39,30 +40,18 @@ pub struct FocusContext {
     pub focused_id: Option<usize>
 }
 
-pub trait LocalFocus {
-    type Props: Any;
-    type ViewData: VViewData;
-
-    fn is_focused(&self, c: &mut VEffectContext1<Self::Props, Self::ViewData>) -> bool;
-    fn focus(&mut self, c: &mut VEffectContext1<Self::Props, Self::ViewData>);
+pub struct LocalFocus<ViewData: VViewData> {
+    focus_context: ContextState<FocusContext, ViewData>,
+    my_id: State<usize, ViewData>
 }
 
-struct LocalFocusImpl<Props: Any, ViewData: VViewData, F1: Fn(&VEffectContext1<Props, ViewData>) -> bool, F2: FnMut(&mut VEffectContext1<Props, ViewData>)> {
-    is_focused: F1,
-    focus: F2,
-    phantom: PhantomData<(Props, ViewData)>
-}
-
-impl <Props: Any, ViewData: VViewData, F1: Fn(&VEffectContext1<Props, ViewData>) -> bool, F2: FnMut(&mut VEffectContext1<Props, ViewData>)> LocalFocus for LocalFocusImpl<Props, ViewData, F1, F2> {
-    type Props = Props;
-    type ViewData = ViewData;
-
-    fn is_focused(&self, c: &mut VEffectContext1<Self::Props, Self::ViewData>) -> bool {
-        (self.is_focused)(c)
+impl <ViewData: VViewData> LocalFocus<ViewData> {
+    fn is_focused<'a>(&self, c: &mut impl VContext<'a, ViewData=ViewData>) -> bool {
+        self.focus_context.get(c).focused_id == Some(*self.my_id.get(c))
     }
 
-    fn focus(&mut self, c: &mut VEffectContext1<Self::Props, Self::ViewData>) {
-        (self.focus)(c)
+    fn focus<'a>(&mut self, c: &mut impl VContext<'a, ViewData=ViewData>) {
+        self.focus_context.get_mut(c).focused_id = Some(*self.my_id.get(c))
     }
 }
 
@@ -102,36 +91,39 @@ pub fn focus_provider<ViewData: VViewData + Clone + 'static>((mut c, FocusProvid
     content(c)
 }
 
-pub fn use_focus<Props: Any, ViewData: VViewData + 'static>(c: &mut VComponentContext1<Props, ViewData>) -> Box<dyn LocalFocus<Props=Props, ViewData=ViewData>> {
+pub fn use_focus<Props: Any, ViewData: VViewData + 'static>(c: &mut VComponentContext1<Props, ViewData>) -> LocalFocus<ViewData> {
     let focus_context = c.use_consume(&FOCUS_PROVIDER_CONTEXT);
     let my_id = c.use_state(|c| {
+        let is_first = focus_context.get(c).focusable_ids.is_empty();
         let my_id = focus_context.get(c).next_free_id;
         focus_context.get_mut(c).next_free_id += 1;
         focus_context.get_mut(c).focusable_ids.insert(my_id);
+
+        // Focus if this is the first focusable element
+        if is_first {
+            focus_context.get_mut(c).focused_id = Some(my_id);
+        }
+
         my_id
     });
 
-    // TODO: Make LocalFocusImpl store focus_context and my_id, then make it not a Box<dyn>
-    Box::new(LocalFocusImpl {
-        is_focused: move |c| focus_context.get(c).focused_id == Some(*my_id.get(c)),
-        focus: move |mut c| focus_context.get_mut(c).focused_id = Some(*my_id.get(c)),
-        phantom: PhantomData
-    })
+    LocalFocus { focus_context, my_id }
 }
 
 pub fn text_field<Props: Any, ViewData: HasTuiViewData + 'static>((mut c, TextField { initial_value, placeholder, is_enabled, override_value, on_change, _p }): VComponentContext2<TextField<Props, ViewData>, ViewData>) -> VNode<ViewData> {
     let mut focus = use_focus(&mut c);
     let mut value = c.use_state(|_| initial_value.to_string());
     let mut cursor = c.use_state(|_| 0);
+    let mut is_focused = focus.is_focused(&mut c);
 
-    c.use_key_listener_when(*is_enabled, move |(mut c, props), key| {
+    c.use_key_listener_when(*is_enabled && is_focused, move |(mut c, props), key| {
         if KeyModifiers::SHIFT.contains(key.modifiers) {
             let cursor_ = *cursor.get(&c);
             let is_shift = key.modifiers.contains(KeyModifiers::SHIFT);
             match key.code {
                 KeyCode::Backspace => {
                     if cursor_ != 0 {
-                        value.get_mut(&mut c).remove(cursor_);
+                        value.get_mut(&mut c).remove(cursor_ - 1);
                         *cursor.get_mut(&mut c) -= 1;
                     }
                 }
@@ -313,6 +305,30 @@ mod test {
             tx.send(b'l').unwrap();
             thread::sleep(Duration::from_secs(1));
             tx.send(b'o').unwrap();
+            thread::sleep(Duration::from_secs(5));
+            tx.send(b'\t').unwrap();
+            thread::sleep(Duration::from_secs(5));
+            tx.send(b'w').unwrap();
+            thread::sleep(Duration::from_secs(1));
+            tx.send(b'o').unwrap();
+            thread::sleep(Duration::from_secs(1));
+            tx.send(b'r').unwrap();
+            thread::sleep(Duration::from_secs(1));
+            tx.send(b'l').unwrap();
+            thread::sleep(Duration::from_secs(1));
+            tx.send(b'd').unwrap();
+            thread::sleep(Duration::from_secs(5));
+            tx.send(b'?').unwrap();
+            thread::sleep(Duration::from_secs(1));
+            tx.send(b'?').unwrap();
+            thread::sleep(Duration::from_secs(1));
+            tx.send(b'\x08').unwrap();
+            thread::sleep(Duration::from_secs(1));
+            tx.send(b'\x08').unwrap();
+            thread::sleep(Duration::from_secs(1));
+            tx.send(b'!').unwrap();
+            thread::sleep(Duration::from_secs(1));
+            tx.send(b'!').unwrap();
             thread::sleep(Duration::from_secs(5));
 
             escape.lock().expect("renderer thread crashed").upgrade().expect("renderer already stopped").set();

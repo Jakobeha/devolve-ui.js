@@ -143,6 +143,25 @@ impl From<KeyCode> for KeyEvent {
     }
 }
 
+impl From<char> for KeyEvent {
+    fn from(c: char) -> Self {
+        KeyEvent {
+            code: match c {
+                '\0' => KeyCode::Null,
+                '\x08' => KeyCode::Backspace, // '\b'
+                '\t' => KeyCode::Tab,
+                '\n' => KeyCode::Enter,
+                _ if c.is_ascii() => KeyCode::char_as_lowercase(c),
+                _ => KeyCode::Other(c as u32)
+            },
+            modifiers: match c.is_uppercase() {
+                false => KeyModifiers::NONE,
+                true => KeyModifiers::SHIFT
+            }
+        }
+    }
+}
+
 /// Represents a key.
 #[derive(Debug, PartialOrd, PartialEq, Eq, Clone, Copy, Hash)]
 pub enum KeyCode {
@@ -195,14 +214,14 @@ pub enum KeyCode {
 
 impl KeyCode {
     /// Converts the character to lowercase and then represents it in a `KeyCode`.
-    pub fn char(char: char) -> Self {
+    pub fn char_as_lowercase(char: char) -> Self {
         Self::CharAsLowercase(char.to_lowercase().next().unwrap())
     }
 }
 
 impl KeyEvent {
     /// If the event is a char, returns it with proper case
-    pub fn char(&self) -> Option<char> {
+    pub fn as_char(&self) -> Option<char> {
         match self.code {
             KeyCode::CharAsLowercase(c) => Some(if self.modifiers.contains(KeyModifiers::SHIFT) {
                 c.to_uppercase().next().unwrap()
@@ -270,7 +289,7 @@ impl From<CrosstermKeyCode> for KeyCode {
             CrosstermKeyCode::Delete => Self::Delete,
             CrosstermKeyCode::Insert => Self::Insert,
             CrosstermKeyCode::F(u8) => Self::F(u8),
-            CrosstermKeyCode::Char(char) => Self::char(char),
+            CrosstermKeyCode::Char(char) => Self::char_as_lowercase(char),
             CrosstermKeyCode::Null => Self::Null,
             CrosstermKeyCode::Esc => Self::Esc
         }

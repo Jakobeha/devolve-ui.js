@@ -22,6 +22,7 @@ use devolve_ui::engines::tui::tui::{TuiConfig, TuiEngine, TuiInputMode};
 use devolve_ui::view_data::tui::tui::HasTuiViewData;
 use devolve_ui::view_data::tui::constr::{vbox, text};
 use devolve_ui::view_data::tui::terminal_image::TuiImageFormat;
+use test_log::test;
 
 pub struct BasicProps {
     pub text: String
@@ -88,6 +89,7 @@ fn test_basic_render() {
         input: io::empty(),
         output: output.clone(),
         input_mode: TuiInputMode::ReadAscii,
+        output_ansi_escapes: false,
         #[cfg(target_family = "unix")]
         termios_fd: None,
         image_format: TuiImageFormat::FallbackColor

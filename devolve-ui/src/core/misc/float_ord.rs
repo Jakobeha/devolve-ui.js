@@ -19,7 +19,7 @@ pub struct FloatOrd<T>(pub T);
 
 macro float_ord_impl($f:ident, $i:ident, $n:expr) {
     impl FloatOrd<$f> {
-        fn convert(&self) -> $i {
+        fn convert(self) -> $i {
             let u = unsafe { transmute::<$f, $i>(self.0) };
             let bit = 1 << ($n - 1);
             if u & bit == 0 {

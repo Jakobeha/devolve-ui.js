@@ -90,6 +90,30 @@ pub fn test_no_ansi() {
             thread::sleep(Duration::from_millis(10));
             tx.send(b'o').unwrap();
             thread::sleep(Duration::from_millis(50));
+            tx.send(b'\t').unwrap();
+            thread::sleep(Duration::from_millis(50));
+            tx.send(b'w').unwrap();
+            thread::sleep(Duration::from_millis(10));
+            tx.send(b'o').unwrap();
+            thread::sleep(Duration::from_millis(10));
+            tx.send(b'r').unwrap();
+            thread::sleep(Duration::from_millis(10));
+            tx.send(b'l').unwrap();
+            thread::sleep(Duration::from_millis(10));
+            tx.send(b'd').unwrap();
+            thread::sleep(Duration::from_millis(50));
+            tx.send(b'?').unwrap();
+            thread::sleep(Duration::from_millis(10));
+            tx.send(b'?').unwrap();
+            thread::sleep(Duration::from_millis(10));
+            tx.send(b'\x08').unwrap();
+            thread::sleep(Duration::from_millis(10));
+            tx.send(b'\x08').unwrap();
+            thread::sleep(Duration::from_millis(10));
+            tx.send(b'!').unwrap();
+            thread::sleep(Duration::from_millis(10));
+            tx.send(b'!').unwrap();
+            thread::sleep(Duration::from_millis(50));
         }
     );
 }
