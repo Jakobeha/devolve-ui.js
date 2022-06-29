@@ -1053,7 +1053,7 @@ impl <Engine: RenderEngine> VComponentRoot for Renderer<Engine> {
 
     fn _with_component(self: Rc<Self>, path: &VComponentPath) -> Option<VComponentRefResolvedPtr<Self::ViewData>> {
         self.root_component.borrow_mut().as_mut()
-            .and_then(|root| root.down_path_mut(path, Vec::new()))
+            .and_then(|root| root.down_path_mut(path, true, Vec::new()))
             .map(|component| component.into_ptr())
     }
 

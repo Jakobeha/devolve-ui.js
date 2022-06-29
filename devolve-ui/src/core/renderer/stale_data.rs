@@ -130,7 +130,7 @@ impl <const IS_THREAD_SAFE: bool> StaleData<IS_THREAD_SAFE> {
         let mut local_lock = self.needs_update_lock()?;
         for (path, detailss) in local_lock.drain() {
             // Component may no longer exist so we need to check for some
-            if let Some(VComponentRefResolved { parent_contexts, component: child_component }) = root_component.down_path_mut(&path, Vec::new()) {
+            if let Some(VComponentRefResolved { parent_contexts, component: child_component }) = root_component.down_path_mut(&path, true, Vec::new()) {
                 child_component.update(&mut VComponentContexts::from_iter(parent_contexts), detailss.into_iter());
             }
         }

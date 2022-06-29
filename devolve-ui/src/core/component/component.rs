@@ -360,9 +360,15 @@ impl <ViewData: VViewData> VComponent<ViewData> {
     }
 
     /// Descendent with the given path.
-    pub(in crate::core) fn down_path_mut<'a>(self: &'a mut Box<Self>, path: &VComponentPath, mut parents: Vec<(&'a mut VComponentLocalContexts, &'a mut ContextPendingUpdates)>) -> Option<VComponentRefResolved<'a, ViewData>> {
+    pub(in crate::core) fn down_path_mut<'a>(self: &'a mut Box<Self>, path: &VComponentPath, mut is_first: bool, mut parents: Vec<(&'a mut VComponentLocalContexts, &'a mut ContextPendingUpdates)>) -> Option<VComponentRefResolved<'a, ViewData>> {
         let mut current = self;
         for segment in path.iter() {
+            if is_first {
+                assert_eq!(segment, self.head.key(), "component is not head of path");
+                is_first = false;
+                continue;
+            }
+
             let (local_contexts, changes, child) = current.local_contexts_and_child_mut(segment);
             parents.push((local_contexts, changes));
             current = child?;
