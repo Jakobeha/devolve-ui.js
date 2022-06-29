@@ -47,7 +47,7 @@ static mut NEXT_ID: usize = 0;
 impl NodeId {
     pub const NULL: NodeId = NodeId(0);
 
-    pub fn next() -> NodeId {
+    pub(in crate::core) fn next() -> NodeId {
         // TODO: Make thread safe?
         unsafe {
             NEXT_ID += 1;
@@ -71,17 +71,24 @@ impl <ViewData: VViewData> VNode<ViewData> {
         }
     }
 
-    pub fn component_and_view<'a>(&'a self, parent: &'a VComponentHead<ViewData>) -> VComponentAndView<'a, ViewData> {
+    pub(in crate::core) fn component_and_view<'a>(&'a self, parent: &'a VComponentHead<ViewData>) -> VComponentAndView<'a, ViewData> {
         match self.resolve(parent) {
             VNodeResolvedHead::Component(component) => component.component_and_view(),
             VNodeResolvedHead::View(view) => (parent, view)
         }
     }
 
-    pub fn view<'a>(&'a self, parent: &'a VComponentHead<ViewData>) -> &'a Box<VView<ViewData>> {
+    pub(in crate::core) fn view<'a>(&'a self, parent: &'a VComponentHead<ViewData>) -> &'a Box<VView<ViewData>> {
         match self.resolve(parent) {
             VNodeResolvedHead::Component(component) => component.view(),
             VNodeResolvedHead::View(view) => view
+        }
+    }
+
+    pub(super) fn try_view<'a>(&'a self, parent: &'a VComponentHead<ViewData>) -> Option<&'a Box<VView<ViewData>>> {
+        match self.resolve(parent) {
+            VNodeResolvedHead::Component(component) => component.try_view(),
+            VNodeResolvedHead::View(view) => Some(view)
         }
     }
 }

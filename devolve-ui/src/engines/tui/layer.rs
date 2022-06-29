@@ -4,16 +4,15 @@
 use std::io;
 use std::iter;
 use std::mem;
-use std::fmt::Write;
 use std::ops::{Index, IndexMut};
 use crossterm::{Command, cursor};
 use crossterm::style;
 use unicode_width::UnicodeWidthChar;
-use replace_with::replace_with_or_abort;
-use crate::core::misc::io_write_2_fmt_write::IoWrite2FmtWrite;
+use replace_with::replace_with;
 use crate::core::view::color::PackedColor;
 use crate::core::view::layout::geom::{BoundingBox, Rectangle};
 use crate::core::renderer::render::{VRender, VRenderLayer};
+use crate::core::misc::io_write_2_fmt_write::IoWrite2FmtWrite;
 
 #[derive(Debug, Clone)]
 pub enum RenderCellContent {
@@ -39,6 +38,10 @@ pub struct RenderCell {
 #[derive(Debug, Clone)]
 pub struct RenderLayer(Vec<Vec<RenderCell>>);
 
+impl RenderCellContent {
+    const ERROR: Self = RenderCellContent::Char('!');
+}
+
 impl RenderCell {
     pub fn new(content: RenderCellContent) -> Self {
         RenderCell {
@@ -56,8 +59,8 @@ impl RenderCell {
         assert_eq!(char.width(), Some(1), "char width is not 1, use RenderCell::char() instead");
         RenderCell {
             content: RenderCellContent::Char(char),
-            fg: fg,
-            bg: bg
+            fg,
+            bg
         }
     }
 
@@ -78,7 +81,7 @@ impl RenderCell {
     }
 
     pub fn prepend_zw_char(&mut self, prefix_char: char) {
-        replace_with_or_abort(&mut self.content, |content| match content {
+        replace_with(&mut self.content, || RenderCellContent::ERROR, |content| match content {
             RenderCellContent::TransparentChar => RenderCellContent::TransparentCharWithZeroWidths {
                 prefix: prefix_char.to_string(),
                 suffix: String::new()
@@ -94,7 +97,7 @@ impl RenderCell {
     }
 
     pub fn append_zw_char(&mut self, suffix_char: char) {
-        replace_with_or_abort(&mut self.content, |content| match content {
+        replace_with(&mut self.content, || RenderCellContent::ERROR, |content| match content {
             RenderCellContent::TransparentChar => RenderCellContent::TransparentCharWithZeroWidths {
                 prefix: String::new(),
                 suffix: suffix_char.to_string()
@@ -111,7 +114,7 @@ impl RenderCell {
 
     pub fn add_zw_prefix_suffix(&mut self, prefix: String, suffix: String) {
         if !prefix.is_empty() || !suffix.is_empty() {
-            replace_with_or_abort(&mut self.content, |content| match content {
+            replace_with(&mut self.content, || RenderCellContent::ERROR, |content| match content {
                 RenderCellContent::TransparentChar => RenderCellContent::TransparentCharWithZeroWidths {
                     prefix,
                     suffix
@@ -241,79 +244,79 @@ impl RenderLayer {
         result
     }
 
-    pub fn write(&self, output: &mut impl io::Write) -> io::Result<()> {
-        IoWrite2FmtWrite::on(output, |output| {
-            for (y, line) in self.0.iter().enumerate() {
-                let mut prev_fg: PackedColor = PackedColor::transparent();
-                let mut prev_bg: PackedColor = PackedColor::transparent();
-                // Relative addressing leads to weird edge cases, especially with images or weird chars
-                // This is set unless we're absolutely sure after writing, we're at the next (x, y) position
-                // Like at the start and every line, we want to explicitly set the position because images do weird stuff with newlines
-                let mut may_have_broken_position = true;
-                let mut buffer = String::new();
+    pub fn write<W>(&self, output: &mut impl io::Write, output_ansi_escapes: bool) -> io::Result<()> {
+        for (y, line) in self.0.iter().enumerate() {
+            let mut prev_fg: PackedColor = PackedColor::transparent();
+            let mut prev_bg: PackedColor = PackedColor::transparent();
+            // Relative addressing leads to weird edge cases, especially with images or weird chars
+            // This is set unless we're absolutely sure after writing, we're at the next (x, y) position
+            // Like at the start and every line, we want to explicitly set the position because images do weird stuff with newlines
+            let mut may_have_broken_position = true;
+            let mut buffer = String::new();
 
-                macro termctl($command:expr) {{
-                    if !buffer.is_empty() {
-                        output.write_str(buffer.as_str()).map_err(|e| io::Error::new(io::ErrorKind::Other, e))?;
-                        buffer.clear();
-                    }
-                    $command.write_ansi(output).map_err(|e| io::Error::new(io::ErrorKind::Other, e))
-                }}
+            macro termctl($command:expr) {{
+                if !buffer.is_empty() {
+                    write!(output, "{}", buffer)?;
+                    buffer.clear();
+                }
+                if output_ansi_escapes {
+                    IoWrite2FmtWrite::with(output, |output| $command.write_ansi(output))
+                } else {
+                    Ok(())
+                }
+            }}
 
-                for (x, cell) in line.iter().enumerate() {
-                    // Fix position
-                    if may_have_broken_position {
-                        termctl!(cursor::MoveTo(x as u16, y as u16))?;
-                        may_have_broken_position = false;
-                    }
-
-                    // Set foreground and background
-                    if prev_fg != cell.fg && prev_bg != cell.bg {
-                        termctl!(style::SetColors(style::Colors { foreground: Some(cell.fg.into()), background: Some(cell.bg.into()) }))?;
-                    }
-                    if prev_fg != cell.fg {
-                        termctl!(style::SetForegroundColor(cell.fg.into()))?;
-                    } else if prev_bg != cell.bg {
-                        termctl!(style::SetBackgroundColor(cell.bg.into()))?;
-                    }
-                    prev_fg = cell.fg;
-                    prev_bg = cell.bg;
-
-                    match &cell.content {
-                        RenderCellContent::TransparentChar => buffer.push(' '),
-                        RenderCellContent::Char(char) => buffer.push(*char),
-                        RenderCellContent::ManyChars(big_content) => {
-                            buffer.push_str(big_content);
-                            may_have_broken_position = true;
-                        }
-                        RenderCellContent::ZeroChars => {
-                            may_have_broken_position = true;
-                        }
-                        RenderCellContent::TransparentCharWithZeroWidths { prefix, suffix } => {
-                            buffer.push_str(prefix);
-                            buffer.push(' ');
-                            buffer.push_str(suffix);
-                            may_have_broken_position = true;
-                        }
-                    }
+            for (x, cell) in line.iter().enumerate() {
+                // Fix position
+                if may_have_broken_position {
+                    termctl!(cursor::MoveTo(x as u16, y as u16))?;
+                    may_have_broken_position = false;
                 }
 
-                // Reset colors (termctl will also print the buffer)
-                termctl!(style::ResetColor)?;
+                // Set foreground and background
+                if prev_fg != cell.fg && prev_bg != cell.bg {
+                    termctl!(style::SetColors(style::Colors { foreground: Some(cell.fg.into()), background: Some(cell.bg.into()) }))?;
+                }
+                if prev_fg != cell.fg {
+                    termctl!(style::SetForegroundColor(cell.fg.into()))?;
+                } else if prev_bg != cell.bg {
+                    termctl!(style::SetBackgroundColor(cell.bg.into()))?;
+                }
+                prev_fg = cell.fg;
+                prev_bg = cell.bg;
 
-                // Technically we don't have to write a newline because we move the position explicitly
-                // HOWEVER some renderers (e.g. opening in a text editor) don't handle terminal escapes,
-                // even in the case where we only expect to print to actual terminals.
-                // Since it costs almost nothing to print newlines anyways, fixes confusing issues,
-                // and makes debugging simple outputs easier, we do so.
-                output.write_char('\n').map_err(|e| io::Error::new(io::ErrorKind::Other, e))?;
+                match &cell.content {
+                    RenderCellContent::TransparentChar => buffer.push(' '),
+                    RenderCellContent::Char(char) => buffer.push(*char),
+                    RenderCellContent::ManyChars(big_content) => {
+                        buffer.push_str(big_content);
+                        may_have_broken_position = true;
+                    }
+                    RenderCellContent::ZeroChars => {
+                        may_have_broken_position = true;
+                    }
+                    RenderCellContent::TransparentCharWithZeroWidths { prefix, suffix } => {
+                        buffer.push_str(prefix);
+                        buffer.push(' ');
+                        buffer.push_str(suffix);
+                        may_have_broken_position = true;
+                    }
+                }
             }
 
-            // Just to make sure
-            output.flush()?;
+            // Reset colors (termctl will also print the buffer)
+            termctl!(style::ResetColor)?;
 
-            Ok(())
-        })
+            // Technically we don't have to write a newline because we move the position explicitly
+            // HOWEVER some renderers (e.g. opening in a text editor) don't handle terminal escapes,
+            // even in the case where we only expect to print to actual terminals.
+            // Since it costs almost nothing to print newlines anyways, fixes confusing issues,
+            // and makes debugging simple outputs easier, we do so.
+            write!(output, "\n")?;
+        }
+
+        // Just to make sure (fmt2io doesn't seem to do this)
+        output.flush()
     }
 }
 

@@ -16,6 +16,8 @@
 #![feature(coerce_unsized)]
 #![feature(dispatch_from_dyn)]
 #![feature(map_try_insert)]
+#![feature(cfg_version)]
+#![cfg_attr(not(version("1.64")), feature(explicit_generic_args_with_impl_trait))]
 #![cfg_attr(feature = "backtrace", feature(backtrace))]
 
 pub mod core;

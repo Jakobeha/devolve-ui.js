@@ -1039,8 +1039,8 @@ impl <Engine: RenderEngine> VComponentRoot for Renderer<Engine> {
         self.set_needs_rerender();
     }
 
-    fn invalidate_view(self: Rc<Self>, view: &Box<VView<Engine::ViewData>>) {
-        self.uncache_view(view.id());
+    fn invalidate_view(self: Rc<Self>, view_id: NodeId) {
+        self.uncache_view(view_id);
     }
 
     fn needs_update_flag_for(self: Rc<Self>, path: VComponentPath) -> NeedsUpdateFlag {

@@ -6,6 +6,7 @@ use std::rc::Rc;
 use std::time::Duration;
 #[cfg(feature = "logging")]
 use crate::core::component::mode::VMode;
+use crate::core::component::node::NodeId;
 use crate::core::component::path::{VComponentPath, VComponentRefResolved, VComponentRefResolvedPtr};
 use crate::core::component::update_details::UpdateDetails;
 #[cfg(feature = "logging")]
@@ -14,15 +15,15 @@ use crate::core::logging::update_logger::UpdateLogger;
 use crate::core::renderer::input::{KeyEvent, MouseEvent, ResizeEvent};
 use crate::core::renderer::listeners::{RendererListener, RendererListenerId};
 use crate::core::renderer::stale_data::{NeedsUpdateFlag, NeedsUpdateNotifier};
-use crate::core::view::view::{VView, VViewData};
+use crate::core::view::view::VViewData;
 
 pub(in crate::core) trait VComponentRoot {
     type ViewData: VViewData;
 
     /// Marks the given path needs to be updated
     fn queue_needs_update(self: Rc<Self>, path: &VComponentPath, details: UpdateDetails);
-    /// Mark the view as stale
-    fn invalidate_view(self: Rc<Self>, view: &Box<VView<Self::ViewData>>);
+    /// Mark the view as stale and needs to be uncached
+    fn invalidate_view(self: Rc<Self>, view_id: NodeId);
     /// A flag for a separate thread or time. When set, this marks that the given path needs to be updated, like `mark_needs_update`
     fn needs_update_flag_for(self: Rc<Self>, path: VComponentPath) -> NeedsUpdateFlag;
     /// A flag for a separate thread or time. When set, this marks that an arbitrary path needs to be updated, like `mark_needs_update`

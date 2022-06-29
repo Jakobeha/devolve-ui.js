@@ -243,6 +243,8 @@ impl <ViewData: VViewData> VComponent<ViewData> {
         assert!(!self.head.is_being_updated(), "why is local_update_stack not empty when calling update? Are we calling it nested?");
         assert!(!self.construct.local_context_changes().is_being_updated(), "why is construct's local_update_stack not empty when calling update? Are we calling it nested?");
 
+        let old_view_id = self.head.try_view().map_or(NodeId::NULL, |view| view.id());
+
         let mut update_stack = UpdateStack::new();
         update_stack.add_all_to_last(initial_updates);
         self.head.local_update_stack = Some(update_stack);
@@ -288,7 +290,7 @@ impl <ViewData: VViewData> VComponent<ViewData> {
         if local_update_stack.is_empty() {
             log::warn!("component at path {} updated but it had no pending updates", self.head.path());
         } else {
-            self.head.invalidate_view();
+            self.head.invalidate_view(old_view_id);
         }
 
         #[cfg(feature = "logging")]
@@ -310,8 +312,8 @@ impl <ViewData: VViewData> VComponent<ViewData> {
         // from devolve-ui.js: "Destroy pixi if pixi component and on web"
         // should have a hook in view trait we can call through node.view().hook(...)
 
-        // We need to explicitly call because this is not an update
-        self.head.invalidate_view();
+        // We need to explicitly invalidate because it's not an update
+        self.head.invalidate_view(self.head.view().id());
 
         for child in self.head.children.into_values() {
             let (local_contexts, local_context_changes) = self.construct.local_contexts();
@@ -396,10 +398,10 @@ impl <ViewData: VViewData> VComponentHead<ViewData> {
         }
     }
 
-    /// Mark that this component's view is stale.
-    fn invalidate_view(&self) {
+    /// Mark that the view with given id (the omponent's old view) is stale and should be uncached.
+    fn invalidate_view(&self, view_id: NodeId) {
         if let Some(renderer) = self.renderer.upgrade() {
-            renderer.invalidate_view(self.view());
+            renderer.invalidate_view(view_id);
         }
     }
 
@@ -474,9 +476,16 @@ impl <ViewData: VViewData> VComponentHead<ViewData> {
     }
 
     /// Gets the components root child view: if the `node` is another component, recurses.
+    /// *Panics* if the component is not initialized
     #[allow(clippy::needless_lifetimes)]
     pub(in crate::core) fn view<'a>(&'a self) -> &'a Box<VView<ViewData>> {
         self.node.as_ref().expect("tried to get view of uninitialized component").view(self)
+    }
+
+    /// Gets the components root child view: if the `node` is another component, recurses.
+    #[allow(clippy::needless_lifetimes)]
+    pub(super) fn try_view<'a>(&'a self) -> Option<&'a Box<VView<ViewData>>> {
+        self.node.as_ref().and_then(|node| node.try_view(self))
     }
 
     /// Gets the renderer, which has the root component and controls rendering.

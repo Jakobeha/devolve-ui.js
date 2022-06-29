@@ -55,6 +55,7 @@ pub struct TuiConfig<Input: Read, Output: Write> {
     #[cfg(target_family = "unix")]
     pub termios_fd: Option<RawFd>,
     pub input_mode: TuiInputMode,
+    pub output_ansi_escapes: bool,
     #[cfg(feature = "tui-images")]
     pub image_format: TuiImageFormat
 }
@@ -87,6 +88,7 @@ impl Default for TuiConfig<Stdin, Stdout> {
             #[cfg(target_family = "unix")]
             termios_fd: Some(fd),
             input_mode: TuiInputMode::Raw,
+            output_ansi_escapes: true,
             #[cfg(feature = "tui-images")]
             image_format: TuiImageFormat::infer_from_env()
         }
@@ -439,24 +441,28 @@ impl <Input: Read, Output: Write> RenderEngine for TuiEngine<Input, Output> {
                 // Enter raw mode
                 terminal::enable_raw_mode()?;
             }
-            // Enter TUI mode
-            write!(self.config.output, "\x1b[?1049h")?;
-            // Clear scrollback
-            write!(self.config.output, "\x1b[2J")?;
-            // Hide cursor
-            write!(self.config.output, "\x1b[25l")?;
+            if self.config.output_ansi_escapes {
+                // Enter TUI mode
+                write!(self.config.output, "\x1b[?1049h")?;
+                // Clear scrollback
+                write!(self.config.output, "\x1b[2J")?;
+                // Hide cursor
+                write!(self.config.output, "\x1b[25l")?;
+            }
             Ok(())
         })
     }
 
     fn stop_rendering(&mut self) {
         do_io(|| {
-            // Show cursor
-            write!(self.config.output, "\x1b[25h")?;
-            // Clear scrollback
-            write!(self.config.output, "\x1b[2J")?;
-            // Exit TUI mode
-            write!(self.config.output, "\x1b[?1049l")?;
+            if self.config.output_ansi_escapes {
+                // Show cursor
+                write!(self.config.output, "\x1b[25h")?;
+                // Clear scrollback
+                write!(self.config.output, "\x1b[2J")?;
+                // Exit TUI mode
+                write!(self.config.output, "\x1b[?1049l")?;
+            }
             if self.config.input_mode == TuiInputMode::Raw {
                 // Exit raw mode
                 terminal::disable_raw_mode()?;
@@ -466,13 +472,15 @@ impl <Input: Read, Output: Write> RenderEngine for TuiEngine<Input, Output> {
     }
 
     fn write_render(&mut self, batch: VRender<RenderLayer>) {
-        do_io(|| RenderLayer::collapse(batch).write(&mut self.config.output))
+        do_io(|| RenderLayer::collapse(batch).write::<Output>(&mut self.config.output, self.config.output_ansi_escapes))
     }
 
     fn clear(&mut self) {
         do_io(|| {
-            // Clear scrollback
-            write!(self.config.output, "\x1b[2J")?;
+            if self.config.output_ansi_escapes {
+                // Clear scrollback
+                write!(self.config.output, "\x1b[2J")?;
+            }
             Ok(())
         })
     }

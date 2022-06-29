@@ -324,6 +324,7 @@ mod test {
             input_mode: TuiInputMode::ReadAscii,
             #[cfg(target_family = "unix")]
             termios_fd: None,
+            output_ansi_escapes: true,
             #[cfg(feature = "tui-images")]
             image_format: TuiImageFormat::FallbackColor
         }));
