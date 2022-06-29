@@ -364,7 +364,7 @@ impl <ViewData: VViewData> VComponent<ViewData> {
         let mut current = self;
         for segment in path.iter() {
             if is_first {
-                assert_eq!(segment, self.head.key(), "component is not head of path");
+                assert_eq!(segment, current.head.key(), "component is not head of path");
                 is_first = false;
                 continue;
             }
