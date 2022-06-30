@@ -24,16 +24,16 @@
 //! - cancer: sixel
 //! - all others: fallback
 
-use std::fmt;
-use std::fmt::{Display, Formatter};
+use std::fs::File;
 use std::io;
 use std::io::Read;
-use std::os::raw::{c_char, c_int, c_uchar, c_void};
-use std::slice;
+use std::path::PathBuf;
 use png;
-use sixel_sys;
-use sixel_sys::status::Status as SixelStatus;
 use base64;
+use sixel;
+use sixel::status::{Error as SixelError};
+use sixel_sys;
+use derive_more::{Display, Error, From};
 use crate::core::view::color::PackedColor;
 use crate::core::view::layout::geom::Size;
 use crate::engines::tui::layer::{RenderCell, RenderLayer};
@@ -51,20 +51,20 @@ pub enum ImageData<R: Read> {
 }
 
 impl <R: Read> ImageData<R> {
-    fn into_rgba32(self) -> Result<Vec<u8>, String> {
+    fn into_rgba32(self) -> Result<Vec<u8>, RenderError> {
         Ok(match self {
             ImageData::Rgba32(data) => data,
             ImageData::Png(input) => {
                 let decoder = png::Decoder::new(input);
-                let mut reader = decoder.read_info().map_err(|err| err.to_string())?;
+                let mut reader = decoder.read_info()?;
                 let mut buf = vec![0; reader.output_buffer_size()];
-                let _info = reader.next_frame(&mut buf).map_err(|err| err.to_string())?;
+                let _info = reader.next_frame(&mut buf)?;
                 buf
             }
         })
     }
 
-    fn into_png(self, width: u32, height: u32) -> Result<Vec<u8>, String> {
+    fn into_png(self, width: u32, height: u32) -> Result<Vec<u8>, RenderError> {
         Ok(match self {
             ImageData::Rgba32(data) => {
                 let mut result = vec![0; width as usize * height as usize * 4];
@@ -72,52 +72,46 @@ impl <R: Read> ImageData<R> {
                     let mut encoder = png::Encoder::new(&mut result, width, height);
                     encoder.set_color(png::ColorType::Rgba);
                     encoder.set_depth(png::BitDepth::Eight);
-                    let mut writer = encoder.write_header().map_err(|err| err.to_string())?;
-                    writer.write_image_data(&data).map_err(|err| err.to_string())?;
+                    let mut writer = encoder.write_header()?;
+                    writer.write_image_data(&data)?;
                 }
                 result
             }
             ImageData::Png(mut input) => {
                 let mut result = Vec::new();
-                input.read_to_end(&mut result).map_err(|err| err.to_string())?;
+                input.read_to_end(&mut result)?;
                 result
             }
         })
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Display, Error, From)]
 pub enum Source2ImageDataError {
-    UnsupportedFormat(InferredFileExtension),
+    #[display(fmt = "{}", _0)]
+    FailedToGetSize(FailedToGetSize),
+    #[from(ignore)]
+    #[display(fmt = "{}", "_0.0.as_ref().map_or(std::borrow::Cow::from(\"unsupported format\"), |e| std::borrow::Cow::from(format!(\"unsupported format: {}\", e)))")]
+    UnsupportedFormat(#[error(not(source))] InferredFileExtension),
+    #[display(fmt = "io error: {}", _0)]
     IoError(io::Error),
+    #[display(fmt = "png decoding error: {}", _0)]
     PngDecodingError(png::DecodingError)
 }
 
-impl From<io::Error> for Source2ImageDataError {
-    fn from(err: io::Error) -> Self {
-        Self::IoError(err)
-    }
-}
-
-impl From<FailedToGetSize> for Source2ImageDataError {
-    fn from(err: FailedToGetSize) -> Self {
-        match err {
-            FailedToGetSize::UnsupportedFileExtension(ext) => Self::UnsupportedFormat(ext),
-            FailedToGetSize::IoError(err) => Self::IoError(err),
-            FailedToGetSize::PngDecodingError(err) => Self::PngDecodingError(err)
-        }
-    }
-}
-
-impl Display for Source2ImageDataError {
-    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        match self {
-            Source2ImageDataError::UnsupportedFormat(InferredFileExtension(None)) => write!(f, "unsupported format"),
-            Source2ImageDataError::UnsupportedFormat(InferredFileExtension(Some(str))) => write!(f, "unsupported format: {}", str),
-            Source2ImageDataError::IoError(err) => write!(f, "IO error: {}", err),
-            Source2ImageDataError::PngDecodingError(err) => write!(f, "PNG decoding error: {}", err)
-        }
-    }
+#[derive(Debug, Display, Error, From)]
+pub enum RenderError {
+    #[from(ignore)]
+    #[display(fmt = "HandleAspectRatio::Complain is set, but {}", _0)]
+    AspectRatioComplain(#[error(not(source))] String),
+    #[display(fmt = "io error: {}", _0)]
+    IoError(io::Error),
+    #[display(fmt = "png encoding error: {}", _0)]
+    PngEncodingError(png::EncodingError),
+    #[display(fmt = "png decoding error: {}", _0)]
+    PngDecodingError(png::DecodingError),
+    #[display(fmt = "libsixel error: {:?}", _0)]
+    SixelError(#[error(not(source))] SixelError)
 }
 
 impl TryFrom<&Source> for Image<Box<dyn Read>> {
@@ -138,7 +132,7 @@ impl TryFrom<&Source> for Image<Box<dyn Read>> {
     }
 }
 
-fn calculate_scaled_width_height(image_width: u16, image_height: u16, width: Measurement, height: Measurement, handle_aspect_ratio: HandleAspectRatio) -> Result<(u16, u16), String> {
+fn calculate_scaled_width_height(image_width: u16, image_height: u16, width: Measurement, height: Measurement, handle_aspect_ratio: HandleAspectRatio) -> Result<(u16, u16), RenderError> {
     match (width, height) {
         (Measurement::Auto, Measurement::Auto) => Ok((image_width, image_height)),
         (Measurement::Pixels(width), Measurement::Auto) => {
@@ -170,10 +164,10 @@ fn calculate_scaled_width_height(image_width: u16, image_height: u16, width: Mea
     }
 }
 
-fn calculate_scaled_width_height_pixels(image_width: u16, image_height: u16, width: u16, height: u16, handle_aspect_ratio: HandleAspectRatio) -> Result<(u16, u16), String> {
+fn calculate_scaled_width_height_pixels(image_width: u16, image_height: u16, width: u16, height: u16, handle_aspect_ratio: HandleAspectRatio) -> Result<(u16, u16), RenderError> {
     match handle_aspect_ratio {
         _ if (width as f32 / image_width as f32 * image_height as f32) as u16 == height => Ok((width, height)),
-        HandleAspectRatio::Complain => Err(format!("HandleAspectRatio::Complain is set but image aspect ratio ({}x{} = {}) does not match specified aspect ratio ({}x{} = {})", image_width, image_height, image_width as f32 / image_height as f32, width, height, width as f32 / height as f32)),
+        HandleAspectRatio::Complain => Err(RenderError::AspectRatioComplain(format!("image aspect ratio ({}x{} = {}) does not match specified aspect ratio ({}x{} = {})", image_width, image_height, image_width as f32 / image_height as f32, width, height, width as f32 / height as f32))),
         HandleAspectRatio::Fit => {
             let fixed_width = f32::min(width as f32, (height as f32 / image_height as f32) * image_width as f32) as u16;
             let fixed_height = f32::min(height as f32, (width as f32 / image_width as f32) * image_height as f32) as u16;
@@ -188,10 +182,10 @@ fn calculate_scaled_width_height_pixels(image_width: u16, image_height: u16, wid
     }
 }
 
-fn calculate_scaled_width_height_ratio(image_width: u16, image_height: u16, width_ratio: f32, height_ratio: f32, handle_aspect_ratio: HandleAspectRatio) -> Result<(u16, u16), String> {
+fn calculate_scaled_width_height_ratio(image_width: u16, image_height: u16, width_ratio: f32, height_ratio: f32, handle_aspect_ratio: HandleAspectRatio) -> Result<(u16, u16), RenderError> {
     match handle_aspect_ratio {
         _ if width_ratio == height_ratio => Ok(((image_width as f32 * width_ratio) as u16, (image_height as f32 * height_ratio) as u16)),
-        HandleAspectRatio::Complain => Err(format!("HandleAspectRatio::Complain is set but ratio is not 1:1)")),
+        HandleAspectRatio::Complain => Err(RenderError::AspectRatioComplain(format!("ratio is not 1:1)"))),
         HandleAspectRatio::Fit => {
             let ratio = f32::min(width_ratio, height_ratio);
             Ok(((image_width as f32 * ratio) as u16, (image_height as f32 * ratio) as u16))
@@ -226,7 +220,7 @@ impl <R: Read> Image<R> {
         height: Measurement,
         handle_aspect_ratio: HandleAspectRatio,
         column_size: &Size,
-    ) -> Result<ImageRender, String> {
+    ) -> Result<ImageRender, RenderError> {
         let (width, height) = calculate_scaled_width_height(self.width, self.height, width, height, handle_aspect_ratio)?;
         if width == 0 || height == 0 {
             return Ok(ImageRender::empty());
@@ -244,7 +238,7 @@ impl <R: Read> Image<R> {
         })
     }
 
-    fn render_fallback_gray(self, width: u16, height: u16, column_size: &Size) -> Result<RenderLayer, String> {
+    fn render_fallback_gray(self, width: u16, height: u16, column_size: &Size) -> Result<RenderLayer, RenderError> {
         let width = f32::round(width as f32 / column_size.width) as usize;
         let height = f32::round(height as f32 / column_size.height) as usize;
         let data = self.data.into_rgba32()?;
@@ -279,7 +273,7 @@ impl <R: Read> Image<R> {
         Ok(result)
     }
 
-    fn render_fallback_color(self, width: u16, height: u16, column_size: &Size) -> Result<RenderLayer, String> {
+    fn render_fallback_color(self, width: u16, height: u16, column_size: &Size) -> Result<RenderLayer, RenderError> {
         let width = f32::round(width as f32 / column_size.width) as usize;
         let height = f32::round(height as f32 / column_size.height) as usize;
         let data = self.data.into_rgba32()?;
@@ -306,7 +300,7 @@ impl <R: Read> Image<R> {
         Ok(result)
     }
 
-    fn render_iterm(self, width: u16, height: u16) -> Result<RenderLayer, String> {
+    fn render_iterm(self, width: u16, height: u16) -> Result<RenderLayer, RenderError> {
         let data = self.data.into_png(self.width as u32, self.height as u32)?;
         // iTerm proprietary format: https://iterm2.com/documentation-images.html
         // iTerm also supports sixel, which one is faster / preferred?
@@ -320,7 +314,7 @@ impl <R: Read> Image<R> {
         Ok(RenderLayer::escape_sequence_and_filler(escape_sequence, width as usize, height as usize))
     }
 
-    pub fn render_kitty(self, width: u16, height: u16, column_size: &Size) -> Result<RenderLayer, String> {
+    pub fn render_kitty(self, width: u16, height: u16, column_size: &Size) -> Result<RenderLayer, RenderError> {
         let width = width as f32 / column_size.width;
         let height = height as f32 / column_size.height;
         let data = self.data.into_rgba32()?;
@@ -337,43 +331,34 @@ impl <R: Read> Image<R> {
         Ok(RenderLayer::escape_sequence_and_filler(escape_sequence, width as usize, height as usize))
     }
 
-    fn render_sixel(self, width: u16, height: u16) -> Result<RenderLayer, String> {
+    fn render_sixel(self, width: u16, height: u16) -> Result<RenderLayer, RenderError> {
         let data = self.data.into_rgba32()?;
-        let escape_sequence = _render_sixel(&data, width, height).map_err(|status| format!("libsixel error code: {}", status))?;
+        let escape_sequence = _render_sixel(&data, self.width, self.height, width, height)?;
         Ok(RenderLayer::escape_sequence_and_filler(escape_sequence, width as usize, height as usize))
     }
 }
 
-fn _render_sixel(rgba32: &[u8], width: u16, height: u16) -> Result<String, SixelStatus> {
-    unsafe {
-        let mut output_str = String::new();
-        let output = sixel_sys::sixel_output_create(Some(read_sixel), &mut output_str as *mut String as *mut c_void);
-        let dither = sixel_sys::sixel_dither_create(32);
+fn _render_sixel(rgba32: &[u8], image_width: u16, image_height: u16, width: u16, height: u16) -> Result<String, RenderError> {
+    let frame = sixel::encoder::QuickFrameBuilder::new()
+        .width(image_width as usize)
+        .height(image_height as usize)
+        .format(sixel_sys::PixelFormat::RGBA8888)
+        .pixels(Vec::from(rgba32));
 
-        // I don't believe sixel_encode actually mutates the first argument,
-        // but the signature requires *mut c_char. Is this an oversight?
-        // If not we have to make rgba32 &mut [u8]
-        let status = sixel_sys::sixel_encode(
-            rgba32.as_ptr() as *mut c_uchar,
-            width as c_int,
-            height as c_int,
-            8,
-            dither,
-            output
-        );
-        if status != sixel_sys::status::OK {
-            return Err(status)
-        }
+    let encoder = sixel::encoder::Encoder::new()?;
+    encoder.set_width(sixel::optflags::SizeSpecification::Pixel(width as u64))?;
+    encoder.set_height(sixel::optflags::SizeSpecification::Pixel(height as u64))?;
 
-        sixel_sys::sixel_dither_destroy(dither);
-        sixel_sys::sixel_output_destroy(output);
-        Ok(output_str)
-    }
-}
+    let output_dir = tempfile::tempdir()?;
+    let mut output_path = PathBuf::from(output_dir.path());
+    output_path.push("sixel.out");
+    encoder.set_output(&output_path)?;
 
-unsafe extern "C" fn read_sixel(data: *mut c_char, size: c_int, priv_: *mut c_void) -> c_int {
-    let output_str = (priv_ as *mut String).as_mut().expect("read_sixel called with null priv_");
-    let data = slice::from_raw_parts(data as *mut u8, size as usize);
-    output_str.push_str(std::str::from_utf8(data).unwrap());
-    size
+    encoder.encode_bytes(frame)?;
+
+    let mut output_file = File::options().read(true).open(output_path)?;
+    let mut output = String::new();
+    output_file.read_to_string(&mut output)?;
+
+    Ok(output)
 }

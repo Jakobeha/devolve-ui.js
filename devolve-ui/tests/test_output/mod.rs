@@ -5,11 +5,9 @@
 #![cfg(feature = "tui")]
 
 use std::cell::RefCell;
-use std::ffi::OsStr;
 use std::fs::File;
 use std::{env, io, thread};
 use std::io::{ErrorKind, Read, Write};
-use std::os::unix::ffi::OsStrExt;
 use std::rc::Rc;
 use std::path::PathBuf;
 use std::string::FromUtf8Error;
@@ -176,14 +174,20 @@ fn assert_render<TestInput: Read + 'static>(
     write!(actual_file, "{}", actual).expect("failed to write actual output");
     expected_file.read_to_string(&mut expected).expect("failed to read expected output");
 
-    // Sanity
+    // Sanity --
     drop(actual_file);
     let actual_path2 = PathBuf::from(format!("{}/{}-actual.txt", test_output_dir.display(), test_name));
     let mut read_from_actual = File::options().read(true).open(actual_path2).expect("failed to open file e just wrote to!");
     let mut actual_read = String::new();
-    read_from_actual.read_to_string(&mut actual_read).expect("failed to read file e just wrote to!");
-    assert_eq!(&actual, &actual_read, "wtf - actual output is different from what we just wrote to!");
-    //
+    let read_result = read_from_actual.read_to_string(&mut actual_read);
+    if read_result.is_err() || &actual != &actual_read {
+        log::warn!("wtf, actual output is different from what we just wrote to!");
+        assert!(expected.starts_with(&actual) || actual.starts_with(&expected), "actual ~!= expected (check files for diff)")
+    }
+    // -- sanity
+    else {
+        //noinspection RsAssertEqual
+        assert!(&actual == &expected, "actual != expected (check files for diff)");
+    }
 
-    assert_eq!(&actual, &expected, "actual (left) != expected (right)");
 }

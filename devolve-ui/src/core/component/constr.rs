@@ -200,7 +200,6 @@ mod tests {
     #[allow(unused_imports)]
     use crate::core::component::constr::{_make_component_macro, make_component, make_component_macro};
     use crate::core::component::node::VNode;
-    use crate::core::misc::shorthand::pd;
     use crate::core::renderer::renderer::Renderer;
     use crate::core::view::layout::macros::smt;
     use crate::engines::tui::tui::{TuiConfig, TuiEngine};
@@ -226,7 +225,7 @@ mod tests {
     #[test]
     fn test_component2() {
         let renderer = Renderer::new(TuiEngine::new(TuiConfig::default()));
-        renderer.root(|(mut c, ())| my_component2!(&mut c, "key", { text: "Override text" }));
+        renderer.root(|(mut c, ())| my_component2!(c, "key", { text: "Override text" }));
     }
 
     make_component!(pub my_component, MyComponentProps<ViewData: HasTuiViewData + Clone> {
@@ -243,7 +242,7 @@ mod tests {
     #[test]
     fn test_component() {
         let renderer = Renderer::new(TuiEngine::new(TuiConfig::default()));
-        renderer.root(|(mut c, ())| my_component!(&mut c, "key", { title: "Override title".to_owned() }, vec![
+        renderer.root(|(mut c, ())| my_component!(c, "key", { title: "Override title".to_owned() }, vec![
             text!({}, {}, "Hello world!".to_owned()),
         ]));
     }

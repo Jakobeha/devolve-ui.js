@@ -17,37 +17,41 @@ use serde::{Serialize, Deserialize};
 #[repr(transparent)]
 pub struct FloatOrd<T>(pub T);
 
-macro float_ord_impl($f:ident, $i:ident, $n:expr) {
-    impl FloatOrd<$f> {
-        fn convert(self) -> $i {
-            let u = unsafe { transmute::<$f, $i>(self.0) };
-            let bit = 1 << ($n - 1);
-            if u & bit == 0 {
-                u | bit
-            } else {
-                !u
+// error[E0599]: no method named `convert` found for reference `FloatOrd<f64>` in the current scope
+// happens until we change the file using macros 2.0, so we need to use macro_rules! for now
+macro_rules! float_ord_impl {
+    ($f:ident, $i:ident, $n:expr) => {
+        impl FloatOrd<$f> {
+            fn convert(self) -> $i {
+                let u = unsafe { transmute::<$f, $i>(self.0) };
+                let bit = 1 << ($n - 1);
+                if u & bit == 0 {
+                    u | bit
+                } else {
+                    !u
+                }
             }
         }
-    }
-    impl PartialEq for FloatOrd<$f> {
-        fn eq(&self, other: &Self) -> bool {
-            self.convert() == other.convert()
+        impl PartialEq for FloatOrd<$f> {
+            fn eq(&self, other: &Self) -> bool {
+                FloatOrd::<$f>::convert(*self) == FloatOrd::<$f>::convert(*other)
+            }
         }
-    }
-    impl Eq for FloatOrd<$f> {}
-    impl PartialOrd for FloatOrd<$f> {
-        fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-            self.convert().partial_cmp(&other.convert())
+        impl Eq for FloatOrd<$f> {}
+        impl PartialOrd for FloatOrd<$f> {
+            fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+                FloatOrd::<$f>::convert(*self).partial_cmp(&FloatOrd::<$f>::convert(*other))
+            }
         }
-    }
-    impl Ord for FloatOrd<$f> {
-        fn cmp(&self, other: &Self) -> Ordering {
-            self.convert().cmp(&other.convert())
+        impl Ord for FloatOrd<$f> {
+            fn cmp(&self, other: &Self) -> Ordering {
+                FloatOrd::<$f>::convert(*self).cmp(&FloatOrd::<$f>::convert(*other))
+            }
         }
-    }
-    impl Hash for FloatOrd<$f> {
-        fn hash<H: Hasher>(&self, state: &mut H) {
-            self.convert().hash(state);
+        impl Hash for FloatOrd<$f> {
+            fn hash<H: Hasher>(&self, state: &mut H) {
+                FloatOrd::<$f>::convert(*self).hash(state);
+            }
         }
     }
 }

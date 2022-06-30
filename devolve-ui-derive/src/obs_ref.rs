@@ -47,7 +47,6 @@ fn derive_struct(
     let (_, ty_generics, where_clause) = &input.generics.split_for_impl();
     let impl_generics_root = generics_bounds(&input.generics, &quote!(#ident #ty_generics));
     let impl_generics_child = generics_bounds(&input.generics, &quote!(Root));
-    let ty_generics2 = ty_generics2(&input.generics);
 
     let all_fields = Fields::<ObsRefAttr>::parse_ast(&s.fields)?;
     let fields = || {
@@ -63,30 +62,37 @@ fn derive_struct(
     let obs_ref_root = ident_from_str(&format!("ObsRefRootFor{}", ident));
     let obs_ref_child = ident_from_str(&format!("ObsRefChildFor{}", ident));
 
+    let ty_generics_and = ty_generics_and(&input.generics);
 
     let res = quote! {
         #[automatically_derived]
-        #vis struct #obs_ref_root <#impl_generics_root> #where_clause {
-            #obs_ref_base_field: ::std::rc::Rc<::devolve_ui::core::data::obs_ref::ObsRefRootBase<#ident #ty_generics>>,
-            #( pub #field_ids: <#types as ::devolve_ui::core::data::obs_ref::ObsRefableChild<#ident #ty_generics>>::ObsRefImpl ),*
+        #vis struct #obs_ref_root <#impl_generics_root S: ::devolve_ui::core::data::obs_ref::st::SubCtx> #where_clause {
+            #obs_ref_base_field: ::std::rc::Rc<::devolve_ui::core::data::obs_ref::st::ObsRefRootBase<#ident #ty_generics, S>>,
+            #( pub #field_ids: <#types as ::devolve_ui::core::data::obs_ref::st::ObsRefableChild<#ident #ty_generics, S>>::ObsRefImpl ),*
         }
 
         #[automatically_derived]
-        #vis struct #obs_ref_child <Root, #impl_generics_child> #where_clause {
-            #obs_ref_base_field: ::devolve_ui::core::data::obs_ref::ObsRefChildBase<Root, #ident #ty_generics>,
-            #( pub #field_ids: <#types as ::devolve_ui::core::data::obs_ref::ObsRefableChild<Root>>::ObsRefImpl ),*
+        #vis struct #obs_ref_child <#impl_generics_child Root, S: ::devolve_ui::core::data::obs_ref::st::SubCtx> #where_clause {
+            #obs_ref_base_field: ::devolve_ui::core::data::obs_ref::st::ObsRefChildBase<Root, #ident #ty_generics, S>,
+            #( pub #field_ids: <#types as ::devolve_ui::core::data::obs_ref::st::ObsRefableChild<Root, S>>::ObsRefImpl ),*
         }
 
         #[automatically_derived]
-        impl <#impl_generics_root> ::devolve_ui::core::data::obs_ref::ObsRefableRoot for #ident #ty_generics #where_clause {
-            type ObsRefImpl = #obs_ref_root #ty_generics #where_clause;
+        impl <#impl_generics_root S: ::devolve_ui::core::data::obs_ref::st::SubCtx> ::devolve_ui::core::data::obs_ref::st::ObsRefableRoot<S> for #ident #ty_generics #where_clause {
+            type ObsRefImpl = #obs_ref_root<#ty_generics_and S> #where_clause;
 
             fn into_obs_ref(self: Self) -> Self::ObsRefImpl {
-                use ::devolve_ui::core::data::obs_ref::ObsRefableChild;
+                use ::devolve_ui::core::data::obs_ref::st::ObsRefableChild;
                 unsafe {
-                    let mut base = ::devolve_ui::core::data::obs_ref::ObsRefRootBase::new(self);
+                    let mut base = ::devolve_ui::core::data::obs_ref::st::ObsRefRootBase::new(self);
                     #obs_ref_root {
-                        #( #field_ids: base.root_value().#field_ids.as_obs_ref_child("", stringify!(#field_ids), ::std::rc::Rc::downgrade(&base)), )*
+                        #( #field_ids: base.root_value().#field_ids.as_obs_ref_child(
+                            &[],
+                            base.pending(),
+                            "",
+                            stringify!(#field_ids),
+                            base.clone()
+                        ), )*
                         #obs_ref_base_field: base
                     }
                 }
@@ -94,53 +100,65 @@ fn derive_struct(
         }
 
         #[automatically_derived]
-        impl <Root, #impl_generics_child> ::devolve_ui::core::data::obs_ref::ObsRefableChild<Root> for #ident #ty_generics #where_clause {
-            type ObsRefImpl = #obs_ref_child<Root #ty_generics2> #where_clause;
+        impl <#impl_generics_child Root, S: ::devolve_ui::core::data::obs_ref::st::SubCtx> ::devolve_ui::core::data::obs_ref::st::ObsRefableChild<Root, S> for #ident #ty_generics #where_clause {
+            type ObsRefImpl = #obs_ref_child<#ty_generics_and Root, S> #where_clause;
 
-            unsafe fn _as_obs_ref_child(this: *mut Self, path: String, root: ::std::rc::Weak<::devolve_ui::core::data::obs_ref::ObsRefRootBase<Root>>) -> Self::ObsRefImpl {
-                use ::devolve_ui::core::data::obs_ref::ObsRefableChild;
-                let mut base = ::devolve_ui::core::data::obs_ref::ObsRefChildBase::new(this, path, root.clone());
+            unsafe fn _as_obs_ref_child(
+                this: *mut Self,
+                ancestors_pending: &[::std::rc::Weak<::devolve_ui::core::data::obs_ref::st::ObsRefPending<S>>],
+                parent_pending: &::std::rc::Rc<::devolve_ui::core::data::obs_ref::st::ObsRefPending<S>>,
+                path: String,
+                root: ::std::rc::Rc<::devolve_ui::core::data::obs_ref::st::ObsRefRootBase<Root, S>>
+            ) -> Self::ObsRefImpl {
+                use ::devolve_ui::core::data::obs_ref::st::ObsRefableChild;
+                let mut base = ::devolve_ui::core::data::obs_ref::st::ObsRefChildBase::new(this, ancestors_pending, parent_pending, path, root.clone());
                 #obs_ref_child {
-                    #( #field_ids: base.child_value().#field_ids.as_obs_ref_child(base.path(), stringify!(#field_ids), root.clone()), )*
+                    #( #field_ids: base.child_value().#field_ids.as_obs_ref_child(
+                        base.parents_pending(),
+                        base.pending(),
+                        base.path(),
+                        stringify!(#field_ids),
+                        root.clone()
+                    ), )*
                     #obs_ref_base_field: base
                 }
             }
         }
 
         #[automatically_derived]
-        impl <#impl_generics_root> ::devolve_ui::core::data::obs_ref::ObsRef<#ident #ty_generics, #ident #ty_generics> for #obs_ref_root #ty_generics #where_clause {
-            fn i(&self) -> &#ident #ty_generics {
-                self.#obs_ref_base_field.i()
+        impl <#impl_generics_root S: ::devolve_ui::core::data::obs_ref::st::SubCtx> ::devolve_ui::core::data::obs_ref::st::ObsRef<#ident #ty_generics, #ident #ty_generics, S> for #obs_ref_root<#ty_generics_and S> #where_clause {
+            fn i(&self, s: S::Input<'_>) -> &#ident #ty_generics {
+                self.#obs_ref_base_field.i(s)
             }
 
-            fn m(&mut self) -> ::devolve_ui::core::data::obs_ref::ObsDeref<#ident #ty_generics, #ident #ty_generics> {
-                self.#obs_ref_base_field.m()
+            fn m(&mut self, s: S::Input<'_>) -> ::devolve_ui::core::data::obs_ref::st::ObsDeref<#ident #ty_generics, #ident #ty_generics, S> {
+                self.#obs_ref_base_field.m(s)
             }
 
-            fn after_mutate(&self, observer: ::devolve_ui::core::data::obs_ref::Observer<#ident #ty_generics>) {
+            fn after_mutate(&self, observer: ::devolve_ui::core::data::obs_ref::st::Observer<#ident #ty_generics, S>) {
                 self.#obs_ref_base_field.after_mutate(observer)
             }
 
-            fn base(&self) -> ::std::rc::Weak<::devolve_ui::core::data::obs_ref::ObsRefRootBase<#ident #ty_generics>> {
+            fn base(&self) -> &::std::rc::Rc<::devolve_ui::core::data::obs_ref::st::ObsRefRootBase<#ident #ty_generics, S>> {
                 self.#obs_ref_base_field.base()
             }
         }
 
         #[automatically_derived]
-        impl <Root, #impl_generics_child> ::devolve_ui::core::data::obs_ref::ObsRef<Root, #ident #ty_generics> for #obs_ref_child<Root, #ty_generics2> #where_clause {
-            fn i(&self) -> &#ident #ty_generics {
-                self.#obs_ref_base_field.i()
+        impl <#impl_generics_child Root, S: ::devolve_ui::core::data::obs_ref::st::SubCtx> ::devolve_ui::core::data::obs_ref::st::ObsRef<Root, #ident #ty_generics, S> for #obs_ref_child<#ty_generics_and Root, S> #where_clause {
+            fn i(&self, s: S::Input<'_>) -> &#ident #ty_generics {
+                self.#obs_ref_base_field.i(s)
             }
 
-            fn m(&mut self) -> ::devolve_ui::core::data::obs_ref::ObsDeref<Root, #ident #ty_generics> {
-                self.#obs_ref_base_field.m()
+            fn m(&mut self, s: S::Input<'_>) -> ::devolve_ui::core::data::obs_ref::st::ObsDeref<Root, #ident #ty_generics, S> {
+                self.#obs_ref_base_field.m(s)
             }
 
-            fn after_mutate(&self, observer: ::devolve_ui::core::data::obs_ref::Observer<Root>) {
+            fn after_mutate(&self, observer: ::devolve_ui::core::data::obs_ref::st::Observer<Root, S>) {
                 self.#obs_ref_base_field.after_mutate(observer)
             }
 
-            fn base(&self) -> ::std::rc::Weak<::devolve_ui::core::data::obs_ref::ObsRefRootBase<Root>> {
+            fn base(&self) -> &::std::rc::Rc<::devolve_ui::core::data::obs_ref::st::ObsRefRootBase<Root, S>> {
                 self.#obs_ref_base_field.base()
             }
         }
@@ -159,9 +177,9 @@ fn generics_bounds(generics: &syn::Generics, root_ident: &TokenStream) -> TokenS
                 let ident = &ty.ident;
                 let bounds = &ty.bounds;
                 if bounds.is_empty() {
-                    quote_spanned!(ty.span()=> #ident : ::devolve_ui::core::obs_ref::ObsRefableChild<#root_ident>)
+                    quote_spanned!(ty.span()=> #ident : ::devolve_ui::core::obs_ref::ObsRefableChild<#root_ident, S>)
                 } else {
-                    quote_spanned!(ty.span()=> #ident : #bounds + ::devolve_ui::core::obs_ref::ObsRefableChild<#root_ident>)
+                    quote_spanned!(ty.span()=> #ident : #bounds + ::devolve_ui::core::obs_ref::ObsRefableChild<#root_ident, S>)
                 }
             }
             syn::GenericParam::Lifetime(lf) => quote!(#lf),
@@ -172,8 +190,8 @@ fn generics_bounds(generics: &syn::Generics, root_ident: &TokenStream) -> TokenS
     quote!( #( #res, )* )
 }
 
-fn ty_generics2(generics: &syn::Generics) -> TokenStream {
+fn ty_generics_and(generics: &syn::Generics) -> TokenStream {
     let params = generics.params.iter();
 
-    quote!( #( ,#params )* )
+    quote!( #( #params, )* )
 }

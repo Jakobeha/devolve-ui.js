@@ -10,8 +10,6 @@ use devolve_ui::core::component::node::VNode;
 use devolve_ui::core::view::layout::macros::{mt, smt};
 use devolve_ui::view_data::tui::constr::*;
 use devolve_ui::view_data::attrs::BorderStyle;
-#[cfg(feature = "tui-images")]
-use devolve_ui::view_data::tui::terminal_image::TuiImageFormat;
 use devolve_ui::view_data::tui::tui::HasTuiViewData;
 use devolve_ui_forms::{FocusProvider, focus_provider, text_field};
 use test_log::test;

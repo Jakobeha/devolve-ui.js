@@ -7,6 +7,9 @@ repository = "https://github.com/jakobeha/devolve-ui-forms.rs"
 license = "Apache-2.0"
 edition = "2021"
 
+[features]
+tui-images = ["devolve-ui/tui-images"]
+
 [dependencies]
 devolve-ui = { path = "../devolve-ui", default-features = false, features = ["tui", "time-blocking", "input", "logging"] }
 

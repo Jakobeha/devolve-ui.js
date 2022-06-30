@@ -157,6 +157,10 @@ impl <T, S: SubCtx> ObsRefRootBase<T, S> {
         }
     }
 
+    pub fn pending(&self) -> &Rc<ObsRefPending<S>> {
+        &self.pending
+    }
+
     fn push_pending(&self, s: S::Input<'_>) {
         let subscription = S::convert_into_subscription_key(s);
         self.pending.direct.borrow_mut().push(subscription);
@@ -192,6 +196,14 @@ impl <Root, T, S: SubCtx> ObsRefChildBase<Root, T, S> {
 
     pub fn path(&self) -> &str {
         self.path.as_str()
+    }
+
+    pub fn parents_pending(&self) -> &[Weak<ObsRefPending<S>>] {
+        &self.parents_pending
+    }
+
+    pub fn pending(&self) -> &Rc<ObsRefPending<S>> {
+        &self.pending
     }
 
     fn push_pending(&self, s: S::Input<'_>) {
@@ -305,6 +317,15 @@ impl <'a, Root, T, S: SubCtx> Drop for ObsDeref<'a, Root, T, S> {
         if let Some(root) = self.root {
             root.send_update(self.parents_pending, self.path);
         }
+    }
+}
+
+impl SubCtx for () {
+    type Input<'a> = ();
+    type Key = ();
+
+    fn convert_into_subscription_key((): Self::Input<'_>) -> Self::Key {
+        ()
     }
 }
 // endregion

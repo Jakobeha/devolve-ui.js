@@ -9,6 +9,7 @@ use std::io::Read;
 use std::path::PathBuf;
 use png;
 use semver::Version;
+use derive_more::{Display, Error, From};
 
 // region tui image format
 /// How the image is rendered to the terminal.
@@ -117,9 +118,11 @@ impl Default for HandleAspectRatio {
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub struct InferredFileExtension(pub Option<String>);
 
-#[derive(Debug)]
+#[derive(Debug, Display, Error, From)]
 pub enum FailedToGetSize {
-    UnsupportedFileExtension(InferredFileExtension),
+    #[from(ignore)]
+    #[display(fmt = "{}", "_0.0.as_ref().map_or(std::borrow::Cow::from(\"unsupported file extension\"), |e| std::borrow::Cow::from(format!(\"unsupported extension: {}\", e)))")]
+    UnsupportedFileExtension(#[error(not(source))] InferredFileExtension),
     IoError(io::Error),
     PngDecodingError(png::DecodingError),
 }
@@ -128,7 +131,7 @@ impl Source {
     pub fn try_get_size(&self) -> Result<(u16, u16), FailedToGetSize> {
         Ok(match self {
             Source::Path(path) => {
-                let format = self.try_get_format()?;
+                let format = self.try_get_format().map_err(FailedToGetSize::UnsupportedFileExtension)?;
                 match format {
                     SourceFormat::RawRgba32Image { size } => size,
                     SourceFormat::Png => {
@@ -206,23 +209,5 @@ impl Display for SourceFormat {
             SourceFormat::RawRgba32Image { size: _ } => write!(f, "RGBA32"),
             SourceFormat::Png => write!(f, "PNG")
         }
-    }
-}
-
-impl From<InferredFileExtension> for FailedToGetSize {
-    fn from(err: InferredFileExtension) -> Self {
-        Self::UnsupportedFileExtension(err)
-    }
-}
-
-impl From<io::Error> for FailedToGetSize {
-    fn from(err: io::Error) -> Self {
-        Self::IoError(err)
-    }
-}
-
-impl From<png::DecodingError> for FailedToGetSize {
-    fn from(err: png::DecodingError) -> Self {
-        Self::PngDecodingError(err)
     }
 }

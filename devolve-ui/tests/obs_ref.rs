@@ -1,4 +1,4 @@
-use devolve_ui::core::data::obs_ref::{ObsRef, ObsRefableRoot};
+use devolve_ui::core::data::obs_ref::st::{ObsRef, ObsRefableRoot};
 use devolve_ui_derive::ObsRefable;
 use test_log::test;
 
@@ -18,16 +18,16 @@ fn test_obs_ref() {
         indices: vec![1, 2, 3],
         id_which_should_be_readonly: 0
     };
-    let mut obs_ref = state.into_obs_ref();
+    let mut obs_ref: ObsRefRootForState<()> = state.into_obs_ref();
 
-    assert_eq!(*obs_ref.number.i(), 1.0f64);
-    *obs_ref.number.m() = 2.0;
-    assert_eq!(*obs_ref.number.i(), 2.0f64);
+    assert_eq!(*obs_ref.number.i(()), 1.0f64);
+    *obs_ref.number.m(()) = 2.0;
+    assert_eq!(*obs_ref.number.i(()), 2.0f64);
 
-    assert_eq!(*obs_ref.indices[1].i(), 2);
-    *obs_ref.indices[1].m() += 5;
-    assert_eq!(*obs_ref.indices[1].i(), 7);
-    obs_ref.indices.m().remove(1);
-    assert_eq!(obs_ref.indices.i().len(), 2);
-    assert_eq!(*obs_ref.indices[1].i(), 3);
+    assert_eq!(*obs_ref.indices[1].i(()), 2);
+    *obs_ref.indices[1].m(()) += 5;
+    assert_eq!(*obs_ref.indices[1].i(()), 7);
+    obs_ref.indices.m(()).remove(1);
+    assert_eq!(obs_ref.indices.i(()).len(), 2);
+    assert_eq!(*obs_ref.indices[1].i(()), 3);
 }

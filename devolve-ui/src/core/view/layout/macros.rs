@@ -48,7 +48,7 @@ pub macro _mt {
                 $lit as f32,
                 $crate::core::view::layout::measurement::MeasurementDebugSymbol::Literal
             ),
-            unit: $crate::core::view::layout::measurement::MeasurementUnit::OfLoad(stringify!($id)),
+            unit: $crate::core::view::layout::measurement::MeasurementUnit::OfLoad($crate::core::misc::ident::Ident::try_from(stringify!($id)).expect("load ident is too large")),
         }).expect("measurement macro is too large");
         _mt!($mt $($rest)*)
     }},
@@ -68,7 +68,7 @@ pub macro _mt {
                 1f32 / ($lit as f32),
                 $crate::core::view::layout::measurement::MeasurementDebugSymbol::Literal
             ),
-            unit: $crate::core::view::layout::measurement::MeasurementUnit::OfLoad(stringify!($id)),
+            unit: $crate::core::view::layout::measurement::MeasurementUnit::OfLoad($crate::core::misc::ident::Ident::try_from(stringify!($id)).expect("load ident is too large")),
         }).expect("measurement macro is too large");
         _mt!($mt $($rest)*)
     }},
@@ -118,7 +118,7 @@ pub macro _mt {
                 $exp as f32,
                 $crate::core::view::layout::measurement::MeasurementDebugSymbol::Expr(stringify!($exp))
             ),
-            unit: $crate::core::view::layout::measurement::MeasurementUnit::OfLoad(stringify!($id)),
+            unit: $crate::core::view::layout::measurement::MeasurementUnit::OfLoad($crate::core::misc::ident::Ident::try_from(stringify!($id)).expect("load ident is too large")),
         }).expect("measurement macro is too large");
         _mt!($mt $($rest)*)
     }},
@@ -138,7 +138,7 @@ pub macro _mt {
                 1f32 / ($exp as f32),
                 $crate::core::view::layout::measurement::MeasurementDebugSymbol::Expr(stringify!(/ $exp))
             ),
-            unit: $crate::core::view::layout::measurement::MeasurementUnit::OfLoad(stringify!($id)),
+            unit: $crate::core::view::layout::measurement::MeasurementUnit::OfLoad($crate::core::misc::ident::Ident::try_from(stringify!($id)).expect("load ident is too large")),
         }).expect("measurement macro is too large");
         _mt!($mt $($rest)*)
     }},
@@ -158,7 +158,7 @@ pub macro _mt {
                 1f32,
                 $crate::core::view::layout::measurement::MeasurementDebugSymbol::Literal
             ),
-            unit: $crate::core::view::layout::measurement::MeasurementUnit::OfLoad(stringify!($id)),
+            unit: $crate::core::view::layout::measurement::MeasurementUnit::OfLoad($crate::core::misc::ident::Ident::try_from(stringify!($id)).expect("load ident is too large")),
         }).expect("measurement macro is too large");
         _mt!($mt $($rest)*)
     }}
@@ -168,7 +168,7 @@ pub macro mt {
     ($store:ident = $($rest:tt)*) => {
         {
             let mut mt = $crate::core::view::layout::measurement::Measurement::ZERO;
-            mt.store = Some(stringify!($store));
+            mt.store = Some($crate::core::misc::ident::Ident::try_from(stringify!($store)).expect("store ident is too large"));
             _mt!(mt + $($rest)*)
         }
     },
@@ -220,7 +220,7 @@ mod test {
 
     #[test]
     fn test_size_measurements() {
-        assert_eq!(smt!(foo = -4 u + 12 px - -12 u + -4 * prev - -8 * prev).unwrap().to_string(), "(foo = -4 + 12px + 12 - 4*prev + 8*prev)");
-        assert!(smt!(auto).is_none());
+        assert_eq!(smt!(foo = -4 u + 12 px - -12 u + -4 * prev - -8 * prev).to_string(), "(foo = -4 + 12px + 12 - 4*prev + 8*prev)");
+        assert_eq!(smt!(auto).to_string(), "auto");
     }
 }
