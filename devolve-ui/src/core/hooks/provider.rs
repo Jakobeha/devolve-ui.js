@@ -1,4 +1,5 @@
-//! Component state which is implicitly passed to and can be accessed from children.
+//! Component state which can be passed to and accessed from children.
+//! By default it's also implicitly passed, however you can make this explicit with `use_provide_explicit`
 //!
 //! See `devolve_ui::core::hooks::state` type for more information about state.
 //! This is similar except its created via `use_provide` and accessible in children `use_consume`.
@@ -15,45 +16,48 @@ use crate::core::view::view::VViewData;
 #[cfg(feature = "serde")]
 use serde::{Serialize, Deserialize};
 
+/// Provider id is a reference to this region in memory.
 #[derive(Debug)]
-pub struct ContextIdSource<T: Any>(PhantomData<T>, PhantomPinned);
+pub struct ProviderIdSource<T: Any>(PhantomData<T>, PhantomPinned);
 
-impl <T: Any> ContextIdSource<T> {
+impl <T: Any> ProviderIdSource<T> {
     pub const fn new() -> Self {
-        ContextIdSource(PhantomData, PhantomPinned)
+        ProviderIdSource(PhantomData, PhantomPinned)
     }
 }
 
-pub type ContextId<T> = *const ContextIdSource<T>;
+/// Provider id with provided state type. Identifies which state to access in `use_consume`
+pub type ProviderId<T> = *const ProviderIdSource<T>;
 
+/// Untyped provider id. Identifies which state to access in `use_consume`
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-pub struct AnonContextId(usize);
+pub struct UntypedProviderId(usize);
 
-impl <T: Any> From<*const ContextIdSource<T>> for AnonContextId {
-    fn from(id: *const ContextIdSource<T>) -> Self {
-        AnonContextId(id as usize)
+impl <T: Any> From<*const ProviderIdSource<T>> for UntypedProviderId {
+    fn from(id: *const ProviderIdSource<T>) -> Self {
+        UntypedProviderId(id as usize)
     }
 }
 
 #[derive(Debug)]
-pub struct ContextState<T: Any, ViewData: VViewData> {
-    id: ContextId<T>,
+pub struct ProvidedState<T: Any, ViewData: VViewData> {
+    id: ProviderId<T>,
     phantom: PhantomData<ViewData>
 }
 
 pub(super) fn _use_provide<'a, 'a0: 'a, T: Any, ViewData: VViewData + 'a, Ctx: VComponentContext<'a, 'a0, ViewData=ViewData>>(
     c: &mut Ctx,
-    id: ContextId<T>,
+    id: ProviderId<T>,
     get_initial: impl FnOnce(&mut Ctx) -> Box<T>
-) -> ContextState<T, ViewData> {
+) -> ProvidedState<T, ViewData> {
     let local_contexts = c.local_contexts();
     if !local_contexts.contains_key(&id.into()) {
         let initial_state = get_initial(c);
         let conflict = c.local_contexts().insert(id.into(), initial_state);
         assert!(conflict.is_none(), "use_provide inside another use_provide.get_initial with the same id, what are you doing?")
     }
-    ContextState {
+    ProvidedState {
         id,
         phantom: PhantomData
     }
@@ -61,17 +65,17 @@ pub(super) fn _use_provide<'a, 'a0: 'a, T: Any, ViewData: VViewData + 'a, Ctx: V
 
 pub(super) fn _use_consume<'a, 'a0: 'a, T: Any, ViewData: VViewData + 'a>(
     c: &mut impl VComponentContext<'a, 'a0, ViewData=ViewData>,
-    id: ContextId<T>
-) -> ContextState<T, ViewData> {
+    id: ProviderId<T>
+) -> ProvidedState<T, ViewData> {
     let existing = c.get_mut_context(&id.into());
     assert!(existing.is_some(), "context with id ({:?}) not found in parent", id);
-    ContextState {
+    ProvidedState {
         id,
         phantom: PhantomData
     }
 }
 
-impl <T: Any, ViewData: VViewData> VContextIndex<ViewData> for ContextState<T, ViewData> {
+impl <T: Any, ViewData: VViewData> VContextIndex<ViewData> for ProvidedState<T, ViewData> {
     type T = T;
 
     fn get<'a: 'b, 'b>(&self, c: &'b impl VContext<'a, ViewData=ViewData>) -> &'b T where ViewData: 'b {
@@ -100,7 +104,7 @@ impl <T: Any, ViewData: VViewData> VContextIndex<ViewData> for ContextState<T, V
     }
 }
 
-impl <T: Any, ViewData: VViewData> Clone for ContextState<T, ViewData> {
+impl <T: Any, ViewData: VViewData> Clone for ProvidedState<T, ViewData> {
     fn clone(&self) -> Self {
         Self {
             id: self.id,
@@ -109,4 +113,4 @@ impl <T: Any, ViewData: VViewData> Clone for ContextState<T, ViewData> {
     }
 }
 
-impl <T: Any, ViewData: VViewData> Copy for ContextState<T, ViewData> {}
+impl <T: Any, ViewData: VViewData> Copy for ProvidedState<T, ViewData> {}

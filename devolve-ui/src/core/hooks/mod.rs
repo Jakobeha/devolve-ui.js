@@ -7,7 +7,7 @@ use crate::core::component::context::{VComponentContext1, VDestructorContext2, V
 #[cfg(feature = "obs-ref")]
 use crate::core::data::obs_ref::st::ObsRefableRoot;
 use crate::core::hooks::atomic_ref_state::{_use_atomic_ref_state, AtomicRefState};
-use crate::core::hooks::context::{_use_consume, _use_provide, ContextId, ContextState};
+use crate::core::hooks::provider::{_use_consume, _use_provide, ProviderId, ProvidedState};
 use crate::core::hooks::effect::{_use_effect, _use_effect_on_create, _use_effect_with_deps, CollectionOfPartialEqs, NoDependencies, UseEffectRerun};
 #[cfg(feature = "time")]
 use crate::core::hooks::event::{_use_delay, _use_interval, _use_tick_listener, _use_tick_listener_when};
@@ -23,8 +23,8 @@ use crate::core::view::view::VViewData;
 
 /// State not mutable by children
 pub mod state;
-/// State mutable by children. Can be explicitly or implicitly passed to children
-pub mod context;
+/// State mutable by children. Can be implicitly or explicitly passed to children
+pub mod provider;
 /// State mutable by children and other threads.
 pub mod atomic_ref_state;
 /// State mutable by children and other threads. Does precise updates
@@ -39,8 +39,8 @@ mod state_internal;
 
 pub trait BuiltinHooks <'a, 'a0: 'a, Props: Any, ViewData: VViewData + 'static> {
     fn use_state<T: Any>(&mut self, get_initial: impl FnOnce(&mut Self) -> T) -> State<T, ViewData>;
-    fn use_provide<T: Any>(&mut self, id: ContextId<T>, get_initial: impl FnOnce(&mut Self) -> Box<T>) -> ContextState<T, ViewData>;
-    fn use_consume<T: Any>(&mut self,id: ContextId<T>) -> ContextState<T, ViewData>;
+    fn use_provide<T: Any>(&mut self, id: ProviderId<T>, get_initial: impl FnOnce(&mut Self) -> Box<T>) -> ProvidedState<T, ViewData>;
+    fn use_consume<T: Any>(&mut self, id: ProviderId<T>) -> ProvidedState<T, ViewData>;
     fn use_atomic_ref_state<T: Any>(&mut self, get_initial: impl FnOnce(&mut Self) -> T) -> AtomicRefState<T, ViewData>;
     #[cfg(feature = "obs-ref")]
     fn use_tree_ref_state<T: ObsRefableRoot<VContextSubCtx<ViewData>> + 'static>(&mut self, get_initial: impl FnOnce(&mut Self) -> T) -> TreeRefState<T, ViewData> where ViewData: 'static;
@@ -103,11 +103,11 @@ impl <'a, 'a0: 'a, Props: Any, ViewData: VViewData + 'static> BuiltinHooks<'a, '
         _use_state(self, get_initial)
     }
 
-    fn use_provide<T: Any>(&mut self, id: ContextId<T>, get_initial: impl FnOnce(&mut Self) -> Box<T>) -> ContextState<T, ViewData> {
+    fn use_provide<T: Any>(&mut self, id: ProviderId<T>, get_initial: impl FnOnce(&mut Self) -> Box<T>) -> ProvidedState<T, ViewData> {
         _use_provide(self, id, get_initial)
     }
 
-    fn use_consume<T: Any>(&mut self, id: ContextId<T>) -> ContextState<T, ViewData> {
+    fn use_consume<T: Any>(&mut self, id: ProviderId<T>) -> ProvidedState<T, ViewData> {
         _use_consume(self, id)
     }
 

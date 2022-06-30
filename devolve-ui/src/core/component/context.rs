@@ -18,7 +18,7 @@ use std::marker::PhantomData;
 use std::ops::{Index, IndexMut};
 use crate::core::component::component::{ContextPendingUpdates, VComponentContexts, VComponentDestructors, VComponentEffects, VComponentHead, VComponentLocalContexts};
 use crate::core::component::path::{VComponentRef, VComponentRefResolved};
-use crate::core::hooks::context::AnonContextId;
+use crate::core::hooks::provider::UntypedProviderId;
 use crate::core::view::view::VViewData;
 
 #[derive(Debug)]
@@ -73,8 +73,8 @@ pub trait VContext<'a> {
 
     fn component_imm<'b>(&'b self) -> &'b VComponentHead<Self::ViewData> where 'a: 'b;
     fn component<'b>(&'b mut self) -> &'b mut VComponentHead<Self::ViewData> where 'a: 'b;
-    fn get_context<'b>(&'b self, id: &AnonContextId) -> Option<&'b Box<dyn Any>> where 'a: 'b;
-    fn get_mut_context<'b>(&'b mut self, id: &AnonContextId) -> Option<(&'b mut Box<dyn Any>, &'b mut ContextPendingUpdates)> where 'a: 'b;
+    fn get_context<'b>(&'b self, id: &UntypedProviderId) -> Option<&'b Box<dyn Any>> where 'a: 'b;
+    fn get_mut_context<'b>(&'b mut self, id: &UntypedProviderId) -> Option<(&'b mut Box<dyn Any>, &'b mut ContextPendingUpdates)> where 'a: 'b;
 }
 
 pub trait VComponentContext<'a, 'a0> : VContext<'a> {
@@ -93,11 +93,11 @@ impl <'a, 'a0: 'a, Props: Any, ViewData: VViewData> VContext<'a> for VComponentC
         self.component
     }
 
-    fn get_context<'b>(&'b self, id: &AnonContextId) -> Option<&'b Box<dyn Any>> where 'a: 'b {
+    fn get_context<'b>(&'b self, id: &UntypedProviderId) -> Option<&'b Box<dyn Any>> where 'a: 'b {
         self.contexts.get(id).map(|(context, _path)| context)
     }
 
-    fn get_mut_context<'b>(&'b mut self, id: &AnonContextId) -> Option<(&'b mut Box<dyn Any>, &'b mut ContextPendingUpdates)> where 'a: 'b {
+    fn get_mut_context<'b>(&'b mut self, id: &UntypedProviderId) -> Option<(&'b mut Box<dyn Any>, &'b mut ContextPendingUpdates)> where 'a: 'b {
         self.contexts.get_mut(id)
     }
 }
@@ -123,11 +123,11 @@ impl <'a, 'a0: 'a, Props: Any, ViewData: VViewData> VContext<'a> for VEffectCont
         self.component
     }
 
-    fn get_context<'b>(&'b self, id: &AnonContextId) -> Option<&'b Box<dyn Any>> where 'a: 'b {
+    fn get_context<'b>(&'b self, id: &UntypedProviderId) -> Option<&'b Box<dyn Any>> where 'a: 'b {
         self.contexts.get(id).map(|(context, _path)| context)
     }
 
-    fn get_mut_context<'b>(&'b mut self, id: &AnonContextId) -> Option<(&'b mut Box<dyn Any>, &'b mut ContextPendingUpdates)> where 'a: 'b {
+    fn get_mut_context<'b>(&'b mut self, id: &UntypedProviderId) -> Option<(&'b mut Box<dyn Any>, &'b mut ContextPendingUpdates)> where 'a: 'b {
         self.contexts.get_mut(id)
     }
 }
@@ -205,11 +205,11 @@ impl <'a, 'a0: 'a, Props: Any, ViewData: VViewData> VContext<'a> for VDestructor
         self.component
     }
 
-    fn get_context<'b>(&'b self, id: &AnonContextId) -> Option<&'b Box<dyn Any>> where 'a: 'b {
+    fn get_context<'b>(&'b self, id: &UntypedProviderId) -> Option<&'b Box<dyn Any>> where 'a: 'b {
         self.contexts.get(id).map(|(context, _path)| context)
     }
 
-    fn get_mut_context<'b>(&'b mut self, id: &AnonContextId) -> Option<(&'b mut Box<dyn Any>, &'b mut ContextPendingUpdates)> where 'a: 'b {
+    fn get_mut_context<'b>(&'b mut self, id: &UntypedProviderId) -> Option<(&'b mut Box<dyn Any>, &'b mut ContextPendingUpdates)> where 'a: 'b {
         self.contexts.get_mut(id)
     }
 }
@@ -235,11 +235,11 @@ impl <'a, 'a0: 'a, Props: Any, ViewData: VViewData> VContext<'a> for VPlainConte
         self.component
     }
 
-    fn get_context<'b>(&'b self, id: &AnonContextId) -> Option<&'b Box<dyn Any>> where 'a: 'b {
+    fn get_context<'b>(&'b self, id: &UntypedProviderId) -> Option<&'b Box<dyn Any>> where 'a: 'b {
         self.contexts.get(id).map(|(context, _path)| context)
     }
 
-    fn get_mut_context<'b>(&'b mut self, id: &AnonContextId) -> Option<(&'b mut Box<dyn Any>, &'b mut ContextPendingUpdates)> where 'a: 'b {
+    fn get_mut_context<'b>(&'b mut self, id: &UntypedProviderId) -> Option<(&'b mut Box<dyn Any>, &'b mut ContextPendingUpdates)> where 'a: 'b {
         self.contexts.get_mut(id)
     }
 }

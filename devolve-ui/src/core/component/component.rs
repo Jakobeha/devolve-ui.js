@@ -33,7 +33,7 @@ use crate::core::component::context::{VComponentContext1, VComponentContext2, VD
 use crate::core::component::path::{VComponentKey, VComponentPath, VComponentRef, VComponentRefResolved};
 use crate::core::component::root::VComponentRoot;
 use crate::core::component::update_details::{UpdateBacktrace, UpdateDetails, UpdateStack};
-use crate::core::hooks::context::AnonContextId;
+use crate::core::hooks::provider::UntypedProviderId;
 #[cfg(feature = "logging")]
 use crate::core::logging::update_logger::UpdateLogger;
 use crate::core::misc::hash_map_ref_stack::HashMapWithAssocMutStack;
@@ -81,8 +81,8 @@ pub struct ContextPendingUpdates {
     pub path: VComponentPath
 }
 
-pub type VComponentLocalContexts = HashMap<AnonContextId, Box<dyn Any>>;
-pub type VComponentContexts<'a> = HashMapWithAssocMutStack<'a, AnonContextId, Box<dyn Any>, ContextPendingUpdates>;
+pub type VComponentLocalContexts = HashMap<UntypedProviderId, Box<dyn Any>>;
+pub type VComponentContexts<'a> = HashMapWithAssocMutStack<'a, UntypedProviderId, Box<dyn Any>, ContextPendingUpdates>;
 
 /// Part of the component with data whose size depends on `Props`, so it's a runtime-sized trait object.
 pub(super) trait VComponentConstruct: Debug {

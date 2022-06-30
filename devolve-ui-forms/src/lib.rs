@@ -8,7 +8,7 @@ use std::marker::PhantomData;
 use devolve_ui::core::component::constr::{_make_component_macro, make_component};
 use devolve_ui::core::component::context::{VComponentContext1, VComponentContext2, VContext, VContextIndex, VEffectContext2};
 use devolve_ui::core::component::node::VNode;
-use devolve_ui::core::hooks::context::{ContextIdSource, ContextState};
+use devolve_ui::core::hooks::provider::{ProviderIdSource, ProvidedState};
 use devolve_ui::core::hooks::BuiltinHooks;
 use devolve_ui::core::hooks::state::State;
 use devolve_ui::core::misc::shorthand::d;
@@ -41,7 +41,7 @@ pub struct FocusContext {
 }
 
 pub struct LocalFocus<ViewData: VViewData> {
-    focus_context: ContextState<FocusContext, ViewData>,
+    focus_context: ProvidedState<FocusContext, ViewData>,
     my_id: State<usize, ViewData>
 }
 
@@ -55,7 +55,7 @@ impl <ViewData: VViewData> LocalFocus<ViewData> {
     }
 }
 
-static FOCUS_PROVIDER_CONTEXT: ContextIdSource<FocusContext> = ContextIdSource::new();
+static FOCUS_PROVIDER_CONTEXT: ProviderIdSource<FocusContext> = ProviderIdSource::new();
 
 pub fn focus_provider<ViewData: VViewData + Clone + 'static>((mut c, FocusProvider {
     content,

@@ -4,7 +4,7 @@ use std::fmt::{Display, Formatter};
 #[cfg(feature = "logging")]
 use serde::{Serialize, Deserialize};
 use crate::core::component::path::VComponentKey;
-use crate::core::hooks::context::AnonContextId;
+use crate::core::hooks::provider::UntypedProviderId;
 
 #[derive(Debug, Clone)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
@@ -32,7 +32,7 @@ pub enum UpdateDetails {
         backtrace: UpdateBacktrace
     },
     SetContextState {
-        id: AnonContextId,
+        id: UntypedProviderId,
         backtrace: UpdateBacktrace
     },
     SetAtomicState {
