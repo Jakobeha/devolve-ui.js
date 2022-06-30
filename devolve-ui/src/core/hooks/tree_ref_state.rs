@@ -19,7 +19,7 @@
 use std::marker::PhantomData;
 use std::ops::{Deref, DerefMut};
 use std::sync::{Arc, LockResult, Mutex, MutexGuard, TryLockResult};
-use crate::core::component::context::{VComponentContext, VContext};
+use crate::core::component::context::{VComponentContext, VContext, VContextIndex};
 use crate::core::component::path::VComponentPath;
 use crate::core::component::update_details::UpdateDetails;
 use crate::core::data::obs_ref::st::{ObsRef, ObsRefableRoot, SubCtx};

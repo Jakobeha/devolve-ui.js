@@ -17,7 +17,7 @@ use std::marker::PhantomData;
 use std::ops::{Deref, DerefMut, Drop};
 use std::sync::{Arc, LockResult, Mutex, MutexGuard, TryLockResult};
 use crate::core::renderer::stale_data::NeedsUpdateFlag;
-use crate::core::component::context::VComponentContext;
+use crate::core::component::context::{VComponentContext, VContextIndex};
 use crate::core::component::update_details::{UpdateBacktrace, UpdateDetails};
 use crate::core::hooks::state_internal::InternalHooks;
 use crate::core::misc::map_lock_result::MappableLockResult;

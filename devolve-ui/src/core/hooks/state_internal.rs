@@ -4,7 +4,7 @@
 
 use std::any::Any;
 use std::marker::PhantomData;
-use crate::core::component::context::{VComponentContext, VContext};
+use crate::core::component::context::{VComponentContext, VContext, VContextIndex};
 use crate::core::view::view::VViewData;
 
 #[derive(Debug)]
@@ -48,22 +48,25 @@ fn _use_non_updating_state<'a, 'a0: 'a, T: Any, ViewData: VViewData + 'a, Ctx: V
     }
 }
 
-
 impl <T: Any, ViewData: VViewData> NonUpdatingState<T, ViewData> {
-    pub fn get<'a: 'b, 'b>(&self, c: &'b impl VContext<'a, ViewData=ViewData>) -> &'b T where ViewData: 'b {
+    pub fn _get_mut<'a>(&self, c_state: &'a mut Vec<Box<dyn Any>>) -> &'a mut T {
+        c_state
+            .get_mut(self.index).expect("unaligned hooks: state index out of bounds")
+            .downcast_mut::<T>().expect("unaligned hooks: state type mismatch")
+    }
+}
+
+impl <T: Any, ViewData: VViewData> VContextIndex<ViewData> for NonUpdatingState<T, ViewData> {
+    type T = T;
+
+    fn get<'a: 'b, 'b>(&self, c: &'b impl VContext<'a, ViewData=ViewData>) -> &'b T where ViewData: 'b {
         c.component_imm().h.state
             .get(self.index).expect("unaligned hooks: state index out of bounds")
             .downcast_ref::<T>().expect("unaligned hooks: state type mismatch")
     }
 
-    pub fn get_mut<'a: 'b, 'b>(&self, c: &'b mut impl VContext<'a, ViewData=ViewData>) -> &'b mut T where ViewData: 'b {
+    fn get_mut<'a: 'b, 'b>(&self, c: &'b mut impl VContext<'a, ViewData=ViewData>) -> &'b mut T where ViewData: 'b {
         self._get_mut(&mut c.component().h.state)
-    }
-
-    pub fn _get_mut<'a>(&self, c_state: &'a mut Vec<Box<dyn Any>>) -> &'a mut T {
-        c_state
-            .get_mut(self.index).expect("unaligned hooks: state index out of bounds")
-            .downcast_mut::<T>().expect("unaligned hooks: state type mismatch")
     }
 }
 

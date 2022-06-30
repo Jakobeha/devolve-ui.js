@@ -31,13 +31,13 @@ make_component!(pub readme, ReadmeProps {
 pub fn header<ViewData: HasTuiViewData + 'static>((mut c, HeaderProps { name }): VComponentContext2<HeaderProps, ViewData>) -> VNode<ViewData> {
     let counter = c.use_state(|_| 0);
     c.use_interval(Duration::from_secs(1), CallFirst::AfterTheInterval, move |(mut c, HeaderProps { .. })| {
-        *counter.get_mut(&mut c) += 1;
+        c[counter] += 1;
     });
 
     zbox!({ width: smt!(34 u), height: smt!(3 u) }, {}, vec![
         zbox!({ x: mt!(2 u), y: mt!(1 u), width: smt!(100% - 4 u) }, {}, vec![
             text!({}, { color: Some(Color::yellow()) }, format!("Hello {}", name)),
-            text!({ x: mt!(100%), anchor_x: 1f32 }, { color: Some(Color::yellow()) }, format!("{} seconds", counter.get(&mut c)))
+            text!({ x: mt!(100%), anchor_x: 1f32 }, { color: Some(Color::yellow()) }, format!("{} seconds", c[counter]))
         ]),
         border!({ width: smt!(100%), height: smt!(100%) }, { color: Some(Color::yellow()) }, BorderStyle::Rounded)
     ])

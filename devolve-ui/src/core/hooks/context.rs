@@ -9,7 +9,7 @@
 
 use std::any::{Any, TypeId};
 use std::marker::{PhantomData, PhantomPinned};
-use crate::core::component::context::{VComponentContext, VContext};
+use crate::core::component::context::{VComponentContext, VContext, VContextIndex};
 use crate::core::component::update_details::{UpdateBacktrace, UpdateDetails};
 use crate::core::view::view::VViewData;
 #[cfg(feature = "serde")]
@@ -71,8 +71,10 @@ pub(super) fn _use_consume<'a, 'a0: 'a, T: Any, ViewData: VViewData + 'a>(
     }
 }
 
-impl <T: Any, ViewData: VViewData> ContextState<T, ViewData> {
-    pub fn get<'a: 'b, 'b>(&self, c: &'b impl VContext<'a, ViewData=ViewData>) -> &'b T where ViewData: 'b {
+impl <T: Any, ViewData: VViewData> VContextIndex<ViewData> for ContextState<T, ViewData> {
+    type T = T;
+
+    fn get<'a: 'b, 'b>(&self, c: &'b impl VContext<'a, ViewData=ViewData>) -> &'b T where ViewData: 'b {
         let value_any = c
             .get_context(&self.id.into())
             .unwrap_or_else(|| panic!("context with id ({:?}) not found in parent", self.id));
@@ -80,7 +82,7 @@ impl <T: Any, ViewData: VViewData> ContextState<T, ViewData> {
         unsafe { value_any.downcast_ref_unchecked::<T>() }
     }
 
-    pub fn get_mut<'a: 'b, 'b>(&self, c: &'b mut impl VContext<'a, ViewData=ViewData>) -> &'b mut T where ViewData: 'b {
+    fn get_mut<'a: 'b, 'b>(&self, c: &'b mut impl VContext<'a, ViewData=ViewData>) -> &'b mut T where ViewData: 'b {
         let update_details = UpdateDetails::SetContextState {
             id: self.id.into(),
             backtrace: UpdateBacktrace::here()

@@ -14,7 +14,7 @@
 //! values between closures, but they will be stale.
 
 use std::any::Any;
-use crate::core::component::context::{VComponentContext, VContext};
+use crate::core::component::context::{VComponentContext, VContext, VContextIndex};
 use crate::core::component::update_details::{UpdateBacktrace, UpdateDetails};
 use crate::core::view::view::VViewData;
 use crate::core::hooks::state_internal::{NonUpdatingState, InternalHooks};
@@ -29,12 +29,14 @@ pub(super) fn _use_state<'a, 'a0: 'a, T: Any, ViewData: VViewData + 'a, Ctx: VCo
     State(c.use_non_updating_state(get_initial))
 }
 
-impl <T: Any, ViewData: VViewData> State<T, ViewData> {
-    pub fn get<'a: 'b, 'b>(&self, c: &'b impl VContext<'a, ViewData=ViewData>) -> &'b T where ViewData: 'b {
+impl <T: Any, ViewData: VViewData> VContextIndex<ViewData> for State<T, ViewData> {
+    type T = T;
+
+    fn get<'a: 'b, 'b>(&self, c: &'b impl VContext<'a, ViewData=ViewData>) -> &'b T where ViewData: 'b {
         self.0.get(c)
     }
 
-    pub fn get_mut<'a: 'b, 'b>(&self, c: &'b mut impl VContext<'a, ViewData=ViewData>) -> &'b mut T where ViewData: 'b {
+    fn get_mut<'a: 'b, 'b>(&self, c: &'b mut impl VContext<'a, ViewData=ViewData>) -> &'b mut T where ViewData: 'b {
         let details = UpdateDetails::SetState {
             index: self.0.index,
             backtrace: UpdateBacktrace::here()

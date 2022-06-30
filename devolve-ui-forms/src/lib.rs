@@ -6,7 +6,7 @@ use std::collections::BTreeSet;
 use std::marker::PhantomData;
 #[allow(unused_imports)]
 use devolve_ui::core::component::constr::{_make_component_macro, make_component};
-use devolve_ui::core::component::context::{VComponentContext1, VComponentContext2, VContext, VEffectContext1, VEffectContext2};
+use devolve_ui::core::component::context::{VComponentContext1, VComponentContext2, VContext, VContextIndex, VEffectContext2};
 use devolve_ui::core::component::node::VNode;
 use devolve_ui::core::hooks::context::{ContextIdSource, ContextState};
 use devolve_ui::core::hooks::BuiltinHooks;

@@ -271,7 +271,7 @@ pub(super) fn _use_delay<'a, 'a0: 'a, Props: Any, ViewData: VViewData + 'static>
     let listener = RefCell::new(Some(listener));
     let called = c.use_non_updating_state(|_| false);
     let start_time = Instant::now();
-    let predicate = !*called.get(c);
+    let predicate = !c[called];
     _use_tick_listener_when(c, !predicate, move |c, _delta_time| {
         let elapsed = start_time.elapsed();
         if elapsed >= delay {

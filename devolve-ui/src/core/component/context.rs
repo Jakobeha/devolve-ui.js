@@ -15,6 +15,7 @@
 use std::any::Any;
 use std::iter::once;
 use std::marker::PhantomData;
+use std::ops::{Index, IndexMut};
 use crate::core::component::component::{ContextPendingUpdates, VComponentContexts, VComponentDestructors, VComponentEffects, VComponentHead, VComponentLocalContexts};
 use crate::core::component::path::{VComponentRef, VComponentRefResolved};
 use crate::core::hooks::context::AnonContextId;
@@ -274,3 +275,68 @@ pub fn with_plain_context<'a, 'a0: 'a, Props: Any, ViewData: VViewData, R>(
         phantom: PhantomData
     }, props))
 }
+
+// region index states
+pub trait VContextIndex<ViewData: VViewData> {
+    type T: Any;
+
+    fn get<'a: 'b, 'b>(&self, c: &'b impl VContext<'a, ViewData=ViewData>) -> &'b Self::T where ViewData: 'b;
+    fn get_mut<'a: 'b, 'b>(&self, c: &'b mut impl VContext<'a, ViewData=ViewData>) -> &'b mut Self::T where ViewData: 'b;
+}
+
+impl <'a, 'a0: 'a, Props: Any, ViewData: VViewData, I: VContextIndex<ViewData>> Index<I> for VComponentContext1<'a, 'a0, Props, ViewData> {
+    type Output = I::T;
+
+    fn index(&self, index: I) -> &Self::Output {
+        index.get(self)
+    }
+}
+
+impl <'a, 'a0: 'a, Props: Any, ViewData: VViewData, I: VContextIndex<ViewData>> Index<I> for VEffectContext1<'a, 'a0, Props, ViewData> {
+    type Output = I::T;
+
+    fn index(&self, index: I) -> &Self::Output {
+        index.get(self)
+    }
+}
+
+impl <'a, 'a0: 'a, Props: Any, ViewData: VViewData, I: VContextIndex<ViewData>> Index<I> for VDestructorContext1<'a, 'a0, Props, ViewData> {
+    type Output = I::T;
+
+    fn index(&self, index: I) -> &Self::Output {
+        index.get(self)
+    }
+}
+
+impl <'a, 'a0: 'a, Props: Any, ViewData: VViewData, I: VContextIndex<ViewData>> Index<I> for VPlainContext1<'a, 'a0, Props, ViewData> {
+    type Output = I::T;
+
+    fn index(&self, index: I) -> &Self::Output {
+        index.get(self)
+    }
+}
+
+impl <'a, 'a0: 'a, Props: Any, ViewData: VViewData, I: VContextIndex<ViewData>> IndexMut<I> for VComponentContext1<'a, 'a0, Props, ViewData> {
+    fn index_mut(&mut self, index: I) -> &mut Self::Output {
+        index.get_mut(self)
+    }
+}
+
+impl <'a, 'a0: 'a, Props: Any, ViewData: VViewData, I: VContextIndex<ViewData>> IndexMut<I> for VEffectContext1<'a, 'a0, Props, ViewData> {
+    fn index_mut(&mut self, index: I) -> &mut Self::Output {
+        index.get_mut(self)
+    }
+}
+
+impl <'a, 'a0: 'a, Props: Any, ViewData: VViewData, I: VContextIndex<ViewData>> IndexMut<I> for VDestructorContext1<'a, 'a0, Props, ViewData> {
+    fn index_mut(&mut self, index: I) -> &mut Self::Output {
+        index.get_mut(self)
+    }
+}
+
+impl <'a, 'a0: 'a, Props: Any, ViewData: VViewData, I: VContextIndex<ViewData>> IndexMut<I> for VPlainContext1<'a, 'a0, Props, ViewData> {
+    fn index_mut(&mut self, index: I) -> &mut Self::Output {
+        index.get_mut(self)
+    }
+}
+// endregion
