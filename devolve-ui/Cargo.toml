@@ -9,6 +9,10 @@ keywords = ["ui", "tui", "terminal"]
 categories = ["command-line-interface", "gui"]
 edition = "2021"
 
+[lib]
+# lib for normal, cdylib for wasm
+crate-type = ["lib", "cdylib"]
+
 [features]
 # Include debug features by default
 default = ["obs-ref", "input", "time", "time-blocking", "debug"]
@@ -21,6 +25,7 @@ tui = ["color", "libc", "crossterm", "lazy_static", "unicode-width"]
 tui-images = ["tui", "semver", "tempfile", "sixel", "sixel-sys", "png", "base64", "devolve-ui-forms/tui-images"]
 color = ["palette"]
 debug = ["bitflags"]
+wasm = ["wasm-bindgen", "js-sys"]
 
 [package.metadata.docs.rs]
 cargo-args = ["-Zunstable-options", "-Zrustdoc-scrape-examples=examples"]
@@ -52,6 +57,8 @@ sixel-sys = { version = "0.3.1", optional = true }
 tempfile = { version = "3.3.0", optional = true }
 png = { version = "0.17.5", optional = true }
 base64 = { version = "0.13.0", optional = true }
+wasm-bindgen = { version = "0.2.81", optional = true }
+js-sys = { version = "0.3.58", optional = true }
 
 [dev-dependencies]
 devolve-ui-forms = { path = "../devolve-ui-forms" }

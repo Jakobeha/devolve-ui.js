@@ -21,6 +21,8 @@
 #![cfg_attr(feature = "backtrace", feature(backtrace))]
 
 pub mod core;
+#[cfg(feature = "wasm")]
+pub mod wasm;
 pub mod engines;
 pub mod view_data;
 
