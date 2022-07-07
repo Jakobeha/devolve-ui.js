@@ -1,6 +1,7 @@
 pub mod data;
 #[cfg(feature = "obs-ref")]
 pub mod obs_ref;
+pub mod rx;
 
 pub use devolve_ui_derive::Data;
 #[cfg(feature = "obs-ref")]
