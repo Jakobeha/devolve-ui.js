@@ -86,14 +86,22 @@ pub struct IRx<T> {
 pub type DMRx<'a, T> = MRx<&'a mut T>;
 pub type DIRx<'a, T> = IRx<&'a T>;
 
-struct RxObservers(RefCell<Vec<Weak<dyn RxContext>>>);
+struct RxObservers(RefCell<HashSet<WeakRxContext>>);
 
-pub trait AsRxContext {
-    fn as_rx_context(&self) -> Weak<dyn RxContext>;
+#[derive(Deref, DerefMut)]
+pub struct WeakRxContext(Weak<dyn RxContext>);
+
+impl Eq for WeakRxContext {
+    fn eq(lhs: &Self, rhs)
+    }
 }
 
-impl AsRxContext for Weak<dyn RxContext> {
-    fn as_rx_context(&self) -> Weak<dyn RxContext> {
+pub trait AsRxContext {
+    fn as_rx_context(&self) -> WeakRxContext;
+}
+
+impl AsRxContext for WeakRxContext {
+    fn as_rx_context(&self) -> WeakRxContext {
         self.clone()
     }
 }
@@ -130,7 +138,7 @@ pub trait RxContext2: RxContext {
     fn _replace(self: Rc<Self>, new_value: Self::T) -> Self::T;
 }
 
-pub struct RxContextImpl<T, F: Fn(&Weak<dyn RxContext>) -> T> {
+pub struct RxContextImpl<T, F: Fn(&WeakRxContext) -> T> {
     value: RefCell<T>,
     compute: F,
 }
@@ -145,7 +153,7 @@ impl<T> Rx<T> for IRx<T> {
 }
 
 impl<T> IRx<T> {
-    pub fn new(compute: impl Fn(&Weak<dyn RxContext>) -> T) -> Self {
+    pub fn new(compute: impl Fn(&WeakRxContext) -> T) -> Self {
         IRx {
             value: RxContextImpl::new(compute),
             observers: RefCell::new(Vec::new()),
@@ -216,7 +224,7 @@ impl<'a, T> Drop for MRxRef<'a, T> {
     }
 }
 
-impl<T, F: Fn(&Weak<dyn RxContext>) -> T> RxContext2 for RxContextImpl<T, F> {
+impl<T, F: Fn(&WeakRxContext) -> T> RxContext2 for RxContextImpl<T, F> {
     type T = T;
 
     fn _get(self: Rc<Self>) -> Ref<'_, Self::T> {
@@ -228,14 +236,14 @@ impl<T, F: Fn(&Weak<dyn RxContext>) -> T> RxContext2 for RxContextImpl<T, F> {
     }
 }
 
-impl<T, F: Fn(&Weak<dyn RxContext>) -> T> RxContext for RxContextImpl<T, F> {
+impl<T, F: Fn(&WeakRxContext) -> T> RxContext for RxContextImpl<T, F> {
     fn _recompute(self: Rc<Self>) {
         let computed = self.compute(&self);
         self.replace(computed);
     }
 }
 
-impl<T, F: Fn(&Weak<dyn RxContext>) -> T> RxContextImpl<T, F> {
+impl<T, F: Fn(&WeakRxContext) -> T> RxContextImpl<T, F> {
     pub fn new(compute: F) -> Rc<Self> {
         Rc::new_cyclic(|this| RxContextImpl {
             value: RefCell::new(compute(this)),
@@ -245,6 +253,6 @@ impl<T, F: Fn(&Weak<dyn RxContext>) -> T> RxContextImpl<T, F> {
 }
 
 /// Runs the function and re-runs every time one of its referenced dependencies changes.
-pub fn with_rx<R>(f: impl Fn(&Weak<dyn RxContext>) -> R) -> IRx<R> {
+pub fn with_rx<R>(f: impl Fn(&WeakRxContext) -> R) -> IRx<R> {
     IRx::new(f)
 }
