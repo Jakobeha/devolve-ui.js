@@ -4,7 +4,99 @@
 //! which can re-run whenever the dependency changes.
 
 use std::cell::RefCell;
+use std::ops::{Deref, DerefMut, Drop};
 use std::rc::{Rc, Weak};
+
+pub trait Rx<T> {
+    fn get(&self, c: &dyn AsRxContext) -> &T;
+
+    fn map<'a, U>(&'a self, f: impl Fn(&'a T) -> U) -> IRx<U>
+    where
+        Self: Sized,
+    {
+        IRx::new(|c| f(self.get(c)))
+    }
+
+    fn split_map2<'a, U1, U2>(&'a self, f: impl Fn(&'a T) -> (U1, U2)) -> (IRx<U1>, IRx<U2>)
+    where
+        Self: Sized,
+    {
+        (
+            IRx::new(|c| f(self.get(c)).0),
+            IRx::new(|c| f(self.get(c)).1),
+        )
+    }
+
+    fn split_map3<'a, U1, U2, U3>(
+        &'a self,
+        f: impl Fn(&'a T) -> (U1, U2, U3),
+    ) -> (IRx<U1>, IRx<U2>, IRx<U3>)
+    where
+        Self: Sized,
+    {
+        (
+            IRx::new(|c| f(self.get(c)).0),
+            IRx::new(|c| f(self.get(c)).1),
+            IRx::new(|c| f(self.get(c)).2),
+        )
+    }
+
+    fn split_map4<'a, U1, U2, U3, U4>(
+        &'a self,
+        f: impl Fn(&'a T) -> (U1, U2, U3, U4),
+    ) -> (IRx<U1>, IRx<U2>, IRx<U3>, IRx<U4>)
+    where
+        Self: Sized,
+    {
+        (
+            IRx::new(|c| f(self.get(c)).0),
+            IRx::new(|c| f(self.get(c)).1),
+            IRx::new(|c| f(self.get(c)).2),
+            IRx::new(|c| f(self.get(c)).3),
+        )
+    }
+
+    fn split_map5<'a, U1, U2, U3, U4, U5>(
+        &'a self,
+        f: impl Fn(&'a T) -> (U1, U2, U3, U4, U5),
+    ) -> (IRx<U1>, IRx<U2>, IRx<U3>, IRx<U4>, IRx<U5>)
+    where
+        Self: Sized,
+    {
+        (
+            IRx::new(|c| f(self.get(c)).0),
+            IRx::new(|c| f(self.get(c)).1),
+            IRx::new(|c| f(self.get(c)).2),
+            IRx::new(|c| f(self.get(c)).3),
+            IRx::new(|c| f(self.get(c)).4),
+        )
+    }
+}
+
+pub struct MRx<T> {
+    value: T,
+    observers: RxObservers,
+}
+
+pub struct IRx<T> {
+    value: Rc<dyn RxContext2<T = T>>,
+    observers: RxObservers,
+}
+
+pub type DMRx<'a, T> = MRx<&'a mut T>;
+pub type DIRx<'a, T> = IRx<&'a T>;
+
+struct RxObservers(RefCell<Vec<Weak<dyn RxContext>>>);
+
+pub trait AsRxContext {
+    fn as_rx_context(&self) -> Weak<dyn RxContext>;
+}
+
+impl AsRxContext for Weak<dyn RxContext> {
+    fn as_rx_context(&self) -> Weak<dyn RxContext> {
+        self.clone()
+    }
+}
 
 pub trait RxContext {
     fn _recompute(self: Rc<Self>);
@@ -17,62 +109,51 @@ impl dyn RxContext {
     }
 }
 
-impl <T> dyn RxContext2<T=T> {
+impl<T> dyn RxContext2<T = T> {
     pub fn recompute(self: &Rc<Self>) {
         self.clone()._recompute()
+    }
+
+    pub fn _get(self: Rc<Self>) -> &T {
+        self.clone().get()
+    }
+
+    pub fn _replace(self: Rc<Self>, new_value: T) -> T {
+        self.clone().replace(new_value)
     }
 }
 
 pub trait RxContext2: RxContext {
     type T;
 
-    fn replace(self: Rc<Self>, new_value: Self::T) -> Self::T;
+    fn _get(self: Rc<Self>) -> &Self::T;
+    fn _replace(self: Rc<Self>, new_value: Self::T) -> Self::T;
 }
 
 pub struct RxContextImpl<T, F: Fn(&Weak<dyn RxContext>) -> T> {
     value: RefCell<T>,
-    compute: F
+    compute: F,
 }
 
-union RxBody<T, const IS_MUTABLE: bool> {
-    immutable: Rc<dyn RxContext2<T=T>>,
-    mutable: T
-}
+pub struct MRxRef<'a, T>(&'a mut MRx<T>);
 
-pub struct Rx<T, const IS_MUTABLE: bool> {
-    value: RxBody<T, IS_MUTABLE>,
-    observers: RefCell<Vec<Weak<dyn RxContext>>>
-}
-
-pub trait AsRxContext {
-    fn as_rx_context(&self) -> Weak<dyn RxContext>;
-}
-
-pub type IRx<T> = Rx<T, false>;
-pub type MRx<T> = Rx<T, true>;
-
-impl <T, const IS_MUTABLE: bool> Rx<T, IS_MUTABLE> {
-    pub fn get(&self, c: &dyn AsRxContext) -> &T {
+impl<T> Rx<T> for IRx<T> {
+    fn get(&self, c: &dyn AsRxContext) -> &T {
         self.observers.borrow_mut().push(c.as_rx_context());
-        &self.value
+        &self.value.get()
     }
+}
 
-    pub fn map<U>(&self, f: impl Fn(&T) -> &U) -> IRx<U> {
-        with_rx(|c| f(self.get(c)))
+impl<T> IRx<T> {
+    pub fn new(compute: impl Fn(&Weak<dyn RxContext>) -> T) -> Self {
+        IRx {
+            value: RxContextImpl::new(compute),
+            observers: RefCell::new(Vec::new()),
+        }
     }
-
-    pub fn split_map2<U1, U2>(&self, f: impl Fn(&T) -> (&U1, &U2)) -> (IRx<U1>, IRx<U2>) {
-        let (a, b) = f(self.get(&self));
-    }
-
-    pub fn split_map3<U1, U2, U3>(&self, f: impl Fn(&T) -> (&U1, &U2, &U3)) -> (IRx<U1>, IRx<U2>, IRx<U3>) {}
-
-    pub fn split_map4<U1, U2, U3, U4>(&self, f: impl Fn(&T) -> (&U1, &U2, &U3, &U4)) -> (IRx<U1>, IRx<U2>, IRx<U3>, IRx<U4>) {}
 
     fn recompute(&self) {
-        if !IS_MUTABLE {
-            unsafe { self.value.immutable.recompute() }
-        }
+        self.value.recompute();
         for observer in self.observers.borrow().iter() {
             if let Some(observer) = observer.upgrade() {
                 observer.recompute();
@@ -81,65 +162,84 @@ impl <T, const IS_MUTABLE: bool> Rx<T, IS_MUTABLE> {
     }
 }
 
-impl <T> Rx<T, false> {
-    fn new(compute: impl Fn(&Weak<dyn RxContext>) -> T) -> Self {
-        Rx {
-            value: RxBody { immutable: RxContextImpl::new(compute) },
-            observers: RefCell::new(Vec::new())
-        }
-    }
-}
-
-impl <T> Rx<T, true> {
-    fn new(initial: T) -> Self {
-        Rx {
+impl<T> MRx<T> {
+    pub fn new(initial: T) -> Self {
+        MRx {
             value: initial,
-            observers: RefCell::new(Vec::new())
+            observers: RefCell::new(Vec::new()),
         }
     }
 
-    fn set(&mut self, new_value: T) {
-        unsafe { self.value.mutable = new_value };
+    pub fn get(&self) -> &T {
+        &self.value
+    }
+
+    pub fn get_mut(&mut self) -> MRxRef<'_, T> {
+        MRxRef(&mut self)
+    }
+
+    pub fn set(&mut self, new_value: T) {
+        self.value = new_value;
         self.recompute();
     }
 
-    pub fn map_mut<U>(&mut self, f: impl Fn(&mut T) -> &mut U) -> MRx<U> {
-
+    pub fn into_inner(self) -> T {
+        self.value
     }
 
-    pub fn split_map2_mut<U1, U2>(&mut self, f: impl Fn(&mut T) -> (&mut U1, &mut U2)) -> (MRx<U1>, MRx<U2>) {
-
-    }
-
-    pub fn split_map3_mut<U1, U2, U3>(&mut self, f: impl Fn(&mut T) -> (&mut U1, &mut U2, &mut U3)) -> (MRx<U1>, MRx<U2>, MRx<U3>) {
-
-    }
-
-    pub fn split_map4_mut<U1, U2, U3, U4>(&mut self, f: impl Fn(&mut T) -> (&mut U1, &mut U2, &mut U3, &mut U4)) -> (MRx<U1>, MRx<U2>, MRx<U3>, MRx<U4>) {
-
+    fn recompute(&self) {
+        for observer in self.observers.borrow().iter() {
+            if let Some(observer) = observer.upgrade() {
+                observer.recompute();
+            }
+        }
     }
 }
 
-impl <T, F: Fn(&Weak<dyn RxContext>) -> T> RxContext2 for RxContextImpl<T, F> {
+impl<'a, T> Deref for MRxRef<'a, T> {
+    type Target = T;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0.value
+    }
+}
+
+impl<'a, T> DerefMut for MRxRef<'a, T> {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.0.value
+    }
+}
+
+impl<'a, T> Drop for MRxRef<'a, T> {
+    fn drop(&mut self) {
+        self.0.recompute();
+    }
+}
+
+impl<T, F: Fn(&Weak<dyn RxContext>) -> T> RxContext2 for RxContextImpl<T, F> {
     type T = T;
 
-    fn replace(self: Rc<Self>, new_value: Self::T) -> Self::T {
+    fn _get(self: Rc<Self>) -> Ref<'_, Self::T> {
+        self.value.borrow()
+    }
+
+    fn _replace(self: Rc<Self>, new_value: Self::T) -> Self::T {
         self.value.replace(new_value)
     }
 }
 
-impl <T, F: Fn(&Weak<dyn RxContext>) -> T> RxContext for RxContextImpl<T, F> {
+impl<T, F: Fn(&Weak<dyn RxContext>) -> T> RxContext for RxContextImpl<T, F> {
     fn _recompute(self: Rc<Self>) {
         let computed = self.compute(&self);
         self.replace(computed);
     }
 }
 
-impl <T, F: Fn(&Weak<dyn RxContext>) -> T> RxContextImpl<T, F> {
+impl<T, F: Fn(&Weak<dyn RxContext>) -> T> RxContextImpl<T, F> {
     pub fn new(compute: F) -> Rc<Self> {
         Rc::new_cyclic(|this| RxContextImpl {
             value: RefCell::new(compute(this)),
-            compute
+            compute,
         })
     }
 }
