@@ -2,18 +2,18 @@ use std::cell::RefCell;
 use std::collections::HashSet;
 use crate::core::data::rx::context::{AsRxContext, RxContextRef};
 
-pub(super) struct RxObservers(RefCell<HashSet<RxContextRef>>);
+pub(super) struct RxObservers<'a>(RefCell<HashSet<RxContextRef<'a>>>);
 
-impl RxObservers {
+impl<'a> RxObservers<'a> {
     pub(super) fn new() -> Self {
         RxObservers(RefCell::new(HashSet::new()))
     }
 
-    pub(super) fn insert(&self, c: RxContextRef) {
+    pub(super) fn insert(&self, c: RxContextRef<'a>) {
         self.0.borrow_mut().insert(c);
     }
 
-    pub(super) fn contains(&self, c: &dyn AsRxContext) -> bool {
+    pub(super) fn contains(&self, c: &dyn AsRxContext<'a>) -> bool {
         self.0.borrow().contains(&c.as_rx_context())
     }
 

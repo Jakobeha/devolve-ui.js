@@ -1,57 +1,56 @@
 use std::hash::Hash;
 use std::rc::{Rc, Weak};
-use derive_more::{Deref, DerefMut, From};
 
-#[derive(Clone, From)]
-pub enum RxContextRef {
-    Weak(Weak<dyn RxContext>),
-    Strong(Rc<dyn RxContext>)
+#[derive(Clone)]
+pub enum RxContextRef<'a> {
+    Weak(Weak<dyn RxContext + 'a>),
+    Strong(Rc<dyn RxContext + 'a>),
 }
 
-impl RxContextRef {
-    pub fn owned(ctx: impl RxContext) -> Self {
+impl<'a> RxContextRef<'a> {
+    pub fn owned(ctx: impl RxContext + 'a) -> Self {
         Self::Strong(Rc::new(ctx))
     }
 
-    pub(super) fn upgrade(&self) -> Option<Rc<dyn RxContext>> {
+    pub(super) fn upgrade(&self) -> Option<Rc<dyn RxContext + 'a>> {
         match self {
             RxContextRef::Weak(ref w) => w.upgrade(),
-            RxContextRef::Strong(ref s) => s.clone(),
+            RxContextRef::Strong(ref s) => Some(s.clone()),
         }
     }
 
-    fn as_ptr(&self) -> *const dyn RxContext {
+    pub(super) fn as_ptr(&self) -> *const (dyn RxContext + 'a) {
         match self {
             RxContextRef::Weak(x) => x.as_ptr(),
-            RxContextRef::Strong(x) => x as *const dyn RxContext
+            RxContextRef::Strong(x) => Rc::as_ptr(x)
         }
     }
 }
 
-impl PartialEq<RxContextRef> for RxContextRef {
+impl<'a> PartialEq<RxContextRef<'a>> for RxContextRef<'a> {
     fn eq(&self, other: &RxContextRef) -> bool {
         self.as_ptr() == other.as_ptr()
     }
 }
 
-impl Eq for RxContextRef {}
+impl<'a> Eq for RxContextRef<'a> {}
 
-impl Hash for RxContextRef {
+impl<'a> Hash for RxContextRef<'a> {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
         self.as_ptr().hash(state);
     }
 }
 
-pub trait AsRxContext {
-    fn as_rx_context(&self) -> RxContextRef;
+pub trait AsRxContext<'a> {
+    fn as_rx_context(&self) -> RxContextRef<'a>;
 }
 
-impl AsRxContext for RxContextRef {
-    fn as_rx_context(&self) -> RxContextRef {
+impl<'a> AsRxContext<'a> for RxContextRef<'a> {
+    fn as_rx_context(&self) -> RxContextRef<'a> {
         self.clone()
     }
 }
 
 pub trait RxContext {
-    fn recompute(&self);
+    fn recompute(self: Rc<Self>);
 }
