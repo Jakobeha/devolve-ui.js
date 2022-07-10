@@ -89,32 +89,33 @@ pub trait Rx<'c, T: 'c> {
 
 pub trait MRx<'c, T: 'c>: Rx<'c, T> {
     type RefMut<'a>: DerefMut<Target = T> where Self: 'a, 'c: 'a;
+    type RefMut2<'a>: DerefMut<Target = T> where Self: 'a, 'c: 'a;
 
     fn get_mut<'a>(&'a mut self, c: &(dyn AsRxContext<'c> + 'c)) -> Self::RefMut<'a> where 'c: 'a;
 
     fn set(&self, new_value: T);
     fn modify(&'c self, f: impl Fn(&mut T) + 'c) where Self: Sized;
 
-    fn map_mut<'a, U>(&'a self, f: impl Fn(&mut T) -> &mut U + 'c) -> DRx<'a, 'c, U> where Self: Sized, 'c: 'a;
+    fn map_mut<'a, U>(&'a self, f: impl Fn(Self::RefMut2<'a>) -> &'a mut U + 'c) -> DRx<'a, 'c, U> where Self: Sized, 'c: 'a;
 
     fn split_map_mut2<'a, U1, U2>(
         &'a self,
-        f: impl Fn(&mut T) -> (&mut U1, &mut U2) + 'c
+        f: impl Fn(Self::RefMut2<'a>) -> (&'a mut U1, &'a mut U2) + 'c
     ) -> (DRx<'a, 'c, U1>, DRx<'a, 'c, U2>) where Self: Sized, 'c: 'a;
 
     fn split_map_mut3<'a, U1, U2, U3>(
         &'a self,
-        f: impl Fn(&mut T) -> (&mut U1, &mut U2, &mut U3) + 'c
+        f: impl Fn(Self::RefMut2<'a>) -> (&'a mut U1, &'a mut U2, &'a mut U3) + 'c
     ) -> (DRx<'a, 'c, U1>, DRx<'a, 'c, U2>, DRx<'a, 'c, U3>) where Self: Sized, 'c: 'a;
 
     fn split_map_mut4<'a, U1, U2, U3, U4>(
         &'a self,
-        f: impl Fn(&mut T) -> (&mut U1, &mut U2, &mut U3, &mut U4) + 'c
+        f: impl Fn(Self::RefMut2<'a>) -> (&'a mut U1, &'a mut U2, &'a mut U3, &'a mut U4) + 'c
     ) -> (DRx<'a, 'c, U1>, DRx<'a, 'c, U2>, DRx<'a, 'c, U3>, DRx<'a, 'c, U4>) where Self: Sized, 'c: 'a;
 
     fn split_map_mut5<'a, U1, U2, U3, U4, U5>(
         &'a self,
-        f: impl Fn(&mut T) -> (&mut U1, &mut U2, &mut U3, &mut U4, &mut U5) + 'c
+        f: impl Fn(Self::RefMut2<'a>) -> (&'a mut U1, &'a mut U2, &'a mut U3, &'a mut U4, &'a mut U5) + 'c
     ) -> (DRx<'a, 'c, U1>, DRx<'a, 'c, U2>, DRx<'a, 'c, U3>, DRx<'a, 'c, U4>, DRx<'a, 'c, U5>) where Self: Sized, 'c: 'a;
 }
 
@@ -152,7 +153,7 @@ struct CRxImplImpl<'c, T: 'c, F: FnMut(&RxContextRef<'c>) -> T + 'c> {
     observers: RxObservers<'c>,
 }
 
-pub(super) trait _MRx<'c, T: 'c>: Rx<'c, T> {
+/*pub(super) */pub trait _MRx<'c, T: 'c>: Rx<'c, T> {
     type RawRef<'b>: MRxRefCell<'b, T> where Self: 'b;
 
     fn get_raw(&self) -> Self::RawRef<'_>;
@@ -189,9 +190,10 @@ impl<'a, 'c: 'a, T: 'c> Rx<'c, T> for DRx<'a, 'c, T> {
 }
 
 impl<'c, T: 'c, R: _MRx<'c, T>> MRx<'c, T> for R {
-    type RefMut<'b> = MRxRef<'b, 'c, T, Self, <R::RawRef<'b> as MRxRefCell<'b, T>>::RefMut<'b>> where Self: 'b, 'c: 'b;
+    type RefMut<'a> = MRxRef<'a, 'c, T, Self, Self::RefMut2<'a>> where Self: 'a, 'c: 'a;
+    type RefMut2<'a> = <R::RawRef<'a> as MRxRefCell<'a, T>>::RefMut where Self: 'a, 'c: 'a;
 
-    fn get_mut<'b>(&'b mut self, c: &(dyn AsRxContext<'c> + 'c)) -> Self::RefMut<'b> where 'c: 'b {
+    fn get_mut<'a>(&'a mut self, c: &(dyn AsRxContext<'c> + 'c)) -> Self::RefMut<'a> where 'c: 'a {
         self.observers().insert(c.as_rx_context());
         MRxRef::new(self)
     }
@@ -204,41 +206,41 @@ impl<'c, T: 'c, R: _MRx<'c, T>> MRx<'c, T> for R {
     fn modify(&'c self, f: impl Fn(&mut T) + 'c) {
         f(&mut *self.get_raw().borrow_mut());
         self.trigger();
-        let (observers, raw) = self.observers_and_get_raw();
+        let observers = self.observers();
         // Need to add observer after the trigger so that we don't re-trigger and recurse
         observers.insert(RxContextRef::owned(RunRxContext::<'c, _>::new(move |c| {
             // equivalent to `f(self.get_mut(c).deref_mut())`, except we don't trigger
             observers.insert(c.as_rx_context());
-            f(&mut *raw.borrow_mut());
+            f(&mut self.get_raw().borrow_mut());
         })));
     }
 
-    fn map_mut<'b, U>(&'b self, f: impl Fn(&mut T) -> &mut U + 'c) -> DRx<'b, 'c, U> where 'c: 'b {
-        let (observers, raw) = self.observers_and_get_raw();
+    fn map_mut<'a, U>(&'a self, f: impl Fn(Self::RefMut2<'a>) -> &'a mut U + 'c) -> DRx<'a, 'c, U> where 'c: 'a {
+        let observers = self.observers();
         DRx {
-            value: RefCell::new(f(&mut *raw.borrow_mut())),
+            value: RefCell::new(f(self.get_raw().borrow_mut())),
             observers
         }
     }
 
-    fn split_map_mut2<'b, U1, U2>(
-        &'b self,
-        f: impl Fn(&mut T) -> (&mut U1, &mut U2) + 'c
-    ) -> (DRx<'b, 'c, U1>, DRx<'b, 'c, U2>) where 'c: 'b {
-        let (observers, raw) = self.observers_and_get_raw();
-        let (a, b) = f(&mut *raw.borrow_mut());
+    fn split_map_mut2<'a, U1, U2>(
+        &'a self,
+        f: impl Fn(Self::RefMut2<'a>) -> (&'a mut U1, &'a mut U2) + 'c
+    ) -> (DRx<'a, 'c, U1>, DRx<'a, 'c, U2>) where 'c: 'a {
+        let observers = self.observers();
+        let (a, b) = f(self.get_raw().borrow_mut());
         (
             DRx { value: RefCell::new(a), observers },
             DRx { value: RefCell::new(b), observers }
         )
     }
 
-    fn split_map_mut3<'b, U1, U2, U3>(
-        &'b self,
-        f: impl Fn(&mut T) -> (&mut U1, &mut U2, &mut U3) + 'c
-    ) -> (DRx<'b, 'c, U1>, DRx<'b, 'c, U2>, DRx<'b, 'c, U3>) where 'c: 'b {
-        let (observers, raw) = self.observers_and_get_raw();
-        let (a, b, c) = f(&mut *raw.borrow_mut());
+    fn split_map_mut3<'a, U1, U2, U3>(
+        &'a self,
+        f: impl Fn(Self::RefMut2<'a>) -> (&'a mut U1, &'a mut U2, &'a mut U3) + 'c
+    ) -> (DRx<'a, 'c, U1>, DRx<'a, 'c, U2>, DRx<'a, 'c, U3>) where 'c: 'a {
+        let observers = self.observers();
+        let (a, b, c) = f(self.get_raw().borrow_mut());
         (
             DRx { value: RefCell::new(a), observers },
             DRx { value: RefCell::new(b), observers },
@@ -246,12 +248,12 @@ impl<'c, T: 'c, R: _MRx<'c, T>> MRx<'c, T> for R {
         )
     }
 
-    fn split_map_mut4<'b, U1, U2, U3, U4>(
-        &'b self,
-        f: impl Fn(&mut T) -> (&mut U1, &mut U2, &mut U3, &mut U4) + 'c
-    ) -> (DRx<'b, 'c, U1>, DRx<'b, 'c, U2>, DRx<'b, 'c, U3>, DRx<'b, 'c, U4>) where 'c: 'b {
-        let (observers, raw) = self.observers_and_get_raw();
-        let (a, b, c, d) = f(&mut *raw.borrow_mut());
+    fn split_map_mut4<'a, U1, U2, U3, U4>(
+        &'a self,
+        f: impl Fn(Self::RefMut2<'a>) -> (&'a mut U1, &'a mut U2, &'a mut U3, &'a mut U4) + 'c
+    ) -> (DRx<'a, 'c, U1>, DRx<'a, 'c, U2>, DRx<'a, 'c, U3>, DRx<'a, 'c, U4>) where 'c: 'a {
+        let observers = self.observers();
+        let (a, b, c, d) = f(self.get_raw().borrow_mut());
         (
             DRx { value: RefCell::new(a), observers },
             DRx { value: RefCell::new(b), observers },
@@ -260,12 +262,12 @@ impl<'c, T: 'c, R: _MRx<'c, T>> MRx<'c, T> for R {
         )
     }
 
-    fn split_map_mut5<'b, U1, U2, U3, U4, U5>(
-        &'b self,
-        f: impl Fn(&mut T) -> (&mut U1, &mut U2, &mut U3, &mut U4, &mut U5) + 'c
-    ) -> (DRx<'b, 'c, U1>, DRx<'b, 'c, U2>, DRx<'b, 'c, U3>, DRx<'b, 'c, U4>, DRx<'b, 'c, U5>) where 'c: 'b {
-        let (observers, raw) = self.observers_and_get_raw();
-        let (a, b, c, d, e) = f(&mut *raw.borrow_mut());
+    fn split_map_mut5<'a, U1, U2, U3, U4, U5>(
+        &'a self,
+        f: impl Fn(Self::RefMut2<'a>) -> (&'a mut U1, &'a mut U2, &'a mut U3, &'a mut U4, &'a mut U5) + 'c
+    ) -> (DRx<'a, 'c, U1>, DRx<'a, 'c, U2>, DRx<'a, 'c, U3>, DRx<'a, 'c, U4>, DRx<'a, 'c, U5>) where 'c: 'a {
+        let observers = self.observers();
+        let (a, b, c, d, e) = f(self.get_raw().borrow_mut());
         (
             DRx { value: RefCell::new(a), observers },
             DRx { value: RefCell::new(b), observers },

@@ -3,13 +3,13 @@ use std::ops::{Deref, DerefMut};
 use std::marker::PhantomData;
 use crate::core::data::rx::_MRx;
 
-impl<'a, 'c: 'a, T: 'c, R: _MRx<'c, T>> MRxRef<'a, 'c, T, R, <R::RawRef<'a> as MRxRefCell<'a, T>>::RefMut<'a>> {
+impl<'a, 'c: 'a, T: 'c, R: _MRx<'c, T>> MRxRef<'a, 'c, T, R, <R::RawRef<'a> as MRxRefCell<'a, T>>::RefMut> {
     pub(super) fn new(rx: &'a R) -> Self {
         MRxRef(rx, rx.get_raw().borrow_mut(), PhantomData)
     }
 }
 
-impl<'a, 'c: 'a, T: 'c, R: _MRx<'c, T>> Deref for MRxRef<'a, 'c, T, R, <R::RawRef<'a> as MRxRefCell<'a, T>>::RefMut<'a>> {
+impl<'a, 'c: 'a, T: 'c, R: _MRx<'c, T>> Deref for MRxRef<'a, 'c, T, R, <R::RawRef<'a> as MRxRefCell<'a, T>>::RefMut> {
     type Target = T;
 
     fn deref(&self) -> &Self::Target {
@@ -17,7 +17,7 @@ impl<'a, 'c: 'a, T: 'c, R: _MRx<'c, T>> Deref for MRxRef<'a, 'c, T, R, <R::RawRe
     }
 }
 
-impl<'a, 'c: 'a, T: 'c, R: _MRx<'c, T>> DerefMut for MRxRef<'a, 'c, T, R, <R::RawRef<'a> as MRxRefCell<'a, T>>::RefMut<'a>> {
+impl<'a, 'c: 'a, T: 'c, R: _MRx<'c, T>> DerefMut for MRxRef<'a, 'c, T, R, <R::RawRef<'a> as MRxRefCell<'a, T>>::RefMut> {
     fn deref_mut(&mut self) -> &mut Self::Target {
         self.1.deref_mut()
     }
@@ -40,11 +40,11 @@ pub struct SRxRefCell<'a, T>(pub(super) &'a RefCell<T>);
 pub struct DRxRefCell<'b, 'a, T>(pub(super) &'b RefCell<&'a mut T>);
 
 pub trait MRxRefCell<'a, T> {
-    type Ref<'b>: Deref<Target = T> where Self: 'b, 'a: 'b;
-    type RefMut<'b>: DerefMut<Target = T> where Self: 'b, 'a: 'b;
+    type Ref: Deref<Target = T>;
+    type RefMut: DerefMut<Target = T>;
 
-    fn borrow(&self) -> Self::Ref<'_>;
-    fn borrow_mut(&self) -> Self::RefMut<'_>;
+    fn borrow(self) -> Self::Ref;
+    fn borrow_mut(self) -> Self::RefMut;
     fn replace(&self, new_value: T);
 }
 
@@ -53,14 +53,14 @@ pub trait DropRef<T> {
 }
 
 impl<'a, T> MRxRefCell<'a, T> for SRxRefCell<'a, T> {
-    type Ref<'b> = Ref<'b, T> where 'a: 'b;
-    type RefMut<'b> = RefMut<'b, T> where 'a: 'b;
+    type Ref = Ref<'a, T>;
+    type RefMut = RefMut<'a, T>;
 
-    fn borrow(&self) -> Self::Ref<'_> {
+    fn borrow(self) -> Self::Ref {
         self.0.borrow()
     }
 
-    fn borrow_mut(&self) -> Self::RefMut<'_> {
+    fn borrow_mut(self) -> Self::RefMut {
         self.0.borrow_mut()
     }
 
@@ -70,14 +70,14 @@ impl<'a, T> MRxRefCell<'a, T> for SRxRefCell<'a, T> {
 }
 
 impl<'b, 'a, T> MRxRefCell<'b, T> for DRxRefCell<'b, 'a, T> {
-    type Ref<'d> = DRxRef<'d, 'a, T> where 'b: 'd;
-    type RefMut<'d> = DRxRefMut<'d, 'a, T> where 'b: 'd;
+    type Ref = DRxRef<'b, 'a, T>;
+    type RefMut = DRxRefMut<'b, 'a, T>;
 
-    fn borrow(&self) -> Self::Ref<'_> {
+    fn borrow(self) -> Self::Ref {
         DRxRef(self.0.borrow())
     }
 
-    fn borrow_mut(&self) -> Self::RefMut<'_> {
+    fn borrow_mut(self) -> Self::RefMut {
         DRxRefMut(self.0.borrow_mut())
     }
 
