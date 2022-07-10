@@ -2,24 +2,24 @@ use std::hash::Hash;
 use std::rc::{Rc, Weak};
 
 #[derive(Clone)]
-pub enum RxContextRef<'a> {
-    Weak(Weak<dyn RxContext + 'a>),
-    Strong(Rc<dyn RxContext + 'a>),
+pub enum RxContextRef<'c> {
+    Weak(Weak<dyn RxContext + 'c>),
+    Strong(Rc<dyn RxContext + 'c>),
 }
 
-impl<'a> RxContextRef<'a> {
-    pub fn owned(ctx: impl RxContext + 'a) -> Self {
+impl<'c> RxContextRef<'c> {
+    pub fn owned(ctx: impl RxContext + 'c) -> Self {
         Self::Strong(Rc::new(ctx))
     }
 
-    pub(super) fn upgrade(&self) -> Option<Rc<dyn RxContext + 'a>> {
+    pub(super) fn upgrade(&self) -> Option<Rc<dyn RxContext + 'c>> {
         match self {
             RxContextRef::Weak(ref w) => w.upgrade(),
             RxContextRef::Strong(ref s) => Some(s.clone()),
         }
     }
 
-    pub(super) fn as_ptr(&self) -> *const (dyn RxContext + 'a) {
+    pub(super) fn as_ptr(&self) -> *const (dyn RxContext + 'c) {
         match self {
             RxContextRef::Weak(x) => x.as_ptr(),
             RxContextRef::Strong(x) => Rc::as_ptr(x)
@@ -27,26 +27,26 @@ impl<'a> RxContextRef<'a> {
     }
 }
 
-impl<'a> PartialEq<RxContextRef<'a>> for RxContextRef<'a> {
+impl<'c> PartialEq<RxContextRef<'c>> for RxContextRef<'c> {
     fn eq(&self, other: &RxContextRef) -> bool {
         self.as_ptr() == other.as_ptr()
     }
 }
 
-impl<'a> Eq for RxContextRef<'a> {}
+impl<'c> Eq for RxContextRef<'c> {}
 
-impl<'a> Hash for RxContextRef<'a> {
+impl<'c> Hash for RxContextRef<'c> {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
         self.as_ptr().hash(state);
     }
 }
 
-pub trait AsRxContext<'a> {
-    fn as_rx_context(&self) -> RxContextRef<'a>;
+pub trait AsRxContext<'c> {
+    fn as_rx_context(&self) -> RxContextRef<'c>;
 }
 
-impl<'a> AsRxContext<'a> for RxContextRef<'a> {
-    fn as_rx_context(&self) -> RxContextRef<'a> {
+impl<'c> AsRxContext<'c> for RxContextRef<'c> {
+    fn as_rx_context(&self) -> RxContextRef<'c> {
         self.clone()
     }
 }
