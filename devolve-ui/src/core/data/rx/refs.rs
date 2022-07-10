@@ -3,28 +3,34 @@ use std::ops::{Deref, DerefMut};
 use std::marker::PhantomData;
 use crate::core::data::rx::_MRx;
 
-impl<'a, 'b, 'c: 'a + 'b, T: 'c, R: _MRx<'a, 'c, T>> Deref for MRxRef<'b, 'c, T, R> {
+impl<'a, 'c: 'a, T: 'c, R: _MRx<'c, T>> MRxRef<'a, 'c, T, R, <R::RawRef<'a> as MRxRefCell<'a, T>>::RefMut<'a>> {
+    pub(super) fn new(rx: &'a R) -> Self {
+        MRxRef(rx, rx.get_raw().borrow_mut(), PhantomData)
+    }
+}
+
+impl<'a, 'c: 'a, T: 'c, R: _MRx<'c, T>> Deref for MRxRef<'a, 'c, T, R, <R::RawRef<'a> as MRxRefCell<'a, T>>::RefMut<'a>> {
     type Target = T;
 
     fn deref(&self) -> &Self::Target {
-        self.0.get_raw().borrow().deref()
+        self.1.deref()
     }
 }
 
-impl<'a, 'b, 'c: 'a + 'b, T: 'c, R: _MRx<'a, 'c, T>> DerefMut for MRxRef<'b, 'c, T, R> {
+impl<'a, 'c: 'a, T: 'c, R: _MRx<'c, T>> DerefMut for MRxRef<'a, 'c, T, R, <R::RawRef<'a> as MRxRefCell<'a, T>>::RefMut<'a>> {
     fn deref_mut(&mut self) -> &mut Self::Target {
-        self.0.get_raw().borrow_mut().deref_mut()
+        self.1.deref_mut()
     }
 }
 
-impl<'a, 'c: 'a, T: 'c, R: DropRef<T>> Drop for MRxRef<'a, 'c, T, R> {
+impl<'a, 'c: 'a, T: 'c, R: DropRef<T>, R2> Drop for MRxRef<'a, 'c, T, R, R2> {
     fn drop(&mut self) {
         self.0.drop_ref();
     }
 }
 
 /// Reference to data in an `Rx` which triggers update when it gets dropped.
-pub struct MRxRef<'a, 'c: 'a, T: 'c, R: DropRef<T>>(pub(super) &'a mut R, pub(super) PhantomData<&'c T>);
+pub struct MRxRef<'a, 'c: 'a, T: 'c, R: DropRef<T>, R2>(&'a R, R2, PhantomData<&'c T>);
 
 pub struct DRxRef<'b, 'a, T>(pub(super) Ref<'b, &'a mut T>);
 
@@ -43,7 +49,7 @@ pub trait MRxRefCell<'a, T> {
 }
 
 pub trait DropRef<T> {
-    fn drop_ref(&mut self);
+    fn drop_ref(&self);
 }
 
 impl<'a, T> MRxRefCell<'a, T> for SRxRefCell<'a, T> {
@@ -80,8 +86,8 @@ impl<'b, 'a, T> MRxRefCell<'b, T> for DRxRefCell<'b, 'a, T> {
     }
 }
 
-impl<'a, 'c: 'a, T: 'c, R: _MRx<'a, 'c, T>> DropRef<T> for R {
-    fn drop_ref(&mut self) {
+impl<'c, T: 'c, R: _MRx<'c, T>> DropRef<T> for R {
+    fn drop_ref(&self) {
         self.trigger();
     }
 }
@@ -90,7 +96,7 @@ impl<'b, 'a, T> Deref for DRxRef<'b, 'a, T> {
     type Target = T;
 
     fn deref(&self) -> &Self::Target {
-        self.0.deref() as &'a Self::Target
+        self.0.deref()
     }
 }
 
@@ -98,12 +104,12 @@ impl<'b, 'a, T> Deref for DRxRefMut<'b, 'a, T> {
     type Target = T;
 
     fn deref(&self) -> &Self::Target {
-        self.0.deref() as &'a Self::Target
+        self.0.deref()
     }
 }
 
 impl<'b, 'a, T> DerefMut for DRxRefMut<'b, 'a, T> {
     fn deref_mut(&mut self) -> &mut Self::Target {
-        self.0.deref_mut() as &'a mut Self::Target
+        self.0.deref_mut()
     }
 }

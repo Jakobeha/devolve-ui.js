@@ -10,7 +10,6 @@ pub mod snapshot_ctx;
 pub mod refs;
 
 use std::cell::{Ref, RefCell};
-use std::marker::PhantomData;
 use std::ops::{Deref, DerefMut};
 use std::rc::Rc;
 use crate::core::data::rx::refs::{DRxRef, DRxRefCell, MRxRef, MRxRefCell, SRxRefCell};
@@ -153,8 +152,8 @@ struct CRxImplImpl<'c, T: 'c, F: FnMut(&RxContextRef<'c>) -> T + 'c> {
     observers: RxObservers<'c>,
 }
 
-pub(super) trait _MRx<'a, 'c: 'a, T: 'c>: Rx<'c, T> {
-    type RawRef<'b>: MRxRefCell<'b, T> where Self: 'b, 'a: 'b;
+pub(super) trait _MRx<'c, T: 'c>: Rx<'c, T> {
+    type RawRef<'b>: MRxRefCell<'b, T> where Self: 'b;
 
     fn get_raw(&self) -> Self::RawRef<'_>;
     fn observers(&self) -> &RxObservers<'c>;
@@ -189,12 +188,12 @@ impl<'a, 'c: 'a, T: 'c> Rx<'c, T> for DRx<'a, 'c, T> {
     }
 }
 
-impl<'a, 'c: 'a, T: 'c, R: _MRx<'a, 'c, T>> MRx<'c, T> for R {
-    type RefMut<'b> = MRxRef<'b, 'c, T, Self> where Self: 'b, 'c: 'b;
+impl<'c, T: 'c, R: _MRx<'c, T>> MRx<'c, T> for R {
+    type RefMut<'b> = MRxRef<'b, 'c, T, Self, <R::RawRef<'b> as MRxRefCell<'b, T>>::RefMut<'b>> where Self: 'b, 'c: 'b;
 
     fn get_mut<'b>(&'b mut self, c: &(dyn AsRxContext<'c> + 'c)) -> Self::RefMut<'b> where 'c: 'b {
         self.observers().insert(c.as_rx_context());
-        MRxRef(self, PhantomData)
+        MRxRef::new(self)
     }
 
     fn set(&self, new_value: T) {
@@ -277,7 +276,7 @@ impl<'a, 'c: 'a, T: 'c, R: _MRx<'a, 'c, T>> MRx<'c, T> for R {
     }
 }
 
-impl<'c, T: 'c> _MRx<'c, 'c, T> for SRx<'c, T> {
+impl<'c, T: 'c> _MRx<'c, T> for SRx<'c, T> {
     type RawRef<'a> = SRxRefCell<'a, T> where 'c: 'a;
 
     fn get_raw(&self) -> Self::RawRef<'_> {
@@ -297,7 +296,7 @@ impl<'c, T: 'c> _MRx<'c, 'c, T> for SRx<'c, T> {
     }
 }
 
-impl<'a, 'c: 'a, T: 'c> _MRx<'a, 'c, T> for DRx<'a, 'c, T> {
+impl<'a, 'c: 'a, T: 'c> _MRx<'c, T> for DRx<'a, 'c, T> {
     type RawRef<'b> = DRxRefCell<'b, 'a, T> where 'a: 'b;
 
     fn get_raw(&self) -> Self::RawRef<'_> {
