@@ -391,50 +391,50 @@ pub mod tests {
 
     #[test]
     fn test_srx() {
-        let mut rx = SRx::new(vec![1, 2, 3]);
-        assert_eq!(rx.get(SNAPSHOT_CTX), &vec![1, 2, 3]);
+        let rx = SRx::new(vec![1, 2, 3]);
+        assert_eq!(rx.get(SNAPSHOT_CTX).deref(), &vec![1, 2, 3]);
         rx.set(vec![1, 2, 4]);
-        assert_eq!(rx.get(SNAPSHOT_CTX), &vec![1, 2, 4]);
+        assert_eq!(rx.get(SNAPSHOT_CTX).deref(), &vec![1, 2, 4]);
         rx.set(vec![1, 2, 5]);
-        assert_eq!(rx.get(SNAPSHOT_CTX), &vec![1, 2, 5]);
+        assert_eq!(rx.get(SNAPSHOT_CTX).deref(), &vec![1, 2, 5]);
     }
 
     #[test]
     fn test_drx() {
-        let mut rx = SRx::new(vec![1, 2, 3]);
+        let rx = SRx::new(vec![1, 2, 3]);
         {
-            let mut drx = rx.map_mut(|x| x.get_mut(0).unwrap());
-            assert_eq!(drx.get(SNAPSHOT_CTX), &1);
+            let drx = rx.map_mut(|mut x| x.get_mut(0).unwrap());
+            assert_eq!(drx.get(SNAPSHOT_CTX).deref(), &1);
             drx.set(2);
-            assert_eq!(drx.get(SNAPSHOT_CTX), &2);
+            assert_eq!(drx.get(SNAPSHOT_CTX).deref(), &2);
         }
-        assert_eq!(rx.get(SNAPSHOT_CTX), &vec![2, 2, 5]);
+        assert_eq!(rx.get(SNAPSHOT_CTX).deref(), &vec![2, 2, 5]);
     }
 
     #[test]
     fn test_drx_split() {
-        let mut rx = SRx::new(vec![1, 2, 3]);
+        let rx = SRx::new(vec![1, 2, 3]);
         {
-            let (mut drx0, mut drx1, mut drx2) = rx.split_map_mut3(|x| {
+            let (drx0, drx1, drx2) = rx.split_map_mut3(|mut x| {
                 let mut iter = x.iter_mut();
                 (iter.next().unwrap(), iter.next().unwrap(), iter.next().unwrap())
             });
-            assert_eq!(drx0.get(SNAPSHOT_CTX), &1);
-            assert_eq!(drx1.get(SNAPSHOT_CTX), &2);
-            assert_eq!(drx2.get(SNAPSHOT_CTX), &5);
+            assert_eq!(drx0.get(SNAPSHOT_CTX).deref(), &1);
+            assert_eq!(drx1.get(SNAPSHOT_CTX).deref(), &2);
+            assert_eq!(drx2.get(SNAPSHOT_CTX).deref(), &5);
             drx0.set(2);
             drx1.set(3);
             drx2.set(4);
         }
-        assert_eq!(rx.get(SNAPSHOT_CTX), &vec![2, 3, 4]);
+        assert_eq!(rx.get(SNAPSHOT_CTX).deref(), &vec![2, 3, 4]);
     }
 
     #[test]
     fn test_crx() {
-        let mut rx = SRx::new(vec![1, 2, 3]);
-        let mut crx = CRx::new(|c| rx.get(c)[0] * 2);
-        let mut crx2 = CRx::new(|c| *crx.get(c) + rx.get(c)[1] * 10);
-        let mut crx3 = crx.map(|x| x.to_string());
+        let rx = SRx::new(vec![1, 2, 3]);
+        let crx = CRx::new(|c| rx.get(c)[0] * 2);
+        let crx2 = CRx::new(|c| *crx.get(c) + rx.get(c)[1] * 10);
+        let crx3 = crx.map(|x| x.to_string());
         assert_eq!(*crx.get(SNAPSHOT_CTX), 2);
         assert_eq!(*crx2.get(SNAPSHOT_CTX), 22);
         assert_eq!(&*crx3.get(SNAPSHOT_CTX), "2");
@@ -450,10 +450,10 @@ pub mod tests {
 
     #[test]
     fn test_complex_rx_tree() {
-        let mut rx1 = SRx::new(vec![1, 2, 3, 4, 5]);
-        let (mut rx2_0, mut rx2_1, mut rx2_3, mut rx2_4) = rx1.split_map_mut4(|x| (&mut x[0], &mut x[1], &mut x[3], &mut x[4]));
-        let mut rx3 = CRx::new(|c| vec![rx2_0.get(c) * 0, rx2_1.get(c) * 1, rx1.get(c)[2] * 2, rx2_3.get(c) * 3, rx2_4.get(c) * 4]);
-        let mut rx4 = CRx::new(|c| rx3.get(c).iter().copied().zip(rx1.get(c).iter().copied()).map(|(a, b)| a + b).collect::<Vec<_>>());
+        let rx1 = SRx::new(vec![1, 2, 3, 4, 5]);
+        let (rx2_0, rx2_1, rx2_3, rx2_4) = rx1.split_map_mut4(|mut x| (&mut x[0], &mut x[1], &mut x[3], &mut x[4]));
+        let rx3 = CRx::new(|c| vec![*rx2_0.get(c) * 0, *rx2_1.get(c) * 1, rx1.get(c)[2] * 2, *rx2_3.get(c) * 3, *rx2_4.get(c) * 4]);
+        let rx4 = CRx::new(|c| rx3.get(c).iter().copied().zip(rx1.get(c).iter().copied()).map(|(a, b)| a + b).collect::<Vec<_>>());
         let (rx5_0, rx5_1, rx5_3) = rx1.split_map3(|x| (&x[0], &x[1], &x[3]));
         assert_eq!(&*rx4.get(SNAPSHOT_CTX), &vec![1, 4, 9, 16, 25]);
         rx2_1.set(8);
@@ -465,7 +465,7 @@ pub mod tests {
 
     #[test]
     fn test_run_rx() {
-        let mut rx = SRx::new(1);
+        let rx = SRx::new(1);
         let mut rx_snapshots = Vec::new();
         let mut expected_rx_snapshots = Vec::new();
         run_rx(|c| {
