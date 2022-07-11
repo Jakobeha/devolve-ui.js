@@ -1,11 +1,17 @@
 use std::hash::Hash;
 use std::rc::{Rc, Weak};
+use crate::core::misc::assert_variance::assert_is_covariant;
+
+pub macro assert_is_c_variant($($t:tt)*) {
+    assert_is_covariant!($($t)*);
+}
 
 #[derive(Clone)]
 pub enum RxContextRef<'c> {
     Weak(Weak<dyn RxContext + 'c>),
     Strong(Rc<dyn RxContext + 'c>),
 }
+assert_is_c_variant!((RxContextRef<'c>) over 'c);
 
 impl<'c> RxContextRef<'c> {
     pub fn owned(ctx: impl RxContext + 'c) -> Self {
