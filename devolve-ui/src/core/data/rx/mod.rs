@@ -17,10 +17,61 @@ use crate::core::data::rx::context::{AsRxContext, RxContext, RxContextRef};
 use crate::core::data::rx::observers::RxObservers;
 use crate::core::data::rx::run_rx::RunRxContext;
 use crate::core::data::rx::context::assert_is_c_variant;
-use crate::core::misc::assert_variance::assert_is_covariant;
+
+pub trait MapRef<'a, T> {
+    fn map<U>(self, f: impl FnOnce(&T) -> &U + 'a) -> Ref<'a, U>;
+    fn split_map2<U1, U2>(self, f: impl FnOnce(&T) -> (&U1, &U2) + 'a) -> (Ref<'a, U1>, Ref<'a, U2>);
+    fn split_map3<U1, U2, U3>(self, f: impl FnOnce(&T) -> (&U1, &U2, &U3) + 'a) -> (Ref<'a, U1>, Ref<'a, U2>, Ref<'a, U3>);
+    fn split_map4<U1, U2, U3, U4>(self, f: impl FnOnce(&T) -> (&U1, &U2, &U3, &U4) + 'a) -> (Ref<'a, U1>, Ref<'a, U2>, Ref<'a, U3>, Ref<'a, U4>);
+    fn split_map5<U1, U2, U3, U4, U5>(self, f: impl FnOnce(&T) -> (&U1, &U2, &U3, &U4, &U5) + 'a) -> (Ref<'a, U1>, Ref<'a, U2>, Ref<'a, U3>, Ref<'a, U4>, Ref<'a, U5>);
+}
+
+impl<'a, T> MapRef<'a, T> for Ref<'a, T> {
+    fn map<U>(self, f: impl FnOnce(&T) -> &U + 'a) -> Ref<'a, U> {
+        Ref::map(self, f)
+    }
+
+    fn split_map2<U1, U2>(self, f: impl FnOnce(&T) -> (&U1, &U2) + 'a) -> (Ref<'a, U1>, Ref<'a, U2>) {
+        Ref::map_split(self, f)
+    }
+
+    fn split_map3<U1, U2, U3>(self, f: impl FnOnce(&T) -> (&U1, &U2, &U3) + 'a) -> (Ref<'a, U1>, Ref<'a, U2>, Ref<'a, U3>) {
+        todo!()
+    }
+
+    fn split_map4<U1, U2, U3, U4>(self, f: impl FnOnce(&T) -> (&U1, &U2, &U3, &U4) + 'a) -> (Ref<'a, U1>, Ref<'a, U2>, Ref<'a, U3>, Ref<'a, U4>) {
+        todo!()
+    }
+
+    fn split_map5<U1, U2, U3, U4, U5>(self, f: impl FnOnce(&T) -> (&U1, &U2, &U3, &U4, &U5) + 'a) -> (Ref<'a, U1>, Ref<'a, U2>, Ref<'a, U3>, Ref<'a, U4>, Ref<'a, U5>) {
+        todo!()
+    }
+}
+
+impl<'b, 'a, T> MapRef<'b, T> for DRxRef<'b, 'a, T> {
+    fn map<U>(self, f: impl FnOnce(&T) -> &U + 'b) -> Ref<'b, U> {
+        Ref::map(self.0, |x| f(x))
+    }
+
+    fn split_map2<U1, U2>(self, f: impl FnOnce(&T) -> (&U1, &U2) + 'b) -> (Ref<'b, U1>, Ref<'b, U2>) {
+        Ref::map_split(self.0, |x| f(x))
+    }
+
+    fn split_map3<U1, U2, U3>(self, f: impl FnOnce(&T) -> (&U1, &U2, &U3) + 'b) -> (Ref<'b, U1>, Ref<'b, U2>, Ref<'b, U3>) {
+        todo!()
+    }
+
+    fn split_map4<U1, U2, U3, U4>(self, f: impl FnOnce(&T) -> (&U1, &U2, &U3, &U4) + 'b) -> (Ref<'b, U1>, Ref<'b, U2>, Ref<'b, U3>, Ref<'b, U4>) {
+        todo!()
+    }
+
+    fn split_map5<U1, U2, U3, U4, U5>(self, f: impl FnOnce(&T) -> (&U1, &U2, &U3, &U4, &U5) + 'b) -> (Ref<'b, U1>, Ref<'b, U2>, Ref<'b, U3>, Ref<'b, U4>, Ref<'b, U5>) {
+        todo!()
+    }
+}
 
 pub trait Rx<'c, T: 'c> {
-    type Ref<'a>: Deref<Target = T> where Self: 'a, 'c: 'a;
+    type Ref<'a>: MapRef<'a, T> + Deref<Target = T> where Self: 'a, 'c: 'a;
 
     fn get<'a, 'c2: 'c + 'a>(&'a self, c: &(dyn AsRxContext<'c2> + '_)) -> Self::Ref<'a>;
 
@@ -87,6 +138,70 @@ pub trait Rx<'c, T: 'c> {
             CRx::<'c2, U5>::new(move |c| f5(c).4),
         )
     }
+
+    fn map_ref<'c2: 'c, U>(&'c2 self, f: impl Fn(&T) -> &U + 'c2) -> DCRx<'c2, U> where Self: Sized, T: 'c2  {
+        DCRx::<'c2, U>::new(move |c| <Self::Ref<'c2> as MapRef<'c2, T>>::map(self.get(c), &f))
+    }
+
+    fn split_map_ref2<'c2: 'c, U1, U2>(
+        &'c2 self,
+        f: impl Fn(&T) -> (&U1, &U2) + 'c2
+    ) -> (DCRx<'c2, U1>, DCRx<'c2, U2>) where Self: Sized, T: 'c2  {
+        let f1 = Rc::new(move |c: &RxContextRef<'c2>| <Self::Ref<'c2> as MapRef<'c2, T>>::split_map2(self.get(c), &f));
+        let f2 = f1.clone();
+        (
+            DCRx::<'c2, U1>::new(move |c| f1(c).0),
+            DCRx::<'c2, U2>::new(move |c| f2(c).1),
+        )
+    }
+
+    fn split_map_ref3<'c2: 'c, U1, U2, U3>(
+        &'c2 self,
+        f: impl Fn(&T) -> (&U1, &U2, &U3) + 'c2
+    ) -> (DCRx<'c2, U1>, DCRx<'c2, U2>, DCRx<'c2, U3>) where Self: Sized, T: 'c2  {
+        let f1 = Rc::new(move |c: &RxContextRef<'c2>| <Self::Ref<'c2> as MapRef<'c2, T>>::split_map3(self.get(c), &f));
+        let f2 = f1.clone();
+        let f3 = f2.clone();
+        (
+            DCRx::<'c2, U1>::new(move |c| f1(c).0),
+            DCRx::<'c2, U2>::new(move |c| f2(c).1),
+            DCRx::<'c2, U3>::new(move |c| f3(c).2),
+        )
+    }
+
+    fn split_map_ref4<'c2: 'c, U1, U2, U3, U4>(
+        &'c2 self,
+        f: impl Fn(&T) -> (&U1, &U2, &U3, &U4) + 'c2
+    ) -> (DCRx<'c2, U1>, DCRx<'c2, U2>, DCRx<'c2, U3>, DCRx<'c2, U4>) where Self: Sized, T: 'c2  {
+        let f1 = Rc::new(move |c: &RxContextRef<'c2>| <Self::Ref<'c2> as MapRef<'c2, T>>::split_map4(self.get(c), &f));
+        let f2 = f1.clone();
+        let f3 = f2.clone();
+        let f4 = f3.clone();
+        (
+            DCRx::<'c2, U1>::new(move |c| f1(c).0),
+            DCRx::<'c2, U2>::new(move |c| f2(c).1),
+            DCRx::<'c2, U3>::new(move |c| f3(c).2),
+            DCRx::<'c2, U4>::new(move |c| f4(c).3)
+        )
+    }
+
+    fn split_map_ref5<'c2: 'c, U1, U2, U3, U4, U5>(
+        &'c2 self,
+        f: impl Fn(&T) -> (&U1, &U2, &U3, &U4, &U5) + 'c2
+    ) -> (DCRx<'c2, U1>, DCRx<'c2, U2>, DCRx<'c2, U3>, DCRx<'c2, U4>, DCRx<'c2, U5>) where Self: Sized, T: 'c2  {
+        let f1 = Rc::new(move |c: &RxContextRef<'c2>| <Self::Ref<'c2> as MapRef<'c2, T>>::split_map5(self.get(c), &f));
+        let f2 = f1.clone();
+        let f3 = f2.clone();
+        let f4 = f3.clone();
+        let f5 = f4.clone();
+        (
+            DCRx::<'c2, U1>::new(move |c| f1(c).0),
+            DCRx::<'c2, U2>::new(move |c| f2(c).1),
+            DCRx::<'c2, U3>::new(move |c| f3(c).2),
+            DCRx::<'c2, U4>::new(move |c| f4(c).3),
+            DCRx::<'c2, U5>::new(move |c| f5(c).4),
+        )
+    }
 }
 
 pub trait MRx<'c, T: 'c>: Rx<'c, T> {
@@ -131,7 +246,7 @@ assert_is_c_variant!(for[T] (SRx<'c, T>) over 'c);
 
 /// Computed `Rx`. This stores its value by running a closure and observing other `Rx`es requested
 /// within the closure. You can't modify the value directly as it is computed.
-pub struct CRx<'c, T>(Rc<dyn CRxImplDyn<'c, T = T> + 'c>);
+pub struct CRx<'c, T>(Rc<dyn CRxImplDyn<T = T> + 'c>);
 assert_is_c_variant!(for[T] (CRx<'c, T>) over 'c);
 
 /// Derived mutable `Rx`. This is a reference to data in an `SRx`. It forwards observers to the source.
@@ -140,18 +255,20 @@ pub struct DRx<'a, 'c: 'a, T: 'c> {
     value: RefCell<&'a mut T>,
     observers: &'a RxObservers<'c>
 }
-assert_is_covariant!(for['c, T] (DRx<'a, 'c, T>) over 'a);
+// assert_is_covariant!(for['c, T] (DRx<'a, 'c, T>) over 'a); Not true
 assert_is_c_variant!(for['a, T] (DRx<'a, 'c, T>) over 'c);
 
 /// Derived computed `Rx`, which is actually just a computed `Rx` of a reference.
-pub type DCRx<'a, 'c, T> = CRx<'c, &'a T>;
-assert_is_covariant!(for['c, T] (DCRx<'a, 'c, T>) over 'a);
-assert_is_c_variant!(for['a, T] (DCRx<'a, 'c, T>) over 'c);
+/// The lifetime is actually more strict than `DRx`, however this is ok because we can do multiple immutable borrows.
+pub type DCRx<'c, T> = CRx<'c, Ref<'c, T>>;
+assert_is_c_variant!(for[T] (DCRx<'c, T>) over 'c);
 
-trait CRxImplDyn<'c>: RxContext {
+// trait CRxImplDyn<'c cov>: RxContext
+trait CRxImplDyn: RxContext {
     type T;
 
-    fn get<'a, 'c2: 'c + 'a>(&'a self, c: &(dyn AsRxContext<'c2> + '_)) -> Ref<'a, Self::T>;
+    // fn get<'a, 'c2: 'c + 'a>(&'a self, c: &(dyn AsRxContext<'c2> + '_)) -> Ref<'a, Self::T>;
+    fn get<'a, 'c2: 'a>(&'a self, c: &(dyn AsRxContext<'c2> + '_)) -> Ref<'a, Self::T>;
 }
 
 struct CRxImplImpl<'c, T: 'c, F: FnMut(&RxContextRef<'c>) -> T + 'c> {
@@ -368,11 +485,13 @@ impl<'c, T: 'c, F: FnMut(&RxContextRef<'c>) -> T + 'c> CRxImplImpl<'c, T, F> {
     }
 }
 
-impl<'c, T: 'c, F: FnMut(&RxContextRef<'c>) -> T + 'c> CRxImplDyn<'c> for CRxImplImpl<'c, T, F> {
+impl<'c, T: 'c, F: FnMut(&RxContextRef<'c>) -> T + 'c> CRxImplDyn for CRxImplImpl<'c, T, F> {
     type T = T;
 
-    fn get<'a, 'c2: 'c + 'a>(&'a self, c: &(dyn AsRxContext<'c2> + '_)) -> Ref<'a, Self::T> {
-        self.observers.insert(c.as_rx_context());
+    // fn get<'a, 'c2: 'c + 'a>(&'a self, c: &(dyn AsRxContext<'c2> + '_)) -> Ref<'a, Self::T>
+    fn get<'a, 'c2: 'a>(&'a self, c: &(dyn AsRxContext<'c2> + '_)) -> Ref<'a, Self::T> {
+        // Here we must extend lifetime because we can't enforce 'c2: 'c and keep variance
+        self.observers.insert(unsafe { std::mem::transmute::<RxContextRef<'c2>, RxContextRef<'c>>(c.as_rx_context()) });
         self.value.borrow()
     }
 }
@@ -468,20 +587,33 @@ pub mod tests {
 
     #[test]
     fn test_complex_rx_tree() {
-        let mut rx1 = SRx::new(vec![1, 2, 3, 4, 5]);
-        let (rx2_0, rx2_1, rx2_3, rx2_4) = rx1.split_map_mut4(|x| {
-            let mut iter = x.iter_mut();
-            (iter.next().unwrap(), iter.next().unwrap(), iter.next().unwrap(), iter.next().unwrap())
-        });
-        let rx3 = CRx::new(|c| vec![*rx2_0.get(c) * 0, *rx2_1.get(c) * 1, rx1.get(c)[2] * 2, *rx2_3.get(c) * 3, *rx2_4.get(c) * 4]);
-        let rx4 = CRx::new(|c| rx3.get(c).iter().copied().zip(rx1.get(c).iter().copied()).map(|(a, b)| a + b).collect::<Vec<_>>());
-        let (_rx5_0, _rx5_1, _rx5_3) = rx1.split_map3(|x| (&x[0], &x[1], &x[3]));
-        assert_eq!(&*rx4.get(SNAPSHOT_CTX), &vec![1, 4, 9, 16, 25]);
-        rx2_1.set(8);
-        rx2_0.set(25);
-        assert_eq!(&*rx4.get(SNAPSHOT_CTX), &vec![25, 16, 9, 16, 25]);
+        let mut rx1 = SRx::new(vec![1, 2, 3, 4]);
+        {
+            let (rx2_0, rx2_1, rx2_2, rx2_3) = rx1.split_map_mut4(|x| {
+                let mut iter = x.iter_mut();
+                (iter.next().unwrap(), iter.next().unwrap(), iter.next().unwrap(), iter.next().unwrap())
+            });
+            let rx1_alt = CRx::new(|c| vec![*rx2_0.get(c), *rx2_1.get(c), *rx2_2.get(c), *rx2_3.get(c)]);
+            let rx3 = CRx::new(|c| vec![*rx2_0.get(c) * 0, *rx2_1.get(c) * 1, *rx2_2.get(c) * 3, *rx2_3.get(c) * 4]);
+            let rx4 = CRx::new(|c| rx3.get(c).iter().copied().zip(rx1_alt.get(c).iter().copied()).map(|(a, b)| a + b).collect::<Vec<_>>());
+            let (_rx5_0, _rx5_1, _rx5_3) = rx4.split_map3(|x| (&x[0], &x[1], &x[3]));
+            assert_eq!(&*rx4.get(SNAPSHOT_CTX), &vec![1, 4, 9, 16, 25]);
+            rx2_1.set(8);
+            rx2_0.set(25);
+            assert_eq!(&*rx4.get(SNAPSHOT_CTX), &vec![25, 16, 9, 16, 25]);
+        }
         rx1.set(vec![5, 4, 3, 2, 1]);
-        assert_eq!(&*rx4.get(SNAPSHOT_CTX), &vec![5, 8, 9, 8, 5]);
+        {
+            let (rx2_0, rx2_1, rx2_2, rx2_3) = rx1.split_map_mut4(|x| {
+                let mut iter = x.iter_mut();
+                (iter.next().unwrap(), iter.next().unwrap(), iter.next().unwrap(), iter.next().unwrap())
+            });
+            let rx1_alt = CRx::new(|c| vec![*rx2_0.get(c), *rx2_1.get(c), *rx2_2.get(c), *rx2_3.get(c)]);
+            let rx3 = CRx::new(|c| vec![*rx2_0.get(c) * 0, *rx2_1.get(c) * 1, *rx2_2.get(c) * 3, *rx2_3.get(c) * 4]);
+            let rx4 = CRx::new(|c| rx3.get(c).iter().copied().zip(rx1_alt.get(c).iter().copied()).map(|(a, b)| a + b).collect::<Vec<_>>());
+            let (_rx5_0, _rx5_1, _rx5_3) = rx4.split_map3(|x| (&x[0], &x[1], &x[3]));
+            assert_eq!(&*rx4.get(SNAPSHOT_CTX), &vec![5, 8, 9, 8, 5]);
+        }
     }
 
     #[test]

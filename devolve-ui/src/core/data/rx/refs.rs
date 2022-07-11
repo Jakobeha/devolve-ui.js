@@ -41,14 +41,14 @@ assert_is_covariant!(for['b, T] (DRxRef<'b, 'a, T>) over 'a);
 assert_is_covariant!(for['a, T] (DRxRef<'b, 'a, T>) over 'b);
 
 pub struct DRxRefMut<'b, 'a, T>(pub(super) RefMut<'b, &'a mut T>);
-assert_is_covariant!(for['b, T] (DRxRefMut<'b, 'a, T>) over 'a);
+// assert_is_covariant!(for['b, T] (DRxRefMut<'b, 'a, T>) over 'a); Not true
 assert_is_covariant!(for['a, T] (DRxRefMut<'b, 'a, T>) over 'b);
 
 pub struct SRxRefCell<'a, T>(pub(super) &'a RefCell<T>);
 assert_is_covariant!(for[T] (SRxRefCell<'a, T>) over 'a);
 
 pub struct DRxRefCell<'b, 'a, T>(pub(super) &'b RefCell<&'a mut T>);
-assert_is_covariant!(for['b, T] (DRxRefCell<'b, 'a, T>) over 'a);
+// assert_is_covariant!(for['b, T] (DRxRefCell<'b, 'a, T>) over 'a); Not true
 assert_is_covariant!(for['a, T] (DRxRefCell<'b, 'a, T>) over 'b);
 
 pub trait MRxRefCell<'a, T> {

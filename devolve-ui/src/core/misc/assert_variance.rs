@@ -43,6 +43,7 @@
 /// [`assert_is_contravariant!`]: macro.assert_is_contravariant.html
 pub macro assert_is_covariant {
     (for[$($gen_params:tt)*] ($type_name:ty) over $lf:lifetime where {$a:lifetime, $b:lifetime} [$($where_body:tt)*] [$($where_body1:tt)*] [$($where_body2:tt)*]) => {
+        #[allow(dead_code, unused)]
         const _: () = {
             struct Cov<$lf, $($gen_params)*>($type_name) where $($where_body)*;
             fn test_cov<$a: $b, $b, $($gen_params)*>(
@@ -55,6 +56,7 @@ pub macro assert_is_covariant {
     },
 
     (for[$($gen_params:tt)*] ($type_name:ty) over $lf:lifetime $(where [$($where_body:tt)*])?) => {
+        #[allow(dead_code, unused)]
         const _: () = {
             struct Cov<$lf, $($gen_params)*>($type_name) $(where $($where_body)*)?;
             fn test_cov<'__a: '__b, '__b, $($gen_params)*>(
@@ -74,6 +76,7 @@ pub macro assert_is_covariant {
     // ONLY covariant, contravariant, or invariant over a type parameter, if it is works in this case
     // it proves that the type is covariant in all cases.
     (for[$($($gen_params:tt)+)?] ($type_name:ty) over $type_param:ident) => {
+        #[allow(dead_code, unused)]
         const _: () = {
             type Transform<$($($gen_params)+,)? $type_param> = $type_name;
 
@@ -134,6 +137,7 @@ pub macro assert_is_covariant {
 /// [`assert_is_covariant!`]: macro.assert_is_covariant.html
 pub macro assert_is_contravariant {
     (for[$($gen_params:tt)*] ($type_name:ty) over $lf:lifetime $(where [$($where_body:tt)*])?) => {
+        #[allow(dead_code, unused)]
         const _: () = {
             struct Contra<$lf, $($gen_params)*>($type_name) $(where $($where_body)*)?;
             fn test_contra<'__a: '__b, '__b, $($gen_params)*>(
@@ -147,6 +151,7 @@ pub macro assert_is_contravariant {
 
     // for info on why this works, see the implementation of assert_is_covariant
     (for[$($($gen_params:tt)+)?] ($type_name:ty) over $type_param:ident) => {
+        #[allow(dead_code, unused)]
         const _: () = {
             type Transform<$($($gen_params)+,)? $type_param> = $type_name;
 
