@@ -9,7 +9,7 @@ pub mod run_rx;
 pub mod snapshot_ctx;
 pub mod refs;
 
-use std::cell::{Cell, Ref, RefCell};
+use std::cell::{Ref, RefCell};
 use std::ops::{Deref, DerefMut};
 use std::rc::Rc;
 use crate::core::data::rx::refs::{DRxRef, DRxRefCell, MRxRef, MRxRefCell, SRxRefCell};
@@ -273,7 +273,7 @@ trait CRxImplDyn: RxContext {
 }
 
 struct CRxImplImpl<'c, T: 'c, F: FnMut(&RxContextRef<'c>) -> T + 'c> {
-    value: Cell<T>,
+    value: RefCell<T>,
     compute: RefCell<F>,
     observers: RxObservers<'c>,
 }
@@ -480,7 +480,7 @@ impl<'c, T: 'c, F: FnMut(&RxContextRef<'c>) -> T + 'c> CRxImplImpl<'c, T, F> {
             }
             Ok(mut compute) => {
                 let computed = compute(&RxContextRef::Strong(self_));
-                self.value.set(computed);
+                self.value.replace(computed);
             }
         }
     }
@@ -544,6 +544,12 @@ pub mod tests {
             drx.set(2);
             assert_eq!(drx.get(SNAPSHOT_CTX).deref(), &2);
         }
+        {
+            let drx2 = rx.map_mut(|x| x.get_mut(2).unwrap());
+            assert_eq!(drx2.get(SNAPSHOT_CTX).deref(), &3);
+            drx2.modify(|x| *x += 2);
+            assert_eq!(drx2.get(SNAPSHOT_CTX).deref(), &5);
+        }
         assert_eq!(rx.get(SNAPSHOT_CTX).deref(), &vec![2, 2, 5]);
     }
 
@@ -557,7 +563,7 @@ pub mod tests {
             });
             assert_eq!(drx0.get(SNAPSHOT_CTX).deref(), &1);
             assert_eq!(drx1.get(SNAPSHOT_CTX).deref(), &2);
-            assert_eq!(drx2.get(SNAPSHOT_CTX).deref(), &5);
+            assert_eq!(drx2.get(SNAPSHOT_CTX).deref(), &3);
             drx0.set(2);
             drx1.set(3);
             drx2.set(4);
@@ -626,9 +632,11 @@ pub mod tests {
             rx_snapshots.push(*rx.get(c))
         });
         for i in 0..1000 {
-            rx.set(*rx.get(SNAPSHOT_CTX) + 1);
-            expected_rx_snapshots.push(i);
+            let new_value = *rx.get(SNAPSHOT_CTX) + 1;
+            rx.set(new_value);
+            expected_rx_snapshots.push(i + 1);
         }
+        expected_rx_snapshots.push(1001);
         assert_eq!(rx_snapshots, expected_rx_snapshots);
     }
 }
