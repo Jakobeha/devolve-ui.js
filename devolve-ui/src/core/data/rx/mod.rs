@@ -9,7 +9,7 @@ pub mod run_rx;
 pub mod snapshot_ctx;
 pub mod refs;
 
-use std::cell::{Ref, RefCell};
+use std::cell::{Cell, Ref, RefCell};
 use std::ops::{Deref, DerefMut};
 use std::rc::Rc;
 use crate::core::data::rx::refs::{DRxRef, DRxRefCell, MRxRef, MRxRefCell, SRxRefCell};
@@ -17,6 +17,7 @@ use crate::core::data::rx::context::{AsRxContext, RxContext, RxContextRef};
 use crate::core::data::rx::observers::RxObservers;
 use crate::core::data::rx::run_rx::RunRxContext;
 use crate::core::data::rx::context::assert_is_c_variant;
+use crate::core::misc::map_split_n::MapSplitN;
 
 pub trait MapRef<'a, T> {
     fn map<U>(self, f: impl FnOnce(&T) -> &U) -> Ref<'a, U>;
@@ -36,15 +37,15 @@ impl<'a, T> MapRef<'a, T> for Ref<'a, T> {
     }
 
     fn split_map3<U1, U2, U3>(self, f: impl FnOnce(&T) -> (&U1, &U2, &U3)) -> (Ref<'a, U1>, Ref<'a, U2>, Ref<'a, U3>) {
-        todo!()
+        Ref::map_split3(self, f)
     }
 
     fn split_map4<U1, U2, U3, U4>(self, f: impl FnOnce(&T) -> (&U1, &U2, &U3, &U4)) -> (Ref<'a, U1>, Ref<'a, U2>, Ref<'a, U3>, Ref<'a, U4>) {
-        todo!()
+        Ref::map_split4(self, f)
     }
 
     fn split_map5<U1, U2, U3, U4, U5>(self, f: impl FnOnce(&T) -> (&U1, &U2, &U3, &U4, &U5)) -> (Ref<'a, U1>, Ref<'a, U2>, Ref<'a, U3>, Ref<'a, U4>, Ref<'a, U5>) {
-        todo!()
+        Ref::map_split5(self, f)
     }
 }
 
@@ -58,15 +59,15 @@ impl<'b, 'a, T> MapRef<'b, T> for DRxRef<'b, 'a, T> {
     }
 
     fn split_map3<U1, U2, U3>(self, f: impl FnOnce(&T) -> (&U1, &U2, &U3)) -> (Ref<'b, U1>, Ref<'b, U2>, Ref<'b, U3>) {
-        todo!()
+        Ref::map_split3(self.0, |x| f(x))
     }
 
     fn split_map4<U1, U2, U3, U4>(self, f: impl FnOnce(&T) -> (&U1, &U2, &U3, &U4)) -> (Ref<'b, U1>, Ref<'b, U2>, Ref<'b, U3>, Ref<'b, U4>) {
-        todo!()
+        Ref::map_split4(self.0, |x| f(x))
     }
 
     fn split_map5<U1, U2, U3, U4, U5>(self, f: impl FnOnce(&T) -> (&U1, &U2, &U3, &U4, &U5)) -> (Ref<'b, U1>, Ref<'b, U2>, Ref<'b, U3>, Ref<'b, U4>, Ref<'b, U5>) {
-        todo!()
+        Ref::map_split5(self.0, |x| f(x))
     }
 }
 
@@ -272,7 +273,7 @@ trait CRxImplDyn: RxContext {
 }
 
 struct CRxImplImpl<'c, T: 'c, F: FnMut(&RxContextRef<'c>) -> T + 'c> {
-    value: RefCell<T>,
+    value: Cell<T>,
     compute: RefCell<F>,
     observers: RxObservers<'c>,
 }
@@ -479,7 +480,7 @@ impl<'c, T: 'c, F: FnMut(&RxContextRef<'c>) -> T + 'c> CRxImplImpl<'c, T, F> {
             }
             Ok(mut compute) => {
                 let computed = compute(&RxContextRef::Strong(self_));
-                self.value.replace(computed);
+                self.value.set(computed);
             }
         }
     }
