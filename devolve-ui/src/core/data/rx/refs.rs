@@ -2,8 +2,9 @@ use std::cell::{Ref, RefCell, RefMut};
 use std::ops::{Deref, DerefMut};
 use std::marker::PhantomData;
 use crate::core::data::rx::_MRx;
-use crate::core::data::rx::context::assert_is_c_variant;
+use crate::core::data::rx::context::assert_is_ctx_variant;
 use crate::core::misc::assert_variance::assert_is_covariant;
+use crate::core::misc::map_split_n::MapSplitN;
 
 impl<'a, 'c: 'a, T: 'c, R: _MRx<'c, T>> MRxRef<'a, 'c, T, R, <R::RawRef<'a> as MRxRefCell<'a, T>>::RefMut> {
     pub(super) fn new(rx: &'a R) -> Self {
@@ -34,7 +35,7 @@ impl<'a, 'c: 'a, T: 'c, R: DropRef<T>, R2> Drop for MRxRef<'a, 'c, T, R, R2> {
 /// Reference to data in an `Rx` which triggers update when it gets dropped.
 pub struct MRxRef<'a, 'c: 'a, T: 'c, R: DropRef<T>, R2>(&'a R, R2, PhantomData<&'c T>);
 assert_is_covariant!(for['c, T, R, R2] (MRxRef<'a, 'c, T, R, R2>) over 'a where [R: DropRef<T>]);
-assert_is_c_variant!(for['a, T, R, R2] (MRxRef<'a, 'c, T, R, R2>) over 'c where [R: DropRef<T>]);
+assert_is_ctx_variant!(for['a, T, R, R2] (MRxRef<'a, 'c, T, R, R2>) over 'c where [R: DropRef<T>]);
 
 pub struct DRxRef<'b, 'a, T>(pub(super) Ref<'b, &'a mut T>);
 assert_is_covariant!(for['b, T] (DRxRef<'b, 'a, T>) over 'a);
@@ -123,5 +124,57 @@ impl<'b, 'a, T> Deref for DRxRefMut<'b, 'a, T> {
 impl<'b, 'a, T> DerefMut for DRxRefMut<'b, 'a, T> {
     fn deref_mut(&mut self) -> &mut Self::Target {
         self.0.deref_mut()
+    }
+}
+
+pub trait MapRef<'a, T> {
+    fn map<U>(self, f: impl FnOnce(&T) -> &U) -> Ref<'a, U>;
+    fn split_map2<U1, U2>(self, f: impl FnOnce(&T) -> (&U1, &U2)) -> (Ref<'a, U1>, Ref<'a, U2>);
+    fn split_map3<U1, U2, U3>(self, f: impl FnOnce(&T) -> (&U1, &U2, &U3)) -> (Ref<'a, U1>, Ref<'a, U2>, Ref<'a, U3>);
+    fn split_map4<U1, U2, U3, U4>(self, f: impl FnOnce(&T) -> (&U1, &U2, &U3, &U4)) -> (Ref<'a, U1>, Ref<'a, U2>, Ref<'a, U3>, Ref<'a, U4>);
+    fn split_map5<U1, U2, U3, U4, U5>(self, f: impl FnOnce(&T) -> (&U1, &U2, &U3, &U4, &U5)) -> (Ref<'a, U1>, Ref<'a, U2>, Ref<'a, U3>, Ref<'a, U4>, Ref<'a, U5>);
+}
+
+impl<'a, T> MapRef<'a, T> for Ref<'a, T> {
+    fn map<U>(self, f: impl FnOnce(&T) -> &U) -> Ref<'a, U> {
+        Ref::map(self, f)
+    }
+
+    fn split_map2<U1, U2>(self, f: impl FnOnce(&T) -> (&U1, &U2)) -> (Ref<'a, U1>, Ref<'a, U2>) {
+        Ref::map_split(self, f)
+    }
+
+    fn split_map3<U1, U2, U3>(self, f: impl FnOnce(&T) -> (&U1, &U2, &U3)) -> (Ref<'a, U1>, Ref<'a, U2>, Ref<'a, U3>) {
+        Ref::map_split3(self, f)
+    }
+
+    fn split_map4<U1, U2, U3, U4>(self, f: impl FnOnce(&T) -> (&U1, &U2, &U3, &U4)) -> (Ref<'a, U1>, Ref<'a, U2>, Ref<'a, U3>, Ref<'a, U4>) {
+        Ref::map_split4(self, f)
+    }
+
+    fn split_map5<U1, U2, U3, U4, U5>(self, f: impl FnOnce(&T) -> (&U1, &U2, &U3, &U4, &U5)) -> (Ref<'a, U1>, Ref<'a, U2>, Ref<'a, U3>, Ref<'a, U4>, Ref<'a, U5>) {
+        Ref::map_split5(self, f)
+    }
+}
+
+impl<'b, 'a, T> MapRef<'b, T> for DRxRef<'b, 'a, T> {
+    fn map<U>(self, f: impl FnOnce(&T) -> &U) -> Ref<'b, U> {
+        Ref::map(self.0, |x| f(x))
+    }
+
+    fn split_map2<U1, U2>(self, f: impl FnOnce(&T) -> (&U1, &U2)) -> (Ref<'b, U1>, Ref<'b, U2>) {
+        Ref::map_split(self.0, |x| f(x))
+    }
+
+    fn split_map3<U1, U2, U3>(self, f: impl FnOnce(&T) -> (&U1, &U2, &U3)) -> (Ref<'b, U1>, Ref<'b, U2>, Ref<'b, U3>) {
+        Ref::map_split3(self.0, |x| f(x))
+    }
+
+    fn split_map4<U1, U2, U3, U4>(self, f: impl FnOnce(&T) -> (&U1, &U2, &U3, &U4)) -> (Ref<'b, U1>, Ref<'b, U2>, Ref<'b, U3>, Ref<'b, U4>) {
+        Ref::map_split4(self.0, |x| f(x))
+    }
+
+    fn split_map5<U1, U2, U3, U4, U5>(self, f: impl FnOnce(&T) -> (&U1, &U2, &U3, &U4, &U5)) -> (Ref<'b, U1>, Ref<'b, U2>, Ref<'b, U3>, Ref<'b, U4>, Ref<'b, U5>) {
+        Ref::map_split5(self.0, |x| f(x))
     }
 }

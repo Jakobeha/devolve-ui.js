@@ -1,11 +1,11 @@
 use std::cell::RefCell;
 use std::collections::HashSet;
 use std::marker::PhantomData;
-use crate::core::data::rx::context::{assert_is_c_variant, RxContextRef};
+use crate::core::data::rx::context::{assert_is_ctx_variant, RxContextRef};
 
 // /*pub(super) */pub struct RxObservers<'c>(UnsafeCovariantRefCell<HashSet<RxContextRef<'c>>>);
 pub struct RxObservers<'c>(RefCell<HashSet<RxContextRef<'static>>>, PhantomData<&'c ()>);
-assert_is_c_variant!((RxObservers<'c>) over 'c);
+assert_is_ctx_variant!((RxObservers<'c>) over 'c);
 
 impl<'c> RxObservers<'c> {
     pub(super) fn new() -> Self {
