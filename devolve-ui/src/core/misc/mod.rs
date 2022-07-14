@@ -1,7 +1,6 @@
 //! Random utility code which aren't really `devolve-ui` specific but needed by `devolve-ui`.
 
 pub(crate) mod assert_variance;
-pub mod cell_vec;
 pub mod float_ord;
 pub mod ident;
 pub mod io_write_2_fmt_write;

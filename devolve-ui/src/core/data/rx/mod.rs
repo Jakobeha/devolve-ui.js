@@ -1,331 +1,434 @@
 //! `Rx` means "reactive value" (or "reactive X"). It is a wrapper for a value which changes,
-//! and these changes trigger dependencies to re-run and change themselves. You can't access the
+//! and these changes trigger dependencies to re-run and change themselves.
+//!
+//! Because of Rust's borrowing rules, you can't just have `Rx` values change arbitrarily,
+//! because then references will be invalidated. Instead, when an `Rx` is updated, this update is delayed until there are no mutable references.
+//! Furthermore, you cannot just get a mutable reference to an `Rx` value, you must set it to an entirely new value.
+//!
+//! The way it works is, there is an `RxDAG` which stores the entire dependency graph, and you can only get a reference to an `Rx` value
+//! from a shared reference to the graph. The `Rx`s update when you call `RxDAG::recompute`, which requires a mutable reference.
+//!
+//! Furthermore, `Rx` closures must have a specific lifetime, because they may be recomputed.
+//! This lifetime is annotated `'c` and the same lifetime is for every closure in an `RxDAG`.
 //! value directly, instead you use an associated function like `run_rx` to access it in a closure
 //! which can re-run whenever the dependency changes. You can create new `Rx`s from old ones.
 
-pub mod context;
-pub mod observers;
-pub mod run_rx;
-pub mod snapshot_ctx;
-pub mod refs;
-
+use std::alloc::{alloc, Layout};
 use std::cell::{Cell, Ref, RefCell};
-use std::ops::{Deref, DerefMut};
-use std::rc::Rc;
-use refs::MapRef;
-use crate::core::data::rx::refs::{DRxRef, DRxRefCell, MRxRef, MRxRefCell, SRxRefCell};
-use crate::core::data::rx::context::{AsRxContext, RxContext, RxContextRef};
-use crate::core::data::rx::observers::RxObservers;
-use crate::core::data::rx::run_rx::RunRxContext;
-use crate::core::data::rx::context::assert_is_ctx_variant;
-use crate::core::misc::assert_variance::assert_is_covariant;
-use crate::core::misc::map_split_n::MapSplitN;
+use std::hash::Hash;
+use std::marker::PhantomData;
+use std::mem::{align_of, align_of_val, MaybeUninit, size_of, size_of_val};
+use std::ops::{Deref, Index};
+use std::ptr;
+use std::ptr::NonNull;
+use std::rc::{Rc, Weak};
+use elsa::FrozenVec;
+use smallvec::SmallVec;
+use stable_deref_trait::StableDeref;
+use crate::core::misc::cell_vec::CellAppendVec;
+use crate::core::misc::slice_split3::SliceSplit3;
 
-pub trait ARx<'ctx, T: 'ctx> {
-    fn get(&self) -> &T;
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct RxDAGUid<'c>(usize, PhantomData<&'c ()>);
 
-    fn map<'a, U: 'ctx>(&'a self, f: impl FnMut(&T) -> &U + 'a) -> DCRx<'a, 'ctx, U> where Self: Sized, 'ctx: 'a;
-    fn split_map2<'a, U1: 'ctx, U2: 'ctx>(
-        &'a self,
-        f: impl FnMut(&T) -> (U1, U2) + 'a
-    ) -> (CRx<'ctx, U1>, CRx<'ctx, U2>) where Self: Sized, 'ctx: 'a;
+thread_local! {
+    static RX_DAG_UID: Cell<usize> = Cell::new(0);
 }
 
-pub trait Var<'ctx, T: 'ctx> {
-    fn get(&self) -> &T;
-    fn set(&self, new_value: T);
-
-    fn map<'a, U>(&'a mut self, f: impl FnMut(&'a mut T) -> &'a mut U + 'a) -> DVar<'a, 'ctx, U> where Self: Sized, 'ctx: 'a;
-    fn split_map2<'a, U1, U2>(
-        &'a mut self,
-        f: impl FnMut(&'a mut T) -> (&'a mut U1, &'a mut U2) + 'a
-    ) -> (DVar<'a, 'ctx, U1>, DVar<'a, 'ctx, U2>) where Self: Sized, 'ctx: 'a;
-}
-
-/// Source `Var`. Serves as an input to `Rx`s which can be accessed and mutated directly.
-/// Contains its value.
-pub struct SVar<'ctx, T: 'ctx> {
-    current: T,
-    next: Cell<Option<T>>,
-    context: &'ctx RxContext<'ctx>
-}
-assert_is_ctx_variant!(for[T] (SRx<'ctx, T>) over 'ctx);
-
-/// Derived `Var`. Serves as an input to `Rx`s which can be accessed and mutated directly.
-/// Contains part of a value from a `SVar`.
-pub struct DVar<'a, 'ctx, T> {
-    current: &'a mut T,
-    next: Cell<Option<&'a mut T>>,
-    context: &'ctx RxContext<'ctx>
-}
-assert_is_ctx_variant!(for['a, T] (DVar<'a, 'ctx, T>) over 'ctx);
-
-/// Source `Rx`. A computed value from `Var`s and other `Rx`s. Contains its value.
-pub struct SRx<'ctx, T: 'ctx> {
-    current: T,
-    next: Cell<Option<T>>,
-    context: &'ctx RxContext<'ctx>
-}
-assert_is_ctx_variant!(for[T] (CRx<'ctx, T>) over 'ctx);
-assert_is_covariant!(for['ctx], (CRx<'ctx, T>) over T)
-
-/// Derived `Rx`. A computed value from `Var`s and other `Rx`s. Contains a part of a value from an `SRx`.
-pub struct DRx<'a, 'ctx, T> {
-    current: &'a T,
-    next: Cell<Option<&'a T>>,
-    context: &'ctx RxContext<'ctx>
-}
-assert_is_ctx_variant!(for['a, T] (DCRx<'ctx, T>) over 'ctx);
-
-// trait CRxImplDyn<'ctx cov, T cov>: RxContext
-trait CRxImplDyn: RxContext {
-    // fn get<'a, 'ctx: 'ctx + 'a>(&'a self, c: &(dyn AsRxContext<'ctx2> + '_)) -> Ref<'a, T>;
-    fn get<'a, 'ctx2: 'a>(&'a self, c: &(dyn AsRxContext<'ctx2> + '_)) -> Ref<'a, Self::T>;
-}
-
-struct CRxImplImpl<'ctx, T: 'ctx, F: FnMut(&RxContextRef<'ctx>) -> T + 'ctx> {
-    value: T,
-    compute: RefCell<F>,
-    observers: RxObservers<'ctx>,
-}
-// assert_is_ctx_variant!(for[T, F] (CRxImplImpl<'ctx, T, F>) over 'ctx where {'__a, '__b} [F: FnMut(&RxContextRef<'ctx>) -> T] [F: FnMut(&RxContextRef<'__a>) -> T] [F: FnMut(&RxContextRef<'__b>) -> T]);
-
-/*pub(super) */pub trait _MRx<'ctx, T: 'ctx>: Rx<'ctx, T> {
-    type RawRef<'b>: MRxRefCell<'b, T> where Self: 'b;
-
-    fn get_raw(&self) -> Self::RawRef<'_>;
-    fn get_raw_mut(&mut self) -> &mut T;
-    fn observers(&self) -> &RxObservers<'ctx>;
-    fn observers_and_get_raw_mut(&mut self) -> (&RxObservers<'ctx>, &mut T);
-
-    fn trigger(&self);
-}
-
-impl<'ctx, T: 'ctx> Rx<'ctx, T> for CRx<'ctx, T> {
-    type Ref<'a> = Ref<'a, T> where Self: 'a, 'ctx: 'a;
-
-    fn get<'a, 'ctx2: 'ctx + 'a>(&'a self, c: &(dyn AsRxContext<'ctx2> + '_)) -> Self::Ref<'a> {
-        self.0.get(c)
-    }
-}
-
-impl<'ctx, T: 'ctx> Rx<'ctx, T> for SRx<'ctx, T> {
-    type Ref<'a> = Ref<'a, T> where Self: 'a, 'ctx: 'a;
-
-    fn get<'a, 'ctx2: 'ctx + 'a>(&'a self, c: &(dyn AsRxContext<'ctx2> + '_)) -> Self::Ref<'a> {
-        self.observers.insert(c.as_rx_context());
-        self.value.borrow()
-    }
-}
-
-impl<'a, 'ctx: 'a, T: 'ctx> Rx<'ctx, T> for DVar<'a, 'ctx, T> {
-    type Ref<'b> = DRxRef<'b, 'a, T> where Self: 'b, 'ctx: 'b;
-
-    fn get<'b, 'ctx2: 'ctx + 'b>(&'b self, c: &(dyn AsRxContext<'ctx2> + '_)) -> Self::Ref<'b> {
-        self.observers.insert(c.as_rx_context());
-        DRxRef(self.value.borrow())
-    }
-}
-
-impl<'ctx, T: 'ctx, R: _MRx<'ctx, T>> Var<'ctx, T> for R {
-    type RefMut<'a> = MRxRef<'a, 'ctx, T, Self, <R::RawRef<'a> as MRxRefCell<'a, T>>::RefMut> where Self: 'a, 'ctx: 'a;
-
-    fn get_mut<'a>(&'a mut self, c: &(dyn AsRxContext<'ctx> + 'ctx)) -> Self::RefMut<'a> where 'ctx: 'a {
-        self.observers().insert(c.as_rx_context());
-        MRxRef::new(self)
-    }
-
-    fn set(&self, new_value: T) {
-        self.get_raw().replace(new_value);
-        self.trigger();
-    }
-
-    fn modify(&'ctx self, f: impl Fn(&mut T) + 'ctx) {
-        f(&mut *self.get_raw().borrow_mut());
-        self.trigger();
-        let observers = self.observers();
-        // Need to add observer after the trigger so that we don't re-trigger and recurse
-        observers.insert(RxContextRef::owned(RunRxContext::<'ctx, _>::new(move |c| {
-            // equivalent to `f(self.get_mut(c).deref_mut())`, except we don't trigger
-            observers.insert(c.as_rx_context());
-            f(&mut self.get_raw().borrow_mut());
-        })));
-    }
-
-    fn map_mut<'a, U>(&'a mut self, f: impl Fn(&'a mut T) -> &'a mut U + 'ctx) -> DVar<'a, 'ctx, U> where 'ctx: 'a {
-        let (observers, raw_mut) = self.observers_and_get_raw_mut();
-        DVar {
-            value: RefCell::new(f(raw_mut)),
-            observers
-        }
-    }
-
-    fn split_map_mut2<'a, U1, U2>(
-        &'a mut self,
-        f: impl Fn(&'a mut T) -> (&'a mut U1, &'a mut U2) + 'ctx
-    ) -> (DVar<'a, 'ctx, U1>, DVar<'a, 'ctx, U2>) where 'ctx: 'a {
-        let (observers, raw_mut) = self.observers_and_get_raw_mut();
-        let (a, b) = f(raw_mut);
-        (
-            DVar { value: RefCell::new(a), observers },
-            DVar { value: RefCell::new(b), observers }
-        )
-    }
-
-    fn split_map_mut3<'a, U1, U2, U3>(
-        &'a mut self,
-        f: impl Fn(&'a mut T) -> (&'a mut U1, &'a mut U2, &'a mut U3) + 'ctx
-    ) -> (DVar<'a, 'ctx, U1>, DVar<'a, 'ctx, U2>, DVar<'a, 'ctx, U3>) where 'ctx: 'a {
-        let (observers, raw_mut) = self.observers_and_get_raw_mut();
-        let (a, b, c) = f(raw_mut);
-        (
-            DVar { value: RefCell::new(a), observers },
-            DVar { value: RefCell::new(b), observers },
-            DVar { value: RefCell::new(c), observers }
-        )
-    }
-
-    fn split_map_mut4<'a, U1, U2, U3, U4>(
-        &'a mut self,
-        f: impl Fn(&'a mut T) -> (&'a mut U1, &'a mut U2, &'a mut U3, &'a mut U4) + 'ctx
-    ) -> (DVar<'a, 'ctx, U1>, DVar<'a, 'ctx, U2>, DVar<'a, 'ctx, U3>, DVar<'a, 'ctx, U4>) where 'ctx: 'a {
-        let (observers, raw_mut) = self.observers_and_get_raw_mut();
-        let (a, b, c, d) = f(raw_mut);
-        (
-            DVar { value: RefCell::new(a), observers },
-            DVar { value: RefCell::new(b), observers },
-            DVar { value: RefCell::new(c), observers },
-            DVar { value: RefCell::new(d), observers }
-        )
-    }
-
-    fn split_map_mut5<'a, U1, U2, U3, U4, U5>(
-        &'a mut self,
-        f: impl Fn(&'a mut T) -> (&'a mut U1, &'a mut U2, &'a mut U3, &'a mut U4, &'a mut U5) + 'ctx
-    ) -> (DVar<'a, 'ctx, U1>, DVar<'a, 'ctx, U2>, DVar<'a, 'ctx, U3>, DVar<'a, 'ctx, U4>, DVar<'a, 'ctx, U5>) where 'ctx: 'a {
-        let (observers, raw_mut) = self.observers_and_get_raw_mut();
-        let (a, b, c, d, e) = f(raw_mut);
-        (
-            DVar { value: RefCell::new(a), observers },
-            DVar { value: RefCell::new(b), observers },
-            DVar { value: RefCell::new(c), observers },
-            DVar { value: RefCell::new(d), observers },
-            DVar { value: RefCell::new(e), observers }
-        )
-    }
-}
-
-impl<'ctx, T: 'ctx> _MRx<'ctx, T> for SRx<'ctx, T> {
-    type RawRef<'a> = SRxRefCell<'a, T> where 'ctx: 'a;
-
-    fn get_raw(&self) -> Self::RawRef<'_> {
-        SRxRefCell(&self.value)
-    }
-
-    fn get_raw_mut(&mut self) -> &mut T {
-        self.value.get_mut()
-    }
-
-    fn observers(&self) -> &RxObservers<'ctx> {
-        &self.observers
-    }
-
-    fn observers_and_get_raw_mut(&mut self) -> (&RxObservers<'ctx>, &mut T) {
-        (&self.observers, self.value.get_mut())
-    }
-
-    fn trigger(&self) {
-        self.observers.trigger()
-    }
-}
-
-impl<'a, 'ctx: 'a, T: 'ctx> _MRx<'ctx, T> for DVar<'a, 'ctx, T> {
-    type RawRef<'b> = DRxRefCell<'b, 'a, T> where 'a: 'b;
-
-    fn get_raw(&self) -> Self::RawRef<'_> {
-        DRxRefCell(&self.value)
-    }
-
-    fn get_raw_mut(&mut self) -> &mut T {
-        self.value.get_mut()
-    }
-
-    fn observers(&self) -> &RxObservers<'ctx> {
-        &self.observers
-    }
-
-    fn observers_and_get_raw_mut(&mut self) -> (&RxObservers<'ctx>, &mut T) {
-        (&self.observers, self.value.get_mut())
-    }
-
-    fn trigger(&self) {
-        self.observers.trigger()
-    }
-}
-
-impl<'ctx, T: 'ctx> CRx<'ctx, T> {
-    pub fn new(compute: impl FnMut(&RxContextRef<'ctx>) -> T + 'ctx) -> Self {
-        CRx(CRxImplImpl::new(compute))
-    }
-}
-
-impl<'ctx, T: 'ctx> SRx<'ctx, T> {
-    pub fn new(value: T) -> Self {
-        SRx {
-            value: RefCell::new(value),
-            observers: RxObservers::new(),
-        }
-    }
-
-    pub fn into_inner(self) -> T {
-        self.value.into_inner()
-    }
-}
-
-impl<'ctx, T: 'ctx, F: FnMut(&RxContextRef<'ctx>) -> T + 'ctx> CRxImplImpl<'ctx, T, F> {
-    fn recompute_without_trigger(self: Rc<Self>) {
-        let self_ = self.clone();
-        match self.compute.try_borrow_mut() {
-            Err(err) => {
-                panic!("compute recursively caused compute: {}", err)
-            }
-            Ok(mut compute) => {
-                let computed = compute(&RxContextRef::Strong(self_));
-                self.value.replace(computed);
-            }
-        }
-    }
-}
-
-impl<'ctx, T: 'ctx, F: FnMut(&RxContextRef<'ctx>) -> T + 'ctx> CRxImplDyn for CRxImplImpl<'ctx, T, F> {
-    type T = T;
-
-    // fn get<'a, 'ctx2: 'ctx + 'a>(&'a self, c: &(dyn AsRxContext<'ctx2> + '_)) -> Ref<'a, Self::T>
-    fn get<'a, 'ctx2: 'a>(&'a self, c: &(dyn AsRxContext<'ctx2> + '_)) -> Ref<'a, Self::T> {
-        // Here we must extend lifetime because we can't enforce 'ctx2: 'ctx and keep variance
-        self.observers.insert(unsafe { std::mem::transmute::<RxContextRef<'ctx2>, RxContextRef<'ctx>>(c.as_rx_context()) });
-        self.value.borrow()
-    }
-}
-
-impl<'ctx, T: 'ctx, F: FnMut(&RxContextRef<'ctx>) -> T + 'ctx> RxContext for CRxImplImpl<'ctx, T, F> {
-    fn recompute(self: Rc<Self>) {
-        self.clone().recompute_without_trigger();
-        self.observers.trigger();
-    }
-}
-
-impl<'ctx, T: 'ctx, F: FnMut(&RxContextRef<'ctx>) -> T + 'ctx> CRxImplImpl<'ctx, T, F> {
-    pub fn new(mut compute: F) -> Rc<Self> {
-        Rc::<CRxImplImpl<T, F>>::new_cyclic(|this| {
-            let value = compute(&RxContextRef::Weak(this.clone()));
-            CRxImplImpl {
-                // have to clone because RxContext :(
-                value: RefCell::new(value),
-                compute: RefCell::new(compute),
-                observers: RxObservers::new()
-            }
+impl<'c> RxDAGUid<'c> {
+    pub fn next() -> RxDAGUid<'c> {
+        RX_DAG_UID.with(|uid_cell| {
+            RxDAGUid(uid_cell.update(|uid| uid + 1), PhantomData)
         })
+    }
+}
+
+pub trait RxContext<'c> {
+    fn graph<'c2>(&self) -> &RxDAG<'c2> where 'c: 'c2;
+}
+
+impl<'c> RxContext<'c> for RxDAG<'c> {
+    fn graph<'c2>(&self) -> &RxDAG<'c2> where 'c: 'c2 {
+        self
+    }
+}
+
+/// The DAG is a list of interspersed nodes and edges. The edges refer to other nodes relative to their own position.
+/// Later Rxs *must* depend on earlier Rxs.
+///
+/// When the DAG recomputes, it simply iterates through each node and edge in order and calls `RxDAGElem::recompute`.
+/// If the nodes were changed (directly or as edge output), they set their new value, and mark that they got recomputed.
+/// The edges will recompute and change their output nodes if any of their inputs got recomputed.
+///
+/// The DAG has interior mutability, in that it can add nodes without a mutable borrow.
+/// See `elsa` crate for why this is sound (though honestly the soundness argument is kinda sus).
+/// `RxDAGElem` implements `Deref` and `StableDeref` but panics if it's an edge, however `Deref` is
+/// only accessible internally and should never be able to reach the panic case.
+///
+/// Setting `Rx` values is also interior mutability, and OK because we don't use those values until `RxDAGElem::recompute`.
+///
+/// The DAG and refs have an ID so that you can't use one ref on another DAG, however this is checked at runtime.
+/// The lifetimes are checked at compile-time though.
+///
+/// Currently no `Rx`s are deallocated until the entire DAG is deallocated,
+/// so if you keep creating and discarding `Rx`s you will leak memory (TODO fix this?)
+pub struct RxDAG<'c>(FrozenVec<RxDAGElem<'c>>, RxDAGUid<'c>);
+
+enum RxDAGElem<'c> {
+    Node(Box<Rx<'c>>),
+    Edge(Box<RxEdge<'c>>)
+}
+
+type Rx<'c> = dyn RxTrait + 'c;
+type RxEdge<'c> = dyn RxEdgeTrait + 'c;
+
+trait RxTrait {
+    fn post_read(&self) -> bool;
+
+    fn recompute(&mut self);
+    fn did_recompute(&self) -> bool;
+    fn post_recompute(&mut self);
+
+    unsafe fn _set_dyn(&self, ptr: *mut u8, size: usize);
+}
+
+impl dyn RxTrait {
+    unsafe fn set_dyn<T>(&self, mut value: T) {
+        self._set_dyn(&mut value as *mut T as *mut u8, size_of_val(&value));
+    }
+}
+
+struct RxImpl<T> {
+    current: T,
+    next: Cell<Option<T>>,
+    // Rx flags (might have same flags for a group to reduce traversing all Rxs)
+    did_read: Cell<bool>,
+    did_recompute: bool
+}
+
+trait RxEdgeTrait {
+    fn recompute(&mut self, inputs: &[RxDAGElem], outputs: &[RxDAGElem]);
+}
+
+struct RxEdgeImpl<'c, F: FnMut(&mut Vec<usize>, &mut dyn Iterator<Item=&Rx<'c>>) + 'c> {
+    // Takes current of input values (first argument) and sets next of output values (second argument).
+    compute: F,
+    num_outputs: usize,
+    input_backwards_offsets: Vec<usize>,
+}
+
+/// Index into the DAG which will give you an `Rx` value.
+/// However, to get or set the value you need a shared reference to the `DAG`.
+///
+/// The DAG and refs have an ID so that you can't use one ref on another DAG, however this is checked at runtime.
+/// The lifetimes are checked at compile-time though.
+#[derive(Debug, Clone, Copy)]
+#[derivative(Clone(bound = ""))]
+struct RxRef<'c, T> {
+    index: usize,
+    graph_id: RxDAGUid<'c>,
+    phantom: PhantomData<T>
+}
+
+/// Index into the DAG which will give you an `Rx` variable.
+/// However, to get or set the value you need a shared reference to the `DAG`.
+/// This value is not computed from other values, instead you set it directly.
+#[derive(Debug, Clone, Copy)]
+#[derivative(Clone(bound = ""))]
+pub struct Var<'c, T>(RxRef<'c, T>);
+
+/// Index into the DAG which will give you a computed `Rx` value.
+/// However, to get the value you need a shared reference to the `DAG`.
+/// You cannot set the value because it's computed from other values.
+#[derive(Debug, Clone, Copy)]
+#[derivative(Clone(bound = ""))]
+pub struct CRx<'c, T>(RxRef<'c, T>);
+
+thread_local! {
+    static ID: Uid = 0;
+}
+
+impl<'c> RxDAG<'c> {
+    /// Create an empty DAG
+    pub fn new() -> Self {
+        Self(FrozenVec::new(), RxDAGUid::next())
+    }
+
+    /// Create a variable `Rx` in this DAG.
+    pub fn new_var<T>(&self, init: T) -> Var<'c, T> {
+        let index = self.next_index();
+        let mut rx = RxImpl::new(init);
+        self.0.push(RxDAGElem::Node(Box::new(rx)));
+        Var(RxRef::new(self, index))
+    }
+
+    /// Create a computed `Rx` in this DAG.
+    pub fn new_crx<T, F: FnMut() -> T>(&self, mut compute: F) -> CRx<'c, T> {
+        let mut input_backwards_offsets = Vec::new();
+        let init = self.run_compute(&mut compute, &mut input_backwards_offsets);
+        let compute_edge = RxEdgeImpl::new(input_backwards_offsets, 1, move |mut input_backwards_offsets, outputs| {
+            input_backwards_offsets.clear();
+            let output = self.run_compute(&mut compute, &mut input_backwards_offsets);
+            unsafe { outputs.next().unwrap().set_dyn(output); }
+            debug_assert!(outputs.next().is_none());
+        });
+        self.0.push(RxDAGElem::Edge(Box::new(compute_edge)));
+
+        let index = self.next_index();
+        let rx = RxImpl::new(init);
+        self.0.push(RxDAGElem::Node(Box::new(rx)));
+        CRx(RxRef::new(self, index))
+    }
+
+    /// Create 2 computed `Rx` in this DAG which are created from the same function.
+    pub fn new_crx2<T1, T2, F: FnMut() -> (T1, T2)>(&self, mut compute: F) -> (CRx<'c, T1>, CRx<'c, T2>) {
+        let mut input_backwards_offsets = Vec::new();
+        let (init1, init2) = self.run_compute(&mut compute, &mut input_backwards_offsets);
+        let compute_edge = RxEdgeImpl::new(input_backwards_offsets, 2, move |mut input_backwards_offsets, outputs| {
+            input_backwards_offsets.clear();
+            let (output1, output2) = self.run_compute(&mut compute, &mut input_backwards_offsets);
+            unsafe { outputs.next().unwrap().set_dyn(output1); }
+            unsafe { outputs.next().unwrap().set_dyn(output2); }
+            debug_assert!(outputs.next().is_none());
+        });
+        self.0.push(RxDAGElem::Edge(Box::new(compute_edge)));
+
+        let index = self.next_index();
+        let mut rx1 = RxImpl::new(init1);
+        let mut rx2 = RxImpl::new(init2);
+        self.0.push(RxDAGElem::Node(Box::new(rx1)));
+        self.0.push(RxDAGElem::Node(Box::new(rx2)));
+        (CRx(RxRef::new(self, index)), CRx(RxRef::new(self, index + 1)))
+    }
+
+    /// Create 3 computed `Rx` in this DAG which are created from the same function.
+    pub fn new_crx3<T1, T2, T3, F: FnMut() -> (T1, T2, T3)>(&self, mut compute: F) -> (CRx<'c, T1>, CRx<'c, T2>, CRx<'c, T3>) {
+        let mut input_backwards_offsets = Vec::new();
+        let (init1, init2, init3) = self.run_compute(&mut compute, &mut input_backwards_offsets);
+        let compute_edge = RxEdgeImpl::new(input_backwards_offsets, 2, move |mut input_backwards_offsets, outputs| {
+            input_backwards_offsets.clear();
+            let (output1, output2, output3) = self.run_compute(&mut compute, &mut input_backwards_offsets);
+            unsafe { outputs.next().unwrap().set_dyn(output1); }
+            unsafe { outputs.next().unwrap().set_dyn(output2); }
+            unsafe { outputs.next().unwrap().set_dyn(output3); }
+            debug_assert!(outputs.next().is_none());
+        });
+        self.0.push(RxDAGElem::Edge(Box::new(compute_edge)));
+
+        let index = self.next_index();
+        let mut rx1 = RxImpl::new(init1);
+        let mut rx2 = RxImpl::new(init2);
+        let mut rx3 = RxImpl::new(init3);
+        self.0.push(RxDAGElem::Node(Box::new(rx1)));
+        self.0.push(RxDAGElem::Node(Box::new(rx2)));
+        self.0.push(RxDAGElem::Node(Box::new(rx3)));
+        (CRx(RxRef::new(self, index)), CRx(RxRef::new(self, index + 1)), CRx(RxRef::new(self, index + 2)))
+    }
+
+    fn next_index(&self) -> usize {
+        self.0.len()
+    }
+
+    fn run_compute<T, F: FnMut() -> T + 'c>(&self, compute: F, input_backwards_offsets: &mut Vec<usize>) -> T {
+        debug_assert!(input_backwards_offsets.is_empty());
+
+        let result = compute();
+        let input_indices = self.post_read();
+        let len = self.next_index();
+
+        input_indices
+            .into_iter()
+            .map(|index| len - index + 1)
+            .collect_into(input_backwards_offsets);
+        (result, input_backwards_offsets)
+    }
+
+    fn post_read(&self) -> Vec<usize> {
+        let mut results = Vec::new();
+        for (index, current) in self.0.iter().enumerate() {
+            if current.post_read() {
+                results.push(index)
+            }
+        }
+        results
+    }
+
+    /// Update all `Var`s with their new values and recompute `Rx`s.
+    pub fn recompute(&mut self) {
+        for (inputs, current, outputs) in self.0.as_mut().iter_mut_split3s() {
+            current.recompute(inputs, outputs);
+        }
+
+        for current in self.0.as_mut().iter_mut() {
+            current.post_recompute();
+        }
+    }
+}
+
+impl<'c> RxDAGElem<'c> {
+    fn post_read(&self) -> bool {
+        match self {
+            RxDAGElem::Node(node) => node.post_read(),
+            RxDAGElem::Edge(_) => {}
+        }
+    }
+
+    fn recompute(&mut self, inputs: &[RxDAGElem], outputs: &[RxDAGElem]) {
+        match self {
+            RxDAGElem::Node(x) => x.recompute(),
+            RxDAGElem::Edge(x) => x.recompute(inputs, outputs)
+        }
+    }
+
+    fn post_recompute(&mut self) {
+        match self {
+            RxDAGElem::Node(x) => x.post_recompute(),
+            RxDAGElem::Edge(_) => {}
+        }
+    }
+
+    fn as_node(&self) -> Option<&Rx<'c>> {
+        match self {
+            RxDAGElem::Node(x) => Some(x),
+            _ => None
+        }
+    }
+}
+
+impl<T> RxImpl<T> {
+    fn new(init: T) -> Self {
+        Self {
+            current: init,
+            next: Cell::new(None),
+            did_read: Cell::new(false),
+            did_recompute: false
+        }
+    }
+
+    fn get(&self) -> &T {
+        self.did_read.set(true);
+        &self.current
+    }
+
+    fn set(&self, value: T) {
+        self.next.set(Some(value));
+    }
+}
+
+impl<'c, T> RxRef<'c, T> {
+    fn new(graph: &RxDAG<'c>, index: usize) -> Self {
+        RxRef {
+            index,
+            graph_id: graph.1,
+            phantom: PhantomData
+        }
+    }
+
+    fn get<'a>(&self, graph: &'a RxDAG<'c>) -> &'a T {
+        self.get_rx(graph).get()
+    }
+
+    fn set(&self, graph: &RxDAG<'c>, value: T) {
+        self.get_rx(graph).set(Some(value));
+    }
+
+    fn get_rx<'a>(&self, graph: &'a RxDAG<'c>) -> &'a RxImpl<T> {
+        debug_assert!(self.graph_id == graph.0, "RxRef::get_rx: different graph");
+        graph.0.get(self.index).expect("RxRef corrupt: index is an edge")
+    }
+}
+
+impl<'c, T> Var<'c, T> {
+    pub fn get<'a>(&self, c: &'a dyn RxContext<'c>) -> &'a T {
+        let graph = c.graph();
+        self.0.get(graph)
+    }
+
+    pub fn set(&mut self, c: &dyn RxContext<'c>, value: T) {
+        let graph = c.graph();
+        self.0.set(value, graph);
+    }
+}
+
+impl<'c, T> CRx<'c, T> {
+    pub fn get<'a>(&self, c: &'a dyn RxContext<'c>) -> &'a T {
+        let graph = c.graph();
+        self.0.get(graph)
+    }
+}
+
+impl<T> RxTrait for RxImpl<T> {
+    fn post_read(&self) -> bool {
+        self.did_read.take()
+    }
+
+    fn recompute(&mut self) {
+        debug_assert!(!self.did_recompute);
+        match self.next.take() {
+            // Didn't update
+            None => {}
+            // Did update
+            Some(next) => {
+                self.current = next;
+                self.did_recompute = true;
+            }
+        }
+    }
+
+    fn did_recompute(&self) -> bool {
+        self.did_recompute
+    }
+
+    fn post_recompute(&mut self) {
+        self.did_recompute = false;
+    }
+
+    unsafe fn _set_dyn(&self, ptr: *mut u8, size: usize) {
+        let mut value = MaybeUninit::<T>::uninit();
+        ptr::copy_nonoverlapping(ptr, value.as_mut_ptr() as *mut u8, size);
+        self.set(value.assume_init());
+    }
+}
+
+impl<'c> Deref for RxDAGElem<'c> {
+    type Target = Rx<'c>;
+
+    fn deref(&self) -> &Self::Target {
+        self.as_node().expect("RxRef is corrupt: index is an edge (cannot deref RxDAGElem which is an edge)")
+    }
+}
+
+unsafe impl<'c> StableDeref for RxDAGElem<'c> {}
+
+impl<'c, F: FnMut(&mut Vec<usize>, &mut dyn Iterator<Item=&Rx<'c>>) + 'c> RxEdgeImpl<'c, F> {
+    fn new(input_backwards_offsets: Vec<usize>, num_outputs: usize, compute: F) -> Self {
+        Self {
+            input_backwards_offsets,
+            num_outputs,
+            compute
+        }
+    }
+
+    fn output_forwards_offsets(&self) -> impl Iterator<Item=usize> {
+        // Maybe this is a dumb abstraction.
+        // This is very simple, outputs are currently always right after the edge.
+        0..self.num_outputs
+    }
+}
+
+impl<'c, F: FnMut(&mut Vec<usize>, &mut dyn Iterator<Item=&Rx<'c>>) + 'c> RxEdgeTrait for RxEdgeImpl<'c, F> {
+    fn recompute(&mut self, inputs: &[RxDAGElem], outputs: &[RxDAGElem]) {
+        let mut inputs = self.input_backwards_offsets.iter().map(|offset| {
+            inputs[inputs.len() - offset].as_node().expect("broken RxDAG: RxEdge input must be a node")
+        });
+
+        if inputs.any(|x| x.did_recompute()) {
+            // Needs update
+            let mut outputs = self.output_forwards_offsets().map(|offset| {
+                outputs[offset].as_node().expect("broken RxDAG: RxEdge output must be a node")
+            });
+            (self.compute)(&mut self.input_backwards_offsets, &mut outputs);
+        }
     }
 }
 

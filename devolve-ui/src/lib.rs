@@ -19,6 +19,7 @@
 #![feature(cfg_version)]
 #![feature(maybe_uninit_write_slice)]
 #![feature(iter_collect_into)]
+#![feature(cell_update)]
 #![cfg_attr(not(version("1.63")), feature(explicit_generic_args_with_impl_trait))]
 #![cfg_attr(feature = "backtrace", feature(backtrace))]
 
