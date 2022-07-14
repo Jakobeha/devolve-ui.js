@@ -44,7 +44,15 @@ impl<'c> RxDAGUid<'c> {
     }
 }
 
+/// Returns a graph you can write. Note that `RxContext` and `MutRxContext` are neither subset nor superset of each other.
+/// You can't read snapshots without recomputing, and you can't write inputs.
 pub trait RxContext<'a, 'c> {
+    fn sub_dag(self) -> RxSubDAG<'a, 'c>;
+}
+
+/// Returns a graph you can write. Note that `RxContext` and `MutRxContext` are neither subset nor superset of each other.
+/// You can't read snapshots without recomputing, and you can't write inputs.
+pub trait MutRxContext<'a, 'c> {
     fn sub_dag(self) -> RxSubDAG<'a, 'c>;
 }
 
@@ -79,6 +87,9 @@ pub struct RxSubDAG<'a, 'c> {
     index: usize,
     id: RxDAGUid<'c>
 }
+
+#[derive(Debug, Clone, Copy)]
+pub struct RxInput<'a, 'c>(RxSubDAG<'a, 'c>);
 
 enum RxDAGElem<'c> {
     Node(Box<Rx<'c>>),
@@ -139,6 +150,20 @@ struct RxRef<'c, T> {
 #[derivative(Clone(bound = ""))]
 pub struct Var<'c, T>(RxRef<'c, T>);
 
+/// View and mutate part of a `Var`
+#[derive(Debug)]
+pub struct DVar<'c, S, T, GetFn: Fn(&S) -> &T, SetFn: Fn(&S, T) -> S> {
+    source: RxRef<'c, S>,
+    get: GetFn,
+    set: SetFn
+}
+
+#[derive(Debug)]
+pub struct DCRx<'c, S, T, GetFn: Fn(&S) -> &T> {
+    source: RxRef<'c, S>,
+    get: GetFn
+}
+
 /// Index into the DAG which will give you a computed `Rx` value.
 /// However, to get the value you need a shared reference to the `DAG`.
 /// You cannot set the value because it's computed from other values.
@@ -165,24 +190,24 @@ impl<'c> RxDAG<'c> {
     }
 
     /// Run a closure when inputs change, without creating any outputs (for side-effects).
-    pub fn run_crx<F: FnMut()>(&self, mut compute: F) {
+    pub fn run_crx<F: FnMut(RxInput<'_, 'c>)>(&self, mut compute: F) {
         let mut input_backwards_offsets = Vec::new();
-        let () = self.run_compute(&mut compute, self.as_sub_dag(), &mut input_backwards_offsets);
-        let compute_edge = RxEdgeImpl::new(input_backwards_offsets, 0, move |mut input_backwards_offsets, sub_dag, outputs| {
+        let () = self.run_compute(&mut compute, RxInput(self.sub_dag()), &mut input_backwards_offsets);
+        let compute_edge = RxEdgeImpl::new(input_backwards_offsets, 0, move |mut input_backwards_offsets, input, outputs| {
             input_backwards_offsets.clear();
-            let () = self.run_compute(&mut compute, sub_dag, &mut input_backwards_offsets);
+            let () = self.run_compute(&mut compute, input, &mut input_backwards_offsets);
             debug_assert!(outputs.next().is_none());
         });
         self.0.push(RxDAGElem::Edge(Box::new(compute_edge)));
     }
 
     /// Create a computed `Rx` in this DAG.
-    pub fn new_crx<T, F: FnMut(RxSubDAG<'_, 'c>) -> T>(&self, mut compute: F) -> CRx<'c, T> {
+    pub fn new_crx<T, F: FnMut(RxInput<'_, 'c>) -> T>(&self, mut compute: F) -> CRx<'c, T> {
         let mut input_backwards_offsets = Vec::new();
-        let init = self.run_compute(&mut compute, self.as_sub_dag(), &mut input_backwards_offsets);
-        let compute_edge = RxEdgeImpl::new(input_backwards_offsets, 1, move |mut input_backwards_offsets, sub_dag, outputs| {
+        let init = self.run_compute(&mut compute, RxInput(self.sub_dag()), &mut input_backwards_offsets);
+        let compute_edge = RxEdgeImpl::new(input_backwards_offsets, 1, move |mut input_backwards_offsets, input, outputs| {
             input_backwards_offsets.clear();
-            let output = self.run_compute(&mut compute, sub_dag, &mut input_backwards_offsets);
+            let output = self.run_compute(&mut compute, input, &mut input_backwards_offsets);
             unsafe { outputs.next().unwrap().set_dyn(output); }
             debug_assert!(outputs.next().is_none());
         });
@@ -195,12 +220,12 @@ impl<'c> RxDAG<'c> {
     }
 
     /// Create 2 computed `Rx` in this DAG which are created from the same function.
-    pub fn new_crx2<T1, T2, F: FnMut() -> (T1, T2)>(&self, mut compute: F) -> (CRx<'c, T1>, CRx<'c, T2>) {
+    pub fn new_crx2<T1, T2, F: FnMut(RxInput<'_, 'c>) -> (T1, T2)>(&self, mut compute: F) -> (CRx<'c, T1>, CRx<'c, T2>) {
         let mut input_backwards_offsets = Vec::new();
-        let (init1, init2) = self.run_compute(&mut compute, self.as_sub_dag(), &mut input_backwards_offsets);
-        let compute_edge = RxEdgeImpl::new(input_backwards_offsets, 2, move |mut input_backwards_offsets, sub_dag, outputs| {
+        let (init1, init2) = self.run_compute(&mut compute, RxInput(Self.sub_dag()), &mut input_backwards_offsets);
+        let compute_edge = RxEdgeImpl::new(input_backwards_offsets, 2, move |mut input_backwards_offsets, input, outputs| {
             input_backwards_offsets.clear();
-            let (output1, output2) = self.run_compute(&mut compute, sub_dag, &mut input_backwards_offsets);
+            let (output1, output2) = self.run_compute(&mut compute, input, &mut input_backwards_offsets);
             unsafe { outputs.next().unwrap().set_dyn(output1); }
             unsafe { outputs.next().unwrap().set_dyn(output2); }
             debug_assert!(outputs.next().is_none());
@@ -216,12 +241,12 @@ impl<'c> RxDAG<'c> {
     }
 
     /// Create 3 computed `Rx` in this DAG which are created from the same function.
-    pub fn new_crx3<T1, T2, T3, F: FnMut() -> (T1, T2, T3)>(&self, mut compute: F) -> (CRx<'c, T1>, CRx<'c, T2>, CRx<'c, T3>) {
+    pub fn new_crx3<T1, T2, T3, F: FnMut(RxInput<'_, 'c>) -> (T1, T2, T3)>(&self, mut compute: F) -> (CRx<'c, T1>, CRx<'c, T2>, CRx<'c, T3>) {
         let mut input_backwards_offsets = Vec::new();
-        let (init1, init2, init3) = self.run_compute(&mut compute, self.as_sub_dag(), &mut input_backwards_offsets);
-        let compute_edge = RxEdgeImpl::new(input_backwards_offsets, 2, move |mut input_backwards_offsets, sub_dag, outputs| {
+        let (init1, init2, init3) = self.run_compute(&mut compute, RxInput(self.sub_dag), &mut input_backwards_offsets);
+        let compute_edge = RxEdgeImpl::new(input_backwards_offsets, 2, move |mut input_backwards_offsets, input, outputs| {
             input_backwards_offsets.clear();
-            let (output1, output2, output3) = self.run_compute(&mut compute, sub_dag, &mut input_backwards_offsets);
+            let (output1, output2, output3) = self.run_compute(&mut compute, input, &mut input_backwards_offsets);
             unsafe { outputs.next().unwrap().set_dyn(output1); }
             unsafe { outputs.next().unwrap().set_dyn(output2); }
             unsafe { outputs.next().unwrap().set_dyn(output3); }
@@ -243,10 +268,10 @@ impl<'c> RxDAG<'c> {
         self.0.len()
     }
 
-    fn run_compute<T, F: FnMut() -> T + 'c>(&self, compute: F, sub_dag: RxSubDAG<'_, 'c>, input_backwards_offsets: &mut Vec<usize>) -> T {
+    fn run_compute<T, F: FnMut(RxInput<'_, 'c>) -> T + 'c>(&self, compute: F, input: RxInput<'_, 'c>, input_backwards_offsets: &mut Vec<usize>) -> T {
         debug_assert!(input_backwards_offsets.is_empty());
 
-        let result = compute(sub_dag);
+        let result = compute(input);
         let input_indices = self.post_read();
         let len = self.next_index();
 
@@ -295,6 +320,12 @@ impl<'a, 'c> RxContext<'a, 'c> for RxDAGSnapshot<'a, 'c> {
     }
 }
 
+impl<'a, 'c> MutRxContext<'a, 'c> for &'a RxDAG<'c> {
+    fn sub_dag(self) -> RxSubDAG<'a, 'c> {
+        RxDAGSnapshot(self).sub_dag()
+    }
+}
+
 impl<'a, 'c> RxSubDAG<'a, 'c> {
     fn get(&self, index: usize) -> &RxDAGElem<'a> {
         debug_assert!(index < self.index, "index out of sub-dag bounds");
@@ -302,13 +333,9 @@ impl<'a, 'c> RxSubDAG<'a, 'c> {
     }
 }
 
-impl<'a, 'c> RxContext<'c> for RxSubDAG<'a, 'c> {
+impl<'a, 'c> RxContext<'c> for RxInput<'a, 'c> {
     fn sub_dag(self) -> RxSubDAG<'a, 'c> {
-        RxSubDAG {
-            before: self.before,
-            index: self.index,
-            id: self.id
-        }
+        self.0
     }
 }
 
@@ -391,9 +418,25 @@ impl<'c, T> Var<'c, T> {
         self.0.get(graph)
     }
 
-    pub fn set(&self, c: impl RxContext<'_, 'c>, value: T) {
+    pub fn set(&self, c: impl MutRxContext<'_, 'c>, value: T) {
         let graph = c.sub_dag();
         self.0.set(value, graph);
+    }
+
+    pub fn derive<U, GetFn: Fn(&T) -> &U, SetFn: Fn(&T, U) -> T>(&self, get: GetFn, set: SetFn) -> DVar<T, U, GetFn, SetFn> {
+        DVar {
+            source: &self.0 as RxRef<T>,
+            get,
+            set
+        }
+    }
+
+    pub fn derive_using_clone<U, GetFn: Fn(&T) -> &U, SetFn: Fn(&mut T, U)>(&self, get: GetFn, set: SetFn) -> DVar<T, U, GetFn, SetFn> where T: Clone {
+        self.derive(get, move |root, child| {
+            let mut root = root.clone();
+            set(&mut root, child);
+            root
+        })
     }
 }
 
@@ -401,6 +444,34 @@ impl<'c, T> CRx<'c, T> {
     pub fn get<'a>(&self, c: impl RxContext<'a, 'c>) -> &'a T {
         let graph = c.sub_dag();
         self.0.get(graph)
+    }
+
+    pub fn derive<U, GetFn: Fn(&T) -> &U>(&self, get: GetFn) -> DCRx<T, U, GetFn> {
+        DCRx {
+            source: &self.0 as RxRef<T>,
+            get
+        }
+    }
+}
+
+impl<'c, S, T, GetFn: Fn(&S) -> &T, SetFn: Fn(&S, T) -> S> DVar<'c, S, T, GetFn, SetFn> {
+    pub fn get<'a>(&self, c: impl RxContext<'a, 'c>) -> &'a T {
+        let graph = c.sub_dag();
+        (self.get)(self.source.get(graph))
+    }
+
+    pub fn set(&self, c: impl MutRxContext<'_, 'c>, value: T) {
+        let graph = c.sub_dag();
+        let old_value = self.source.get(graph);
+        let new_value = (self.set)(old_value, &value);
+        self.source.set(new_value, graph)
+    }
+}
+
+impl<'c, S, T, GetFn: Fn(&S) -> &T> DCRx<'c, S, T, GetFn> {
+    pub fn get<'a>(&self, c: impl RxContext<'a, 'c>) -> &'a T {
+        let graph = c.sub_dag();
+        (self.get)(self.source.get(graph))
     }
 }
 
@@ -447,7 +518,7 @@ impl<'c> Deref for RxDAGElem<'c> {
 
 unsafe impl<'c> StableDeref for RxDAGElem<'c> {}
 
-impl<'c, F: FnMut(&mut Vec<usize>, RxSubDAG<'_, 'c>, &mut dyn Iterator<Item=&Rx<'c>>) + 'c> RxEdgeImpl<'c, F> {
+impl<'c, F: FnMut(&mut Vec<usize>, RxInput<'_, 'c>, &mut dyn Iterator<Item=&Rx<'c>>) + 'c> RxEdgeImpl<'c, F> {
     fn new(input_backwards_offsets: Vec<usize>, num_outputs: usize, compute: F) -> Self {
         let num_inputs = input_backwards_offsets.len();
         Self {
@@ -465,7 +536,7 @@ impl<'c, F: FnMut(&mut Vec<usize>, RxSubDAG<'_, 'c>, &mut dyn Iterator<Item=&Rx<
     }
 }
 
-impl<'c, F: FnMut(&mut Vec<usize>, RxSubDAG<'_, 'c>, &mut dyn Iterator<Item=&Rx<'c>>) + 'c> RxEdgeTrait for RxEdgeImpl<'c, F> {
+impl<'c, F: FnMut(&mut Vec<usize>, RxInput<'_, 'c>, &mut dyn Iterator<Item=&Rx<'c>>) + 'c> RxEdgeTrait for RxEdgeImpl<'c, F> {
     fn recompute(&mut self, index: usize, before: &[RxDAGElem], after: &[RxDAGElem], graph_id: RxDAGUid) {
         debug_assert!(self.cached_inputs.is_empty());
         self.input_backwards_offsets.iter().copied().map(|offset| {
@@ -478,138 +549,14 @@ impl<'c, F: FnMut(&mut Vec<usize>, RxSubDAG<'_, 'c>, &mut dyn Iterator<Item=&Rx<
             let mut outputs = self.output_forwards_offsets().map(|offset| {
                 after[offset].as_node().expect("broken RxDAG: RxEdge output must be a node")
             });
-            let sub_dag = RxSubDAG {
+            let input_dag = RxInput(RxSubDAG {
                 before,
                 index,
                 id: graph_id
-            };
-            (self.compute)(&mut self.input_backwards_offsets, sub_dag, &mut outputs);
+            });
+            (self.compute)(&mut self.input_backwards_offsets, input_dag, &mut outputs);
         }
         self.cached_inputs.clear();
-    }
-}
-
-#[cfg(test)]
-pub mod tests {
-    use test_log::test;
-    use super::*;
-    use super::run_rx::run_rx;
-    use super::snapshot_ctx::SNAPSHOT_CTX;
-
-    #[test]
-    fn test_srx() {
-        let rx = SRx::new(vec![1, 2, 3]);
-        assert_eq!(rx.get(SNAPSHOT_CTX).deref(), &vec![1, 2, 3]);
-        rx.set(vec![1, 2, 4]);
-        assert_eq!(rx.get(SNAPSHOT_CTX).deref(), &vec![1, 2, 4]);
-        rx.set(vec![1, 2, 5]);
-        assert_eq!(rx.get(SNAPSHOT_CTX).deref(), &vec![1, 2, 5]);
-    }
-
-    #[test]
-    fn test_drx() {
-        let mut rx = SRx::new(vec![1, 2, 3]);
-        {
-            let drx = rx.map_mut(|x| x.get_mut(0).unwrap());
-            assert_eq!(drx.get(SNAPSHOT_CTX).deref(), &1);
-            drx.set(2);
-            assert_eq!(drx.get(SNAPSHOT_CTX).deref(), &2);
-        }
-        {
-            let drx2 = rx.map_mut(|x| x.get_mut(2).unwrap());
-            assert_eq!(drx2.get(SNAPSHOT_CTX).deref(), &3);
-            drx2.modify(|x| *x += 2);
-            assert_eq!(drx2.get(SNAPSHOT_CTX).deref(), &5);
-        }
-        assert_eq!(rx.get(SNAPSHOT_CTX).deref(), &vec![2, 2, 5]);
-    }
-
-    #[test]
-    fn test_drx_split() {
-        let mut rx = SRx::new(vec![1, 2, 3]);
-        {
-            let (drx0, drx1, drx2) = rx.split_map_mut3(|x| {
-                let mut iter = x.iter_mut();
-                (iter.next().unwrap(), iter.next().unwrap(), iter.next().unwrap())
-            });
-            assert_eq!(drx0.get(SNAPSHOT_CTX).deref(), &1);
-            assert_eq!(drx1.get(SNAPSHOT_CTX).deref(), &2);
-            assert_eq!(drx2.get(SNAPSHOT_CTX).deref(), &3);
-            drx0.set(2);
-            drx1.set(3);
-            drx2.set(4);
-        }
-        assert_eq!(rx.get(SNAPSHOT_CTX).deref(), &vec![2, 3, 4]);
-    }
-
-    #[test]
-    fn test_crx() {
-        let g = RxDAG::new();
-        let rx = g.new_var(vec![1, 2, 3]);
-        {
-            let crx = g.new_crx(|g| rx.get(g)[0] * 2);
-            let crx2 = g.new_crx(|g| *crx.get(g) + rx.get(g)[1] * 10);
-            let crx3 = g.new_crx(|g| *crx2.get(g).to_string());
-            assert_eq!(*crx.get(g.now()), 2);
-            assert_eq!(*crx2.get(g.now()), 22);
-            assert_eq!(&*crx3.get(g.now()), "2");
-            rx.set(g.now(), vec![2, 3, 4]);
-            assert_eq!(*crx.get(g.now()), 4);
-            assert_eq!(*crx2.get(g.now()), 34);
-            assert_eq!(&*crx3.get(g.now()), "4");
-            rx.set(g.now(), vec![3, 4, 5]);
-            assert_eq!(*crx.get(g.now()), 6);
-            assert_eq!(*crx2.get(g.now()), 46);
-            assert_eq!(&*crx3.get(g.now()), "6");
-        }
-    }
-
-    #[test]
-    fn test_complex_rx_tree() {
-        let mut rx1 = SRx::new(vec![1, 2, 3, 4]);
-        {
-            let (rx2_0, rx2_1, rx2_2, rx2_3) = rx1.split_map_mut4(|x| {
-                let mut iter = x.iter_mut();
-                (iter.next().unwrap(), iter.next().unwrap(), iter.next().unwrap(), iter.next().unwrap())
-            });
-            let rx1_alt = CRx::new(|c| vec![*rx2_0.get(c), *rx2_1.get(c), *rx2_2.get(c), *rx2_3.get(c)]);
-            let rx3 = CRx::new(|c| vec![*rx2_0.get(c) * 0, *rx2_1.get(c) * 1, *rx2_2.get(c) * 3, *rx2_3.get(c) * 4]);
-            let rx4 = CRx::new(|c| rx3.get(c).iter().copied().zip(rx1_alt.get(c).iter().copied()).map(|(a, b)| a + b).collect::<Vec<_>>());
-            let (_rx5_0, _rx5_1, _rx5_3) = rx4.split_map_ref3(|x| (&x[0], &x[1], &x[3]));
-            assert_eq!(&*rx4.get(SNAPSHOT_CTX), &vec![1, 4, 9, 16, 25]);
-            rx2_1.set(8);
-            rx2_0.set(25);
-            assert_eq!(&*rx4.get(SNAPSHOT_CTX), &vec![25, 16, 9, 16, 25]);
-        }
-        rx1.set(vec![5, 4, 3, 2, 1]);
-        {
-            let (rx2_0, rx2_1, rx2_2, rx2_3) = rx1.split_map_mut4(|x| {
-                let mut iter = x.iter_mut();
-                (iter.next().unwrap(), iter.next().unwrap(), iter.next().unwrap(), iter.next().unwrap())
-            });
-            let rx1_alt = CRx::new(|c| vec![*rx2_0.get(c), *rx2_1.get(c), *rx2_2.get(c), *rx2_3.get(c)]);
-            let rx3 = CRx::new(|c| vec![*rx2_0.get(c) * 0, *rx2_1.get(c) * 1, *rx2_2.get(c) * 3, *rx2_3.get(c) * 4]);
-            let rx4 = CRx::new(|c| rx3.get(c).iter().copied().zip(rx1_alt.get(c).iter().copied()).map(|(a, b)| a + b).collect::<Vec<_>>());
-            let (_rx5_0, _rx5_1, _rx5_3) = rx4.split_map_ref3(|x| (&x[0], &x[1], &x[3]));
-            assert_eq!(&*rx4.get(SNAPSHOT_CTX), &vec![5, 8, 9, 8, 5]);
-        }
-    }
-
-    #[test]
-    fn test_run_rx() {
-        let rx = SRx::new(1);
-        let mut rx_snapshots = Vec::new();
-        let mut expected_rx_snapshots = Vec::new();
-        run_rx(|c| {
-            rx_snapshots.push(*rx.get(c))
-        });
-        for i in 0..1000 {
-            let new_value = *rx.get(SNAPSHOT_CTX) + 1;
-            rx.set(new_value);
-            expected_rx_snapshots.push(i + 1);
-        }
-        expected_rx_snapshots.push(1001);
-        assert_eq!(rx_snapshots, expected_rx_snapshots);
     }
 }
 
@@ -636,4 +583,146 @@ impl<T> Debug for RxEdgeImpl<T> {
             .field("input_backwards_offsets", &self.input_backwards_offsets)
             .finish_non_exhaustive()
     }
+}
+
+#[cfg(test)]
+pub mod tests {
+    use test_log::test;
+    use super::*;
+    use super::run_rx::run_rx;
+    use super::snapshot_ctx::SNAPSHOT_CTX;
+
+    #[test]
+    fn test_rx() {
+        let mut g = RxDAG::new();
+        let mut rx = g.new_var(1);
+        let mut crx = g.new_rx(|g| *rx.get(g) * 2);
+        let mut side_effect = 1;
+        g.run_crx(|g| {
+            side_effect += crx.get(g);
+        });
+        assert_eq!(rx.get(g.now()), &1);
+        assert_eq!(crx.get(g.now()), &2);
+        assert_eq!(side_effect, 2);
+
+        rx.set(&g, 2);
+        assert_eq!(rx.get(g.now()), &2);
+        assert_eq!(crx.get(g.now()), &4);
+        assert_eq!(side_effect, 6);
+
+        rx.set(&g, 3);
+        assert_eq!(rx.get(g.now()), &3);
+        assert_eq!(crx.get(g.now()), &6);
+        assert_eq!(side_effect, 12);
+    }
+
+    #[test]
+    fn test_rx_multiple_inputs_outputs() {
+        let mut g = RxDAG::new();
+        let mut rx = g.new_var(1);
+        let mut rx2 = g.new_var(2);
+        let mut rx3 = g.new_var(vec![3, 4]);
+        {
+            let crx = g.new_crx(|g| vec![*rx.get(g) * 10, *rx2.get(g) * 10]);
+            let crx2 = g.new_crx(|g| {
+                let mut vec = Vec::new();
+                vec.push(*rx.get(g));
+                for elem in rx3.get(g).iter().copied() {
+                    vec.push(elem)
+                }
+                for elem in crx.get(g).iter().copied() {
+                    vec.push(elem)
+                }
+                vec
+            });
+            let (crx3_1, crx3_2) = g.new_crx2(|g| {
+                let vec = crx.get(g);
+                (vec[0] * 10, vec[1] * 10)
+            });
+            let (crx4_1, crx4_2, crx4_3) = g.new_crx3(|g| {
+                let v2 = rx2.get(g);
+                let v3 = crx3_1.get(g);
+                let v4 = rx3.get(g)[0];
+                (v2, v3, v4 * 100)
+            });
+
+            assert_eq!(rx.get(g.now()), &1);
+            assert_eq!(rx2.get(g.now()), &2);
+            assert_eq!(rx3.get(g.now()), &vec![3, 4]);
+            assert_eq!(crx.get(g.now()), &vec![10, 20]);
+            assert_eq!(crx2.get(g.now()), &vec![1, 3, 4, 10, 20]);
+            assert_eq!(crx3_1.get(g.now()), &100);
+            assert_eq!(crx3_2.get(g.now()), &200);
+            assert_eq!(crx4_1.get(g.now()), &1);
+            assert_eq!(crx4_2.get(g.now()), &200);
+            assert_eq!(crx4_3.get(g.now()), &300);
+
+            rx.set(&g, 5);
+            rx2.set(&g, 6);
+            rx3.set(&g, vec![7, 8, 9]);
+            g.recompute();
+
+            assert_eq!(rx.get(g.now()), &5);
+            assert_eq!(rx2.get(g.now()), &6);
+            assert_eq!(rx3.get(g.now()), &vec![7, 8, 9]);
+            assert_eq!(crx.get(g.now()), &vec![50, 60]);
+            assert_eq!(crx2.get(g.now()), &vec![5, 7, 8, 50, 60]);
+            assert_eq!(crx3_1.get(g.now()), &500);
+            assert_eq!(crx3_2.get(g.now()), &600);
+            assert_eq!(crx4_1.get(g.now()), &5);
+            assert_eq!(crx4_2.get(g.now()), &600);
+            assert_eq!(crx4_3.get(g.now()), &700);
+        }
+    }
+
+    #[test]
+    fn test_drx_split() {
+        let mut g = RxDAG::new();
+        let rx = g.new_var(vec![1, 2, 3]);
+        {
+            let drx0 = rx.derive_using_clone(|x| &x[0], |x, new| {
+                x[0] = new;
+            });
+            let drx1 = rx.derive_using_clone(|x| &x[1], |x, new| {
+                x[1] = new;
+            });
+            let drx2 = rx.derive_using_clone(|x| &x[2], |x, new| {
+                x[2] = new;
+            });
+            assert_eq!(drx0.get(g.now()).deref(), &1);
+            assert_eq!(drx1.get(g.now()).deref(), &2);
+            assert_eq!(drx2.get(g.now()).deref(), &3);
+            drx0.set(&g, 2);
+            drx1.set(&g, 3);
+            drx2.set(&g, 4);
+        }
+        assert_eq!(rx.get(g.now()).deref(), &vec![2, 3, 4]);
+    }
+
+    #[test]
+    fn test_crx() {
+        let mut g = RxDAG::new();
+        let rx = g.new_var(vec![1, 2, 3]);
+        {
+            let crx = g.new_crx(|g| rx.get(g)[0] * 2);
+            let crx2 = g.new_crx(|g| *crx.get(g) + rx.get(g)[1] * 10);
+            let crx3 = g.new_crx(|g| *crx2.get(g).to_string());
+            assert_eq!(*crx.get(g.now()), 2);
+            assert_eq!(*crx2.get(g.now()), 22);
+            assert_eq!(&*crx3.get(g.now()), "2");
+            rx.set(&g, vec![2, 3, 4]);
+            assert_eq!(*crx.get(g.now()), 4);
+            assert_eq!(*crx2.get(g.now()), 34);
+            assert_eq!(&*crx3.get(g.now()), "4");
+            rx.set(&g, vec![3, 4, 5]);
+            assert_eq!(*crx.get(g.now()), 6);
+            assert_eq!(*crx2.get(g.now()), 46);
+            assert_eq!(&*crx3.get(g.now()), "6");
+        }
+    }
+
+    /* #[test]
+    fn test_complex_rx_tree() {
+        todo!()
+    } */
 }
