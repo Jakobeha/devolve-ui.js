@@ -74,6 +74,12 @@ impl<'c> RxContext<'c> for RxDAG<'c> {
 /// so if you keep creating and discarding `Rx`s you will leak memory (TODO fix this?)
 pub struct RxDAG<'c>(FrozenVec<RxDAGElem<'c>>, RxDAGUid<'c>);
 
+pub struct RxSubDAG<'a, 'c> {
+    slice: &'a [&'a RxDAGElem<'c>],
+    offset: usize,
+    id: RxDAGUid<'c>
+}
+
 enum RxDAGElem<'c> {
     Node(Box<Rx<'c>>),
     Edge(Box<RxEdge<'c>>)
@@ -107,14 +113,15 @@ struct RxImpl<T> {
 }
 
 trait RxEdgeTrait {
-    fn recompute(&mut self, inputs: &[RxDAGElem], outputs: &[RxDAGElem]);
+    fn recompute(&mut self, offset: usize, inputs: &[RxDAGElem], outputs: &[RxDAGElem], graph_id: RxDAGUid);
 }
 
-struct RxEdgeImpl<'c, F: FnMut(&mut Vec<usize>, &mut dyn Iterator<Item=&Rx<'c>>) + 'c> {
+struct RxEdgeImpl<'c, F: FnMut(&mut Vec<usize>, RxSubDAG<'_, 'c>, &mut dyn Iterator<Item=&Rx<'c>>) + 'c> {
     // Takes current of input values (first argument) and sets next of output values (second argument).
     compute: F,
     num_outputs: usize,
     input_backwards_offsets: Vec<usize>,
+    cached_inputs: Vec<*const RxDAGElem<'c>>
 }
 
 /// Index into the DAG which will give you an `Rx` value.
@@ -162,13 +169,25 @@ impl<'c> RxDAG<'c> {
         Var(RxRef::new(self, index))
     }
 
+    /// Run a closure when inputs change, without creating any outputs (for side-effects).
+    pub fn run_crx<F: FnMut()>(&self, mut compute: F) {
+        let mut input_backwards_offsets = Vec::new();
+        let () = self.run_compute(&mut compute, self.as_sub_dag(), &mut input_backwards_offsets);
+        let compute_edge = RxEdgeImpl::new(input_backwards_offsets, 0, move |mut input_backwards_offsets, sub_dag, outputs| {
+            input_backwards_offsets.clear();
+            let () = self.run_compute(&mut compute, sub_dag, &mut input_backwards_offsets);
+            debug_assert!(outputs.next().is_none());
+        });
+        self.0.push(RxDAGElem::Edge(Box::new(compute_edge)));
+    }
+
     /// Create a computed `Rx` in this DAG.
     pub fn new_crx<T, F: FnMut() -> T>(&self, mut compute: F) -> CRx<'c, T> {
         let mut input_backwards_offsets = Vec::new();
-        let init = self.run_compute(&mut compute, &mut input_backwards_offsets);
-        let compute_edge = RxEdgeImpl::new(input_backwards_offsets, 1, move |mut input_backwards_offsets, outputs| {
+        let init = self.run_compute(&mut compute, self.as_sub_dag(), &mut input_backwards_offsets);
+        let compute_edge = RxEdgeImpl::new(input_backwards_offsets, 1, move |mut input_backwards_offsets, sub_dag, outputs| {
             input_backwards_offsets.clear();
-            let output = self.run_compute(&mut compute, &mut input_backwards_offsets);
+            let output = self.run_compute(&mut compute, sub_dag, &mut input_backwards_offsets);
             unsafe { outputs.next().unwrap().set_dyn(output); }
             debug_assert!(outputs.next().is_none());
         });
@@ -183,10 +202,10 @@ impl<'c> RxDAG<'c> {
     /// Create 2 computed `Rx` in this DAG which are created from the same function.
     pub fn new_crx2<T1, T2, F: FnMut() -> (T1, T2)>(&self, mut compute: F) -> (CRx<'c, T1>, CRx<'c, T2>) {
         let mut input_backwards_offsets = Vec::new();
-        let (init1, init2) = self.run_compute(&mut compute, &mut input_backwards_offsets);
-        let compute_edge = RxEdgeImpl::new(input_backwards_offsets, 2, move |mut input_backwards_offsets, outputs| {
+        let (init1, init2) = self.run_compute(&mut compute, self.as_sub_dag(), &mut input_backwards_offsets);
+        let compute_edge = RxEdgeImpl::new(input_backwards_offsets, 2, move |mut input_backwards_offsets, sub_dag, outputs| {
             input_backwards_offsets.clear();
-            let (output1, output2) = self.run_compute(&mut compute, &mut input_backwards_offsets);
+            let (output1, output2) = self.run_compute(&mut compute, sub_dag, &mut input_backwards_offsets);
             unsafe { outputs.next().unwrap().set_dyn(output1); }
             unsafe { outputs.next().unwrap().set_dyn(output2); }
             debug_assert!(outputs.next().is_none());
@@ -204,10 +223,10 @@ impl<'c> RxDAG<'c> {
     /// Create 3 computed `Rx` in this DAG which are created from the same function.
     pub fn new_crx3<T1, T2, T3, F: FnMut() -> (T1, T2, T3)>(&self, mut compute: F) -> (CRx<'c, T1>, CRx<'c, T2>, CRx<'c, T3>) {
         let mut input_backwards_offsets = Vec::new();
-        let (init1, init2, init3) = self.run_compute(&mut compute, &mut input_backwards_offsets);
-        let compute_edge = RxEdgeImpl::new(input_backwards_offsets, 2, move |mut input_backwards_offsets, outputs| {
+        let (init1, init2, init3) = self.run_compute(&mut compute, self.as_sub_dag(), &mut input_backwards_offsets);
+        let compute_edge = RxEdgeImpl::new(input_backwards_offsets, 2, move |mut input_backwards_offsets, sub_dag, outputs| {
             input_backwards_offsets.clear();
-            let (output1, output2, output3) = self.run_compute(&mut compute, &mut input_backwards_offsets);
+            let (output1, output2, output3) = self.run_compute(&mut compute, sub_dag, &mut input_backwards_offsets);
             unsafe { outputs.next().unwrap().set_dyn(output1); }
             unsafe { outputs.next().unwrap().set_dyn(output2); }
             unsafe { outputs.next().unwrap().set_dyn(output3); }
@@ -229,10 +248,10 @@ impl<'c> RxDAG<'c> {
         self.0.len()
     }
 
-    fn run_compute<T, F: FnMut() -> T + 'c>(&self, compute: F, input_backwards_offsets: &mut Vec<usize>) -> T {
+    fn run_compute<T, F: FnMut() -> T + 'c>(&self, compute: F, sub_dag: RxSubDAG<'_, 'c>, input_backwards_offsets: &mut Vec<usize>) -> T {
         debug_assert!(input_backwards_offsets.is_empty());
 
-        let result = compute();
+        let result = compute(sub_dag);
         let input_indices = self.post_read();
         let len = self.next_index();
 
@@ -255,8 +274,8 @@ impl<'c> RxDAG<'c> {
 
     /// Update all `Var`s with their new values and recompute `Rx`s.
     pub fn recompute(&mut self) {
-        for (inputs, current, outputs) in self.0.as_mut().iter_mut_split3s() {
-            current.recompute(inputs, outputs);
+        for (offset, (inputs, current, outputs)) in self.0.as_mut().iter_mut_split3s().enumerate() {
+            current.recompute(offset, inputs, outputs, self.1);
         }
 
         for current in self.0.as_mut().iter_mut() {
@@ -273,10 +292,10 @@ impl<'c> RxDAGElem<'c> {
         }
     }
 
-    fn recompute(&mut self, inputs: &[RxDAGElem], outputs: &[RxDAGElem]) {
+    fn recompute(&mut self, offset: usize, inputs: &[RxDAGElem], outputs: &[RxDAGElem], graph_id: RxDAGUid) {
         match self {
             RxDAGElem::Node(x) => x.recompute(),
-            RxDAGElem::Edge(x) => x.recompute(inputs, outputs)
+            RxDAGElem::Edge(x) => x.recompute(offset, inputs, outputs, graph_id)
         }
     }
 
@@ -400,12 +419,14 @@ impl<'c> Deref for RxDAGElem<'c> {
 
 unsafe impl<'c> StableDeref for RxDAGElem<'c> {}
 
-impl<'c, F: FnMut(&mut Vec<usize>, &mut dyn Iterator<Item=&Rx<'c>>) + 'c> RxEdgeImpl<'c, F> {
+impl<'c, F: FnMut(&mut Vec<usize>, RxSubDAG<'_, 'c>, &mut dyn Iterator<Item=&Rx<'c>>) + 'c> RxEdgeImpl<'c, F> {
     fn new(input_backwards_offsets: Vec<usize>, num_outputs: usize, compute: F) -> Self {
+        let num_inputs = input_backwards_offsets.len();
         Self {
             input_backwards_offsets,
             num_outputs,
-            compute
+            compute,
+            cached_inputs: Vec::with_capacity(num_inputs)
         }
     }
 
@@ -416,19 +437,27 @@ impl<'c, F: FnMut(&mut Vec<usize>, &mut dyn Iterator<Item=&Rx<'c>>) + 'c> RxEdge
     }
 }
 
-impl<'c, F: FnMut(&mut Vec<usize>, &mut dyn Iterator<Item=&Rx<'c>>) + 'c> RxEdgeTrait for RxEdgeImpl<'c, F> {
-    fn recompute(&mut self, inputs: &[RxDAGElem], outputs: &[RxDAGElem]) {
-        let mut inputs = self.input_backwards_offsets.iter().map(|offset| {
-            inputs[inputs.len() - offset].as_node().expect("broken RxDAG: RxEdge input must be a node")
-        });
+impl<'c, F: FnMut(&mut Vec<usize>, RxSubDAG<'_, 'c>, &mut dyn Iterator<Item=&Rx<'c>>) + 'c> RxEdgeTrait for RxEdgeImpl<'c, F> {
+    fn recompute(&mut self, offset: usize, inputs: &[RxDAGElem], outputs: &[RxDAGElem], graph_id: RxDAGUid) {
+        debug_assert!(self.cached_inputs.is_empty());
+        self.input_backwards_offsets.iter().copied().map(|offset| {
+            inputs[inputs.len() - offset].as_node().expect("broken RxDAG: RxEdge input must be a node") as *const _
+        }).collect_into(&mut self.cached_inputs);
+        let inputs = unsafe { std::mem::transmute::<&[*const RxDAGElem<'c>], &[&RxDAGElem<'c>]>(&self.cached_inputs) };
 
-        if inputs.any(|x| x.did_recompute()) {
+        if inputs.iter().any(|x| x.did_recompute()) {
             // Needs update
             let mut outputs = self.output_forwards_offsets().map(|offset| {
                 outputs[offset].as_node().expect("broken RxDAG: RxEdge output must be a node")
             });
-            (self.compute)(&mut self.input_backwards_offsets, &mut outputs);
+            let sub_dag = RxSubDAG {
+                slice: inputs,
+                offset,
+                id: graph_id
+            };
+            (self.compute)(&mut self.input_backwards_offsets, sub_dag, &mut outputs);
         }
+        self.cached_inputs.clear();
     }
 }
 
@@ -487,11 +516,12 @@ pub mod tests {
 
     #[test]
     fn test_crx() {
-        let rx = SRx::new(vec![1, 2, 3]);
+        let g = RxDAG::new();
+        let rx = g.new_var(vec![1, 2, 3]);
         {
-            let crx = CRx::new(|c| rx.get(c)[0] * 2);
-            let crx2 = CRx::new(|c| *crx.get(c) + rx.get(c)[1] * 10);
-            let crx3 = crx.map(|x| x.to_string());
+            let crx = g.new_crx(|g| rx.get(g)[0] * 2);
+            let crx2 = g.new_crx(|g| *crx.get(g) + rx.get(g)[1] * 10);
+            let crx3 = g.new_crx(|g| *crx2.get(g).to_string());
             assert_eq!(*crx.get(SNAPSHOT_CTX), 2);
             assert_eq!(*crx2.get(SNAPSHOT_CTX), 22);
             assert_eq!(&*crx3.get(SNAPSHOT_CTX), "2");
