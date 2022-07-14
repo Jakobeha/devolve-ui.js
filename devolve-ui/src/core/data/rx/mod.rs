@@ -15,6 +15,7 @@
 
 use std::alloc::{alloc, Layout};
 use std::cell::{Cell, Ref, RefCell};
+use std::fmt::{Debug, Formatter};
 use std::hash::Hash;
 use std::marker::PhantomData;
 use std::mem::{align_of, align_of_val, MaybeUninit, size_of, size_of_val};
@@ -43,14 +44,8 @@ impl<'c> RxDAGUid<'c> {
     }
 }
 
-pub trait RxContext<'c> {
-    fn graph<'c2>(&self) -> &RxDAG<'c2> where 'c: 'c2;
-}
-
-impl<'c> RxContext<'c> for RxDAG<'c> {
-    fn graph<'c2>(&self) -> &RxDAG<'c2> where 'c: 'c2 {
-        self
-    }
+pub trait RxContext<'a, 'c> {
+    fn sub_dag(self) -> RxSubDAG<'a, 'c>;
 }
 
 /// The DAG is a list of interspersed nodes and edges. The edges refer to other nodes relative to their own position.
@@ -72,11 +67,16 @@ impl<'c> RxContext<'c> for RxDAG<'c> {
 ///
 /// Currently no `Rx`s are deallocated until the entire DAG is deallocated,
 /// so if you keep creating and discarding `Rx`s you will leak memory (TODO fix this?)
+#[derive(Debug)]
 pub struct RxDAG<'c>(FrozenVec<RxDAGElem<'c>>, RxDAGUid<'c>);
 
+#[derive(Debug, Clone, Copy)]
+pub struct RxDAGSnapshot<'a, 'c>(&'a RxDAG<'c>);
+
+#[derive(Debug, Clone, Copy)]
 pub struct RxSubDAG<'a, 'c> {
-    slice: &'a [&'a RxDAGElem<'c>],
-    offset: usize,
+    before: &'a [RxDAGElem<'c>],
+    index: usize,
     id: RxDAGUid<'c>
 }
 
@@ -88,7 +88,7 @@ enum RxDAGElem<'c> {
 type Rx<'c> = dyn RxTrait + 'c;
 type RxEdge<'c> = dyn RxEdgeTrait + 'c;
 
-trait RxTrait {
+trait RxTrait: Debug {
     fn post_read(&self) -> bool;
 
     fn recompute(&mut self);
@@ -96,12 +96,6 @@ trait RxTrait {
     fn post_recompute(&mut self);
 
     unsafe fn _set_dyn(&self, ptr: *mut u8, size: usize);
-}
-
-impl dyn RxTrait {
-    unsafe fn set_dyn<T>(&self, mut value: T) {
-        self._set_dyn(&mut value as *mut T as *mut u8, size_of_val(&value));
-    }
 }
 
 struct RxImpl<T> {
@@ -112,8 +106,8 @@ struct RxImpl<T> {
     did_recompute: bool
 }
 
-trait RxEdgeTrait {
-    fn recompute(&mut self, offset: usize, inputs: &[RxDAGElem], outputs: &[RxDAGElem], graph_id: RxDAGUid);
+trait RxEdgeTrait: Debug {
+    fn recompute(&mut self, index: usize, before: &[RxDAGElem], after: &[RxDAGElem], graph_id: RxDAGUid);
 }
 
 struct RxEdgeImpl<'c, F: FnMut(&mut Vec<usize>, RxSubDAG<'_, 'c>, &mut dyn Iterator<Item=&Rx<'c>>) + 'c> {
@@ -123,6 +117,7 @@ struct RxEdgeImpl<'c, F: FnMut(&mut Vec<usize>, RxSubDAG<'_, 'c>, &mut dyn Itera
     input_backwards_offsets: Vec<usize>,
     cached_inputs: Vec<*const RxDAGElem<'c>>
 }
+
 
 /// Index into the DAG which will give you an `Rx` value.
 /// However, to get or set the value you need a shared reference to the `DAG`.
@@ -182,7 +177,7 @@ impl<'c> RxDAG<'c> {
     }
 
     /// Create a computed `Rx` in this DAG.
-    pub fn new_crx<T, F: FnMut() -> T>(&self, mut compute: F) -> CRx<'c, T> {
+    pub fn new_crx<T, F: FnMut(RxSubDAG<'_, 'c>) -> T>(&self, mut compute: F) -> CRx<'c, T> {
         let mut input_backwards_offsets = Vec::new();
         let init = self.run_compute(&mut compute, self.as_sub_dag(), &mut input_backwards_offsets);
         let compute_edge = RxEdgeImpl::new(input_backwards_offsets, 1, move |mut input_backwards_offsets, sub_dag, outputs| {
@@ -274,12 +269,45 @@ impl<'c> RxDAG<'c> {
 
     /// Update all `Var`s with their new values and recompute `Rx`s.
     pub fn recompute(&mut self) {
-        for (offset, (inputs, current, outputs)) in self.0.as_mut().iter_mut_split3s().enumerate() {
-            current.recompute(offset, inputs, outputs, self.1);
+        for (index, (before, current, after)) in self.0.as_mut().iter_mut_split3s().enumerate() {
+            current.recompute(index, before, after, self.1);
         }
 
         for current in self.0.as_mut().iter_mut() {
             current.post_recompute();
+        }
+    }
+
+    /// Recomputes if necessary and then returns a `RxContext` you can use to get the current value.
+    pub fn now(&mut self) -> RxDAGSnapshot<'_, 'c> {
+        self.recompute();
+        RxDAGSnapshot(self)
+    }
+}
+
+impl<'a, 'c> RxContext<'a, 'c> for RxDAGSnapshot<'a, 'c> {
+    fn sub_dag(self) -> RxSubDAG<'a, 'c> {
+        RxSubDAG {
+            before: unsafe { std::mem::transmute(&self.0) },
+            index: self.0.len(),
+            id: self.1
+        }
+    }
+}
+
+impl<'a, 'c> RxSubDAG<'a, 'c> {
+    fn get(&self, index: usize) -> &RxDAGElem<'a> {
+        debug_assert!(index < self.index, "index out of sub-dag bounds");
+        &self.before[index]
+    }
+}
+
+impl<'a, 'c> RxContext<'c> for RxSubDAG<'a, 'c> {
+    fn sub_dag(self) -> RxSubDAG<'a, 'c> {
+        RxSubDAG {
+            before: self.before,
+            index: self.index,
+            id: self.id
         }
     }
 }
@@ -292,10 +320,10 @@ impl<'c> RxDAGElem<'c> {
         }
     }
 
-    fn recompute(&mut self, offset: usize, inputs: &[RxDAGElem], outputs: &[RxDAGElem], graph_id: RxDAGUid) {
+    fn recompute(&mut self, index: usize, before: &[RxDAGElem], after: &[RxDAGElem], graph_id: RxDAGUid) {
         match self {
             RxDAGElem::Node(x) => x.recompute(),
-            RxDAGElem::Edge(x) => x.recompute(offset, inputs, outputs, graph_id)
+            RxDAGElem::Edge(x) => x.recompute(index, before, after, graph_id)
         }
     }
 
@@ -343,35 +371,35 @@ impl<'c, T> RxRef<'c, T> {
         }
     }
 
-    fn get<'a>(&self, graph: &'a RxDAG<'c>) -> &'a T {
+    fn get<'a>(&self, graph: RxSubDAG<'a, 'c>) -> &'a T {
         self.get_rx(graph).get()
     }
 
-    fn set(&self, graph: &RxDAG<'c>, value: T) {
+    fn set(&self, graph: RxSubDAG<'_, 'c>, value: T) {
         self.get_rx(graph).set(Some(value));
     }
 
-    fn get_rx<'a>(&self, graph: &'a RxDAG<'c>) -> &'a RxImpl<T> {
+    fn get_rx<'a>(&self, graph: RxSubDAG<'a, 'c>) -> &'a RxImpl<T> {
         debug_assert!(self.graph_id == graph.0, "RxRef::get_rx: different graph");
-        graph.0.get(self.index).expect("RxRef corrupt: index is an edge")
+        graph.get(self.index).expect("RxRef corrupt: index is an edge")
     }
 }
 
 impl<'c, T> Var<'c, T> {
-    pub fn get<'a>(&self, c: &'a dyn RxContext<'c>) -> &'a T {
-        let graph = c.graph();
+    pub fn get<'a>(&self, c: impl RxContext<'a, 'c>) -> &'a T {
+        let graph = c.sub_dag();
         self.0.get(graph)
     }
 
-    pub fn set(&mut self, c: &dyn RxContext<'c>, value: T) {
-        let graph = c.graph();
+    pub fn set(&self, c: impl RxContext<'_, 'c>, value: T) {
+        let graph = c.sub_dag();
         self.0.set(value, graph);
     }
 }
 
 impl<'c, T> CRx<'c, T> {
-    pub fn get<'a>(&self, c: &'a dyn RxContext<'c>) -> &'a T {
-        let graph = c.graph();
+    pub fn get<'a>(&self, c: impl RxContext<'a, 'c>) -> &'a T {
+        let graph = c.sub_dag();
         self.0.get(graph)
     }
 }
@@ -438,21 +466,21 @@ impl<'c, F: FnMut(&mut Vec<usize>, RxSubDAG<'_, 'c>, &mut dyn Iterator<Item=&Rx<
 }
 
 impl<'c, F: FnMut(&mut Vec<usize>, RxSubDAG<'_, 'c>, &mut dyn Iterator<Item=&Rx<'c>>) + 'c> RxEdgeTrait for RxEdgeImpl<'c, F> {
-    fn recompute(&mut self, offset: usize, inputs: &[RxDAGElem], outputs: &[RxDAGElem], graph_id: RxDAGUid) {
+    fn recompute(&mut self, index: usize, before: &[RxDAGElem], after: &[RxDAGElem], graph_id: RxDAGUid) {
         debug_assert!(self.cached_inputs.is_empty());
         self.input_backwards_offsets.iter().copied().map(|offset| {
-            inputs[inputs.len() - offset].as_node().expect("broken RxDAG: RxEdge input must be a node") as *const _
+            before[before.len() - offset].as_node().expect("broken RxDAG: RxEdge input must be a node") as *const _
         }).collect_into(&mut self.cached_inputs);
-        let inputs = unsafe { std::mem::transmute::<&[*const RxDAGElem<'c>], &[&RxDAGElem<'c>]>(&self.cached_inputs) };
+        let mut inputs = self.cached_inputs.iter().map(|x| unsafe { &**x });
 
-        if inputs.iter().any(|x| x.did_recompute()) {
+        if inputs.any(|x| x.did_recompute()) {
             // Needs update
             let mut outputs = self.output_forwards_offsets().map(|offset| {
-                outputs[offset].as_node().expect("broken RxDAG: RxEdge output must be a node")
+                after[offset].as_node().expect("broken RxDAG: RxEdge output must be a node")
             });
             let sub_dag = RxSubDAG {
-                slice: inputs,
-                offset,
+                before,
+                index,
                 id: graph_id
             };
             (self.compute)(&mut self.input_backwards_offsets, sub_dag, &mut outputs);
@@ -522,17 +550,17 @@ pub mod tests {
             let crx = g.new_crx(|g| rx.get(g)[0] * 2);
             let crx2 = g.new_crx(|g| *crx.get(g) + rx.get(g)[1] * 10);
             let crx3 = g.new_crx(|g| *crx2.get(g).to_string());
-            assert_eq!(*crx.get(SNAPSHOT_CTX), 2);
-            assert_eq!(*crx2.get(SNAPSHOT_CTX), 22);
-            assert_eq!(&*crx3.get(SNAPSHOT_CTX), "2");
-            rx.set(vec![2, 3, 4]);
-            assert_eq!(*crx.get(SNAPSHOT_CTX), 4);
-            assert_eq!(*crx2.get(SNAPSHOT_CTX), 34);
-            assert_eq!(&*crx3.get(SNAPSHOT_CTX), "4");
-            rx.set(vec![3, 4, 5]);
-            assert_eq!(*crx.get(SNAPSHOT_CTX), 6);
-            assert_eq!(*crx2.get(SNAPSHOT_CTX), 46);
-            assert_eq!(&*crx3.get(SNAPSHOT_CTX), "6");
+            assert_eq!(*crx.get(g.now()), 2);
+            assert_eq!(*crx2.get(g.now()), 22);
+            assert_eq!(&*crx3.get(g.now()), "2");
+            rx.set(g.now(), vec![2, 3, 4]);
+            assert_eq!(*crx.get(g.now()), 4);
+            assert_eq!(*crx2.get(g.now()), 34);
+            assert_eq!(&*crx3.get(g.now()), "4");
+            rx.set(g.now(), vec![3, 4, 5]);
+            assert_eq!(*crx.get(g.now()), 6);
+            assert_eq!(*crx2.get(g.now()), 46);
+            assert_eq!(&*crx3.get(g.now()), "6");
         }
     }
 
@@ -582,5 +610,30 @@ pub mod tests {
         }
         expected_rx_snapshots.push(1001);
         assert_eq!(rx_snapshots, expected_rx_snapshots);
+    }
+}
+
+impl dyn RxTrait {
+    unsafe fn set_dyn<T>(&self, mut value: T) {
+        self._set_dyn(&mut value as *mut T as *mut u8, size_of_val(&value));
+    }
+}
+
+impl<T> Debug for RxImpl<T> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("RxImpl")
+            .field("next.is_some()", &unsafe { &*self.next.as_ptr() }.is_some())
+            .field("did_read", &self.did_read.get())
+            .field("did_recompute", &self.did_recompute)
+            .finish_non_exhaustive()
+    }
+}
+
+impl<T> Debug for RxEdgeImpl<T> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("RxEdgeImpl")
+            .field("num_outputs", &self.num_outputs)
+            .field("input_backwards_offsets", &self.input_backwards_offsets)
+            .finish_non_exhaustive()
     }
 }
