@@ -26,13 +26,13 @@ use crate::core::misc::slice_split3::SliceSplit3;
 
 /// Returns a graph you can write. Note that `RxContext` and `MutRxContext` are neither subset nor superset of each other.
 /// You can't read snapshots without recomputing, and you can't write inputs.
-pub trait RxContext<'a, 'c> {
+pub trait RxContext<'a, 'c: 'a> {
     fn sub_dag(self) -> RxSubDAG<'a, 'c>;
 }
 
 /// Returns a graph you can write. Note that `RxContext` and `MutRxContext` are neither subset nor superset of each other.
 /// You can't read snapshots without recomputing, and you can't write inputs.
-pub trait MutRxContext<'a, 'c> {
+pub trait MutRxContext<'a, 'c: 'a> {
     fn sub_dag(self) -> RxSubDAG<'a, 'c>;
 }
 
@@ -61,17 +61,17 @@ pub struct RxDAG<'c>(FrozenVec<RxDAGElem<'c>>, RxDAGUid<'c>);
 struct RxDAGUid<'c>(usize, PhantomData<&'c ()>);
 
 #[derive(Debug, Clone, Copy)]
-pub struct RxDAGSnapshot<'a, 'c>(&'a RxDAG<'c>);
+pub struct RxDAGSnapshot<'a, 'c: 'a>(&'a RxDAG<'c>);
 
 #[derive(Debug, Clone, Copy)]
-pub struct RxSubDAG<'a, 'c> {
+pub struct RxSubDAG<'a, 'c: 'a> {
     before: &'a [RxDAGElem<'c>],
     index: usize,
     id: RxDAGUid<'c>
 }
 
 #[derive(Debug, Clone, Copy)]
-pub struct RxInput<'a, 'c>(RxSubDAG<'a, 'c>);
+pub struct RxInput<'a, 'c: 'a>(RxSubDAG<'a, 'c>);
 
 #[derive(Debug)]
 enum RxDAGElem<'c> {
@@ -302,7 +302,7 @@ impl<'c> RxDAGUid<'c> {
     }
 }
 
-impl<'a, 'c> RxContext<'a, 'c> for RxDAGSnapshot<'a, 'c> {
+impl<'a, 'c: 'a> RxContext<'a, 'c> for RxDAGSnapshot<'a, 'c> {
     fn sub_dag(self) -> RxSubDAG<'a, 'c> {
         RxSubDAG {
             before: unsafe { &*transmute::<&FrozenVec<_>, &UnsafeCell<Vec<_>>>(&self.0.0).get() },
@@ -312,26 +312,26 @@ impl<'a, 'c> RxContext<'a, 'c> for RxDAGSnapshot<'a, 'c> {
     }
 }
 
-impl<'a, 'c> MutRxContext<'a, 'c> for &'a RxDAG<'c> {
+impl<'a, 'c: 'a> MutRxContext<'a, 'c> for &'a RxDAG<'c> {
     fn sub_dag(self) -> RxSubDAG<'a, 'c> {
         RxDAGSnapshot(self).sub_dag()
     }
 }
 
-impl<'a, 'c> RxSubDAG<'a, 'c> {
+impl<'a, 'c: 'a> RxSubDAG<'a, 'c> {
     fn get(self, index: usize) -> &'a RxDAGElem<'c> {
         debug_assert!(index < self.index, "index out of sub-dag bounds");
         &self.before[index]
     }
 }
 
-impl<'a, 'c> RxContext<'a, 'c> for RxInput<'a, 'c> {
+impl<'a, 'c: 'a> RxContext<'a, 'c> for RxInput<'a, 'c> {
     fn sub_dag(self) -> RxSubDAG<'a, 'c> {
         self.0
     }
 }
 
-impl<'a, 'c> RxInput<'a, 'c> {
+impl<'a, 'c: 'a> RxInput<'a, 'c> {
     fn post_read(&self) -> Vec<usize> {
         let mut results = Vec::new();
         for (index, current) in self.0.before.iter().enumerate() {
@@ -402,7 +402,7 @@ impl<'c, T> RxRef<'c, T> {
         }
     }
 
-    fn get<'a>(&self, graph: RxSubDAG<'a, 'c>) -> &'a T {
+    fn get<'a>(&self, graph: RxSubDAG<'a, 'c>) -> &'a T where 'c: 'a {
         unsafe { self.get_rx(graph).get_dyn() }
     }
 
@@ -410,7 +410,7 @@ impl<'c, T> RxRef<'c, T> {
         unsafe { self.get_rx(graph).set_dyn(value); }
     }
 
-    fn get_rx<'a>(&self, graph: RxSubDAG<'a, 'c>) -> &'a Rx<'c> {
+    fn get_rx<'a>(&self, graph: RxSubDAG<'a, 'c>) -> &'a Rx<'c> where 'c: 'a {
         debug_assert!(self.graph_id == graph.id, "RxRef::get_rx: different graph");
         graph.get(self.index).as_node().expect("RxRef corrupt: index is an edge")
     }
