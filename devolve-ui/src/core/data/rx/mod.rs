@@ -270,16 +270,6 @@ impl<'c> RxDAG<'c> {
         result
     }
 
-    fn post_read(&self) -> Vec<usize> {
-        let mut results = Vec::new();
-        for (index, current) in self.0.iter().enumerate() {
-            if current.post_read() {
-                results.push(index)
-            }
-        }
-        results
-    }
-
     /// Update all `Var`s with their new values and recompute `Rx`s.
     pub fn recompute(&mut self) {
         let len = self.0.len();
@@ -544,7 +534,7 @@ impl<T> RxTrait for RxImpl<T> {
     }
 
     unsafe fn _get_dyn(&self) -> *const () {
-        &self.current as *const T as *const ()
+        self.get() as *const T as *const ()
     }
 
     unsafe fn _set_dyn(&self, ptr: *mut u8, size: usize) {
