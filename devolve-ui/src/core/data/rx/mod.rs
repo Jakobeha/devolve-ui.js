@@ -22,6 +22,7 @@ use std::ptr;
 use elsa::FrozenVec;
 use stable_deref_trait::StableDeref;
 use derivative::Derivative;
+use crate::core::misc::assert_variance::assert_is_covariant;
 use crate::core::misc::slice_split3::SliceSplit3;
 
 /// Returns a graph you can write. Note that `RxContext` and `MutRxContext` are neither subset nor superset of each other.
@@ -80,7 +81,9 @@ enum RxDAGElem<'c> {
 }
 
 type Rx<'c> = dyn RxTrait + 'c;
-type RxEdge<'c> = dyn RxEdgeTrait<'c> + 'c;
+assert_is_covariant!((Rx<'c>) over 'c);
+type RxEdge<'c> = dyn RxEdgeTrait + 'c;
+assert_is_covariant!((RxEdge<'c>) over 'c);
 
 trait RxTrait: Debug {
     fn post_read(&self) -> bool;
@@ -101,8 +104,11 @@ struct RxImpl<T> {
     did_recompute: bool
 }
 
-trait RxEdgeTrait<'c>: Debug {
-    fn recompute(&mut self, index: usize, before: &[RxDAGElem<'c>], after: &[RxDAGElem<'c>], len: usize, graph_id: RxDAGUid<'c>);
+// trait RxEdgeTrait<cov 'c>: Debug
+trait RxEdgeTrait: Debug {
+    // fn recompute(&mut self, index: usize, before: &[RxDAGElem<'c>], after: &[RxDAGElem<'c>], len: usize, graph_id: RxDAGUid<'c>);
+    // 'c2 must outlive 'c, this is a workaround beause there aren't covariant trait lifetime parameters
+    fn recompute<'c2>(&mut self, index: usize, before: &[RxDAGElem<'c2>], after: &[RxDAGElem<'c2>], len: usize, graph_id: RxDAGUid<'c2>);
 }
 
 struct RxEdgeImpl<'c, F: FnMut(&mut Vec<usize>, RxInput<'_, 'c>, &mut dyn Iterator<Item=&Rx<'c>>, usize) + 'c> {
@@ -134,6 +140,13 @@ struct RxRef<'c, T> {
 #[derivative(Clone(bound = ""), Copy(bound = ""))]
 pub struct Var<'c, T>(RxRef<'c, T>);
 
+/// Index into the DAG which will give you a computed `Rx` value.
+/// However, to get the value you need a shared reference to the `DAG`.
+/// You cannot set the value because it's computed from other values.
+#[derive(Debug, Derivative)]
+#[derivative(Clone(bound = ""), Copy(bound = ""))]
+pub struct CRx<'c, T>(RxRef<'c, T>);
+
 /// View and mutate part of a `Var`
 #[derive(Debug)]
 pub struct DVar<'c, S, T, GetFn: Fn(&S) -> &T, SetFn: Fn(&S, T) -> S> {
@@ -147,13 +160,6 @@ pub struct DCRx<'c, S, T, GetFn: Fn(&S) -> &T> {
     source: RxRef<'c, S>,
     get: GetFn
 }
-
-/// Index into the DAG which will give you a computed `Rx` value.
-/// However, to get the value you need a shared reference to the `DAG`.
-/// You cannot set the value because it's computed from other values.
-#[derive(Debug, Derivative)]
-#[derivative(Clone(bound = ""), Copy(bound = ""))]
-pub struct CRx<'c, T>(RxRef<'c, T>);
 
 impl<'c> RxDAG<'c> {
     /// Create an empty DAG
@@ -354,6 +360,7 @@ impl<'c> RxDAGElem<'c> {
     fn recompute(&mut self, index: usize, before: &[RxDAGElem<'c>], after: &[RxDAGElem<'c>], len: usize, graph_id: RxDAGUid<'c>) {
         match self {
             RxDAGElem::Node(x) => x.recompute(),
+            // this is ok because this allows an arbitrary lifetime, but we pass 'c which is required
             RxDAGElem::Edge(x) => x.recompute(index, before, after, len, graph_id)
         }
     }
@@ -568,8 +575,13 @@ impl<'c, F: FnMut(&mut Vec<usize>, RxInput<'_, 'c>, &mut dyn Iterator<Item=&Rx<'
     }
 }
 
-impl<'c, F: FnMut(&mut Vec<usize>, RxInput<'_, 'c>, &mut dyn Iterator<Item=&Rx<'c>>, usize) + 'c> RxEdgeTrait<'c> for RxEdgeImpl<'c, F> {
-    fn recompute(&mut self, index: usize, before: &[RxDAGElem<'c>], after: &[RxDAGElem<'c>], len: usize, graph_id: RxDAGUid<'c>) {
+impl<'c, F: FnMut(&mut Vec<usize>, RxInput<'_, 'c>, &mut dyn Iterator<Item=&Rx<'c>>, usize) + 'c> RxEdgeTrait for RxEdgeImpl<'c, F> {
+    fn recompute<'c2>(&mut self, index: usize, before: &[RxDAGElem<'c2>], after: &[RxDAGElem<'c2>], len: usize, graph_id: RxDAGUid<'c2>) {
+        // 'c2 must outlive 'c, this is a workaround beause there aren't covariant trait lifetime parameters
+        let (before, after, graph_id) = unsafe {
+            transmute::<(&[RxDAGElem<'c2>], &[RxDAGElem<'c2>], RxDAGUid<'c2>), (&[RxDAGElem<'c>], &[RxDAGElem<'c>], RxDAGUid<'c>)>((before, after, graph_id))
+        };
+
         debug_assert!(self.cached_inputs.is_empty());
         self.input_backwards_offsets.iter().copied().map(|offset| {
             before[before.len() - offset].as_node().expect("broken RxDAG: RxEdge input must be a node") as *const Rx<'c>
