@@ -70,6 +70,7 @@ pub struct RxSubDAG<'a, 'c: 'a> {
     index: usize,
     id: RxDAGUid<'c>
 }
+assert_is_covariant!(for['a] (RxSubDAG<'a, 'c>) over 'c);
 
 #[derive(Debug, Clone, Copy)]
 pub struct RxInput<'a, 'c: 'a>(RxSubDAG<'a, 'c>);
