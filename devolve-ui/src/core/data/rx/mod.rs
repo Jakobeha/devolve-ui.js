@@ -16,7 +16,7 @@
 use std::cell::{Cell, UnsafeCell};
 use std::fmt::{Debug, Formatter};
 use std::marker::PhantomData;
-use std::mem::{MaybeUninit, size_of_val, transmute};
+use std::mem::{MaybeUninit, size_of, transmute};
 use std::ops::Deref;
 use std::ptr;
 use elsa::FrozenVec;
@@ -94,7 +94,7 @@ trait RxTrait: Debug {
     fn post_recompute(&mut self);
 
     unsafe fn _get_dyn(&self) -> *const ();
-    unsafe fn _set_dyn(&self, ptr: *mut u8, size: usize);
+    unsafe fn _set_dyn(&self, ptr: *const (), size: usize);
 }
 
 struct RxImpl<T> {
@@ -402,36 +402,36 @@ impl<'c, T> RxRef<'c, T> {
         }
     }
 
-    fn get<'a>(&self, graph: RxSubDAG<'a, 'c>) -> &'a T where 'c: 'a {
+    fn get<'a>(self, graph: RxSubDAG<'a, 'c>) -> &'a T where 'c: 'a {
         // unsafe { self.get_rx(graph).get_dyn() }
         // but there is a lifetime issue I just don't understand and don't know how to fix
-        unsafe { transmute::<&RxRef<'c, T>, &RxRef<'static, T>>(self).get_rx(transmute::<RxSubDAG<'a, 'c>, RxSubDAG<'static, 'static>>(graph)).get_dyn() }
+        unsafe { transmute::<RxRef<'c, T>, RxRef<'static, T>>(self).get_rx(transmute::<RxSubDAG<'a, 'c>, RxSubDAG<'static, 'static>>(graph)).get_dyn() }
     }
 
-    fn set(&self, graph: RxSubDAG<'_, 'c>, value: T) {
+    fn set(self, graph: RxSubDAG<'_, 'c>, value: T) {
         // unsafe { self.get_rx(graph).set_dyn(value); }
         // but there is a lifetime issue I just don't understand and don't know how to fix
-        unsafe { transmute::<&RxRef<'c, T>, &RxRef<'static, T>>(self).get_rx(transmute::<RxSubDAG<'_, 'c>, RxSubDAG<'static, 'static>>(graph)).set_dyn(value) }
+        unsafe { transmute::<RxRef<'c, T>, RxRef<'static, T>>(self).get_rx(transmute::<RxSubDAG<'_, 'c>, RxSubDAG<'static, 'static>>(graph)).set_dyn(value) }
     }
 
-    fn get_rx<'a>(&self, graph: RxSubDAG<'a, 'c>) -> &'a Rx<'c> where 'c: 'a {
+    fn get_rx<'a>(self, graph: RxSubDAG<'a, 'c>) -> &'a Rx<'c> where 'c: 'a {
         debug_assert!(self.graph_id == graph.id, "RxRef::get_rx: different graph");
         graph.get(self.index).as_node().expect("RxRef corrupt: index is an edge")
     }
 }
 
 impl<'c, T> Var<'c, T> {
-    pub fn get<'a>(&self, c: impl RxContext<'a, 'c>) -> &'a T where 'c: 'a {
+    pub fn get<'a>(self, c: impl RxContext<'a, 'c>) -> &'a T where 'c: 'a {
         let graph = c.sub_dag();
         self.0.get(graph)
     }
 
-    pub fn set<'a>(&self, c: impl MutRxContext<'a, 'c>, value: T) where 'c: 'a {
+    pub fn set<'a>(self, c: impl MutRxContext<'a, 'c>, value: T) where 'c: 'a {
         let graph = c.sub_dag();
         self.0.set(graph, value);
     }
 
-    pub fn derive<U, GetFn: Fn(&T) -> &U, SetFn: Fn(&T, U) -> T>(&self, get: GetFn, set: SetFn) -> DVar<T, U, GetFn, SetFn> {
+    pub fn derive<U, GetFn: Fn(&T) -> &U, SetFn: Fn(&T, U) -> T>(self, get: GetFn, set: SetFn) -> DVar<'c, T, U, GetFn, SetFn> {
         DVar {
             source: self.0,
             get,
@@ -439,7 +439,7 @@ impl<'c, T> Var<'c, T> {
         }
     }
 
-    pub fn derive_using_clone<U, GetFn: Fn(&T) -> &U, SetFn: Fn(&mut T, U)>(&self, get: GetFn, set: SetFn) -> DVar<T, U, GetFn, CloneSetFn<T, U, SetFn>> where T: Clone {
+    pub fn derive_using_clone<U, GetFn: Fn(&T) -> &U, SetFn: Fn(&mut T, U)>(self, get: GetFn, set: SetFn) -> DVar<'c, T, U, GetFn, CloneSetFn<T, U, SetFn>> where T: Clone {
         self.derive(get, CloneSetFn(set, PhantomData))
     }
 }
@@ -473,12 +473,12 @@ impl<T: Clone, U, F: Fn(&mut T, U)> Fn<(&T, U)> for CloneSetFn<T, U, F> {
 }
 
 impl<'c, T> CRx<'c, T> {
-    pub fn get<'a>(&self, c: impl RxContext<'a, 'c>) -> &'a T where 'c: 'a {
+    pub fn get<'a>(self, c: impl RxContext<'a, 'c>) -> &'a T where 'c: 'a {
         let graph = c.sub_dag();
         self.0.get(graph)
     }
 
-    pub fn derive<U, GetFn: Fn(&T) -> &U>(&self, get: GetFn) -> DCRx<T, U, GetFn> {
+    pub fn derive<U, GetFn: Fn(&T) -> &U>(self, get: GetFn) -> DCRx<'c, T, U, GetFn> {
         DCRx {
             source: self.0,
             get
@@ -537,9 +537,9 @@ impl<T> RxTrait for RxImpl<T> {
         self.get() as *const T as *const ()
     }
 
-    unsafe fn _set_dyn(&self, ptr: *mut u8, size: usize) {
+    unsafe fn _set_dyn(&self, ptr: *const (), size: usize) {
         let mut value = MaybeUninit::<T>::uninit();
-        ptr::copy_nonoverlapping(ptr, value.as_mut_ptr() as *mut u8, size);
+        ptr::copy(ptr, value.as_mut_ptr() as *mut (), size);
         self.set(value.assume_init());
     }
 }
@@ -602,11 +602,13 @@ impl<'c, F: FnMut(&mut Vec<usize>, RxInput<'_, 'c>, &mut dyn Iterator<Item=&Rx<'
 }
 
 impl dyn RxTrait {
-    unsafe fn set_dyn<T>(&self, mut value: T) {
-        self._set_dyn(&mut value as *mut T as *mut u8, size_of_val(&value));
+    unsafe fn set_dyn<T>(&self, value: T) {
+        debug_assert_eq!(size_of::<*const T>(), size_of::<*const ()>(), "won't work");
+        self._set_dyn(&value as *const T as *const (), size_of::<T>());
     }
 
     unsafe fn get_dyn<T>(&self) -> &T {
+        debug_assert_eq!(size_of::<*const T>(), size_of::<*const ()>(), "won't work");
         &*(self._get_dyn() as *const T)
     }
 }
@@ -643,42 +645,45 @@ impl<'c, F: FnMut(&mut Vec<usize>, RxInput<'_, 'c>, &mut dyn Iterator<Item=&Rx<'
 pub mod tests {
     use test_log::test;
     use super::*;
-    use super::run_rx::run_rx;
-    use super::snapshot_ctx::SNAPSHOT_CTX;
 
     #[test]
     fn test_rx() {
         let mut g = RxDAG::new();
-        let mut rx = g.new_var(1);
-        let mut crx = g.new_rx(|g| *rx.get(g) * 2);
-        let mut side_effect = 1;
-        g.run_crx(|g| {
-            side_effect += crx.get(g);
+        let rx = g.new_var(1);
+        let crx = g.new_crx(move |g| *rx.get(g) * 2);
+        let side_effect = Cell::new(1);
+        let side_effect2 = &side_effect;
+        g.run_crx(move |g| {
+            side_effect2.set(side_effect2.get() + crx.get(g));
         });
         assert_eq!(rx.get(g.now()), &1);
         assert_eq!(crx.get(g.now()), &2);
-        assert_eq!(side_effect, 2);
+        assert_eq!(side_effect.get(), 2);
 
         rx.set(&g, 2);
         assert_eq!(rx.get(g.now()), &2);
         assert_eq!(crx.get(g.now()), &4);
-        assert_eq!(side_effect, 6);
+        assert_eq!(side_effect.get(), 6);
 
         rx.set(&g, 3);
         assert_eq!(rx.get(g.now()), &3);
         assert_eq!(crx.get(g.now()), &6);
-        assert_eq!(side_effect, 12);
+        assert_eq!(side_effect.get(), 12);
+
+        // We need to explicitly drop g before we drop side_effect.
+        // This is probably a bug in the rust compiler
+        drop(g);
     }
 
     #[test]
     fn test_rx_multiple_inputs_outputs() {
         let mut g = RxDAG::new();
-        let mut rx = g.new_var(1);
-        let mut rx2 = g.new_var(2);
-        let mut rx3 = g.new_var(vec![3, 4]);
+        let rx = g.new_var(1);
+        let rx2 = g.new_var(2);
+        let rx3 = g.new_var(vec![3, 4]);
         {
-            let crx = g.new_crx(|g| vec![*rx.get(g) * 10, *rx2.get(g) * 10]);
-            let crx2 = g.new_crx(|g| {
+            let crx = g.new_crx(move |g| vec![*rx.get(g) * 10, *rx2.get(g) * 10]);
+            let crx2 = g.new_crx(move |g| {
                 let mut vec = Vec::new();
                 vec.push(*rx.get(g));
                 for elem in rx3.get(g).iter().copied() {
@@ -689,13 +694,13 @@ pub mod tests {
                 }
                 vec
             });
-            let (crx3_1, crx3_2) = g.new_crx2(|g| {
+            let (crx3_1, crx3_2) = g.new_crx2(move |g| {
                 let vec = crx.get(g);
                 (vec[0] * 10, vec[1] * 10)
             });
-            let (crx4_1, crx4_2, crx4_3) = g.new_crx3(|g| {
-                let v2 = rx2.get(g);
-                let v3 = crx3_1.get(g);
+            let (crx4_1, crx4_2, crx4_3) = g.new_crx3(move |g| {
+                let v2 = *rx2.get(g);
+                let v3 = *crx3_1.get(g);
                 let v4 = rx3.get(g)[0];
                 (v2, v3, v4 * 100)
             });
@@ -758,9 +763,9 @@ pub mod tests {
         let mut g = RxDAG::new();
         let rx = g.new_var(vec![1, 2, 3]);
         {
-            let crx = g.new_crx(|g| rx.get(g)[0] * 2);
-            let crx2 = g.new_crx(|g| *crx.get(g) + rx.get(g)[1] * 10);
-            let crx3 = g.new_crx(|g| *crx2.get(g).to_string());
+            let crx = g.new_crx(move |g| rx.get(g)[0] * 2);
+            let crx2 = g.new_crx(move |g| *crx.get(g) + rx.get(g)[1] * 10);
+            let crx3 = g.new_crx(move |g| crx2.get(g).to_string());
             assert_eq!(*crx.get(g.now()), 2);
             assert_eq!(*crx2.get(g.now()), 22);
             assert_eq!(&*crx3.get(g.now()), "2");
