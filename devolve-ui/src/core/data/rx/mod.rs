@@ -180,7 +180,7 @@ impl<'c> RxDAG<'c> {
     pub fn run_crx<F: FnMut(RxInput<'_, 'c>) + 'c>(&self, mut compute: F) {
         let mut input_backwards_offsets = Vec::new();
         let () = Self::run_compute(&mut compute, RxInput(self.sub_dag()), &mut input_backwards_offsets, self.next_index());
-        let compute_edge = RxEdgeImpl::<'c, _>::new(input_backwards_offsets, 0, move |mut input_backwards_offsets, input, outputs, len| {
+        let compute_edge = RxEdgeImpl::<'c, _>::new(input_backwards_offsets, 0, move |mut input_backwards_offsets: &mut Vec<usize>, input: RxInput<'_, 'c>, outputs: &mut dyn Iterator<Item=&Rx<'c>>, len: usize| {
             input_backwards_offsets.clear();
             let () = Self::run_compute(&mut compute, input, &mut input_backwards_offsets, len);
             debug_assert!(outputs.next().is_none());
@@ -192,10 +192,12 @@ impl<'c> RxDAG<'c> {
     pub fn new_crx<T: 'c, F: FnMut(RxInput<'_, 'c>) -> T + 'c>(&self, mut compute: F) -> CRx<'c, T> {
         let mut input_backwards_offsets = Vec::new();
         let init = Self::run_compute(&mut compute, RxInput(self.sub_dag()), &mut input_backwards_offsets, self.next_index());
-        let compute_edge = RxEdgeImpl::<'c, _>::new(input_backwards_offsets, 1, move |mut input_backwards_offsets, input, outputs, len| {
+        let compute_edge = RxEdgeImpl::<'c, _>::new(input_backwards_offsets, 1, move |mut input_backwards_offsets: &mut Vec<usize>, input: RxInput<'_, 'c>, outputs: &mut dyn Iterator<Item=&Rx<'c>>, len: usize| {
             input_backwards_offsets.clear();
             let output = Self::run_compute(&mut compute, input, &mut input_backwards_offsets, len);
-            unsafe { outputs.next().unwrap().set_dyn(output); }
+            // unsafe { outputs.next().unwrap().set_dyn(output); }
+            // but there's another confusing lifetime issue I don't know how to fix. For some reason they always involve get_dyn and set_dyn
+            unsafe { transmute::<&Rx<'c>, &'static Rx<'static>>(outputs.next().unwrap()).set_dyn(output); }
             debug_assert!(outputs.next().is_none());
         });
         self.0.push(RxDAGElem::Edge(Box::new(compute_edge)));
@@ -210,11 +212,11 @@ impl<'c> RxDAG<'c> {
     pub fn new_crx2<T1: 'c, T2: 'c, F: FnMut(RxInput<'_, 'c>) -> (T1, T2) + 'c>(&self, mut compute: F) -> (CRx<'c, T1>, CRx<'c, T2>) {
         let mut input_backwards_offsets = Vec::new();
         let (init1, init2) = Self::run_compute(&mut compute, RxInput(self.sub_dag()), &mut input_backwards_offsets, self.next_index());
-        let compute_edge = RxEdgeImpl::<'c, _>::new(input_backwards_offsets, 2, move |mut input_backwards_offsets, input, outputs, len| {
+        let compute_edge = RxEdgeImpl::<'c, _>::new(input_backwards_offsets, 2, move |mut input_backwards_offsets: &mut Vec<usize>, input: RxInput<'_, 'c>, outputs: &mut dyn Iterator<Item=&Rx<'c>>, len: usize| {
             input_backwards_offsets.clear();
             let (output1, output2) = Self::run_compute(&mut compute, input, &mut input_backwards_offsets, len);
-            unsafe { outputs.next().unwrap().set_dyn(output1); }
-            unsafe { outputs.next().unwrap().set_dyn(output2); }
+            unsafe { transmute::<&Rx<'c>, &'static Rx<'static>>(outputs.next().unwrap()).set_dyn(output1); }
+            unsafe { transmute::<&Rx<'c>, &'static Rx<'static>>(outputs.next().unwrap()).set_dyn(output2); }
             debug_assert!(outputs.next().is_none());
         });
         self.0.push(RxDAGElem::Edge(Box::new(compute_edge)));
@@ -231,12 +233,12 @@ impl<'c> RxDAG<'c> {
     pub fn new_crx3<T1: 'c, T2: 'c, T3: 'c, F: FnMut(RxInput<'_, 'c>) -> (T1, T2, T3) + 'c>(&self, mut compute: F) -> (CRx<'c, T1>, CRx<'c, T2>, CRx<'c, T3>) {
         let mut input_backwards_offsets = Vec::new();
         let (init1, init2, init3) = Self::run_compute(&mut compute, RxInput(self.sub_dag()), &mut input_backwards_offsets, self.next_index());
-        let compute_edge = RxEdgeImpl::<'c, _>::new(input_backwards_offsets, 2, move |mut input_backwards_offsets, input, outputs, len| {
+        let compute_edge = RxEdgeImpl::<'c, _>::new(input_backwards_offsets, 2, move |mut input_backwards_offsets: &mut Vec<usize>, input: RxInput<'_, 'c>, outputs: &mut dyn Iterator<Item=&Rx<'c>>, len: usize| {
             input_backwards_offsets.clear();
             let (output1, output2, output3) = Self::run_compute(&mut compute, input, &mut input_backwards_offsets, len);
-            unsafe { outputs.next().unwrap().set_dyn(output1); }
-            unsafe { outputs.next().unwrap().set_dyn(output2); }
-            unsafe { outputs.next().unwrap().set_dyn(output3); }
+            unsafe { transmute::<&Rx<'c>, &'static Rx<'static>>(outputs.next().unwrap()).set_dyn(output1); }
+            unsafe { transmute::<&Rx<'c>, &'static Rx<'static>>(outputs.next().unwrap()).set_dyn(output2); }
+            unsafe { transmute::<&Rx<'c>, &'static Rx<'static>>(outputs.next().unwrap()).set_dyn(output3); }
             debug_assert!(outputs.next().is_none());
         });
         self.0.push(RxDAGElem::Edge(Box::new(compute_edge)));
@@ -411,11 +413,15 @@ impl<'c, T> RxRef<'c, T> {
     }
 
     fn get<'a>(&self, graph: RxSubDAG<'a, 'c>) -> &'a T where 'c: 'a {
-        unsafe { self.get_rx(graph).get_dyn() }
+        // unsafe { self.get_rx(graph).get_dyn() }
+        // but there is a lifetime issue I just don't understand and don't know how to fix
+        unsafe { transmute::<&RxRef<'c, T>, &RxRef<'static, T>>(self).get_rx(transmute::<RxSubDAG<'a, 'c>, RxSubDAG<'static, 'static>>(graph)).get_dyn() }
     }
 
     fn set(&self, graph: RxSubDAG<'_, 'c>, value: T) {
-        unsafe { self.get_rx(graph).set_dyn(value); }
+        // unsafe { self.get_rx(graph).set_dyn(value); }
+        // but there is a lifetime issue I just don't understand and don't know how to fix
+        unsafe { transmute::<&RxRef<'c, T>, &RxRef<'static, T>>(self).get_rx(transmute::<RxSubDAG<'_, 'c>, RxSubDAG<'static, 'static>>(graph)).set_dyn(value) }
     }
 
     fn get_rx<'a>(&self, graph: RxSubDAG<'a, 'c>) -> &'a Rx<'c> where 'c: 'a {
