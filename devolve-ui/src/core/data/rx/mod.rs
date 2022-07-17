@@ -17,7 +17,6 @@ use std::cell::Cell;
 use std::fmt::{Debug, Formatter};
 use std::marker::PhantomData;
 use std::mem::{MaybeUninit, size_of, transmute};
-use std::ptr;
 use derivative::Derivative;
 use crate::core::misc::stable_deref2::{Deref2, StableDeref2};
 use crate::core::misc::frozen_vec::{FrozenVec, FrozenSlice};
@@ -99,7 +98,8 @@ trait RxTrait: Debug {
     fn post_recompute(&mut self);
 
     unsafe fn _get_dyn(&self) -> *const ();
-    unsafe fn _set_dyn(&self, ptr: *const (), size: usize);
+    unsafe fn _take_latest_dyn(&self, ptr: *mut MaybeUninit<CurrentOrNext<'_, ()>>, size: usize);
+    unsafe fn _set_dyn(&self, ptr: *mut MaybeUninit<()>, size: usize);
 }
 
 struct RxImpl<T> {
@@ -165,6 +165,11 @@ pub struct DVar<'c, S, T, GetFn: Fn(&S) -> &T, SetFn: Fn(&S, T) -> S> {
 pub struct DCRx<'c, S, T, GetFn: Fn(&S) -> &T> {
     source: RxRef<'c, S>,
     get: GetFn
+}
+
+enum CurrentOrNext<'a, T> {
+    Current(&'a T),
+    Next(T)
 }
 
 impl<'c> RxDAG<'c> {
@@ -236,7 +241,7 @@ impl<'c> RxDAG<'c> {
     pub fn new_crx3<T1: 'c, T2: 'c, T3: 'c, F: FnMut(RxInput<'_, 'c>) -> (T1, T2, T3) + 'c>(&self, mut compute: F) -> (CRx<'c, T1>, CRx<'c, T2>, CRx<'c, T3>) {
         let mut input_backwards_offsets = Vec::new();
         let (init1, init2, init3) = Self::run_compute(&mut compute, RxInput(self.sub_dag()), &mut input_backwards_offsets);
-        let compute_edge = RxEdgeImpl::<'c, _>::new(input_backwards_offsets, 2, move |mut input_backwards_offsets: &mut Vec<usize>, input: RxInput<'_, 'c>, outputs: &mut dyn Iterator<Item=&Rx<'c>>| {
+        let compute_edge = RxEdgeImpl::<'c, _>::new(input_backwards_offsets, 3, move |mut input_backwards_offsets: &mut Vec<usize>, input: RxInput<'_, 'c>, outputs: &mut dyn Iterator<Item=&Rx<'c>>| {
             input_backwards_offsets.clear();
             let (output1, output2, output3) = Self::run_compute(&mut compute, input, &mut input_backwards_offsets);
             unsafe { outputs.next().unwrap().set_dyn(output1); }
@@ -400,6 +405,16 @@ impl<T> RxImpl<T> {
         &self.current
     }
 
+    /// Take `next` if set, otherwise returns a reference to `current`.
+    /// The value should then be re-assigned to `next` via `set`.
+    fn take_latest(&self) -> CurrentOrNext<'_, T> {
+        self.did_read.set(true);
+        match self.next.take() {
+            None => CurrentOrNext::Current(&self.current),
+            Some(next) => CurrentOrNext::Next(next)
+        }
+    }
+
     fn set(&self, value: T) {
         self.next.set(Some(value));
     }
@@ -418,8 +433,23 @@ impl<'c, T> RxRef<'c, T> {
         unsafe { self.get_rx(graph).get_dyn() }
     }
 
+    /// Take `next` if set, otherwise returns a reference to `current`.
+    /// The value should then be re-passed to `next` via `set`
+    fn take_latest<'a>(self, graph: RxSubDAG<'a, 'c>) -> CurrentOrNext<'a, T> where 'c: 'a {
+        unsafe { self.get_rx(graph).take_latest_dyn() }
+    }
+
     fn set(self, graph: RxSubDAG<'_, 'c>, value: T) {
         unsafe { self.get_rx(graph).set_dyn(value); }
+    }
+
+    /// Apply a transformation to the latest value.
+    /// This must be used instead of chaining `set` and `get`, since setting a value doesn't make it
+    /// returned by `get` until the graph is recomputed.
+    fn modify<F: FnOnce(&T) -> T>(self, graph: RxSubDAG<'_, 'c>, modify: F) {
+        let latest = self.take_latest(graph);
+        let next = modify(latest.as_ref());
+        self.set(graph, next);
     }
 
     fn get_rx<'a>(self, graph: RxSubDAG<'a, 'c>) -> &'a Rx<'c> where 'c: 'a {
@@ -437,6 +467,14 @@ impl<'c, T> Var<'c, T> {
     pub fn set<'a>(self, c: impl MutRxContext<'a, 'c>, value: T) where 'c: 'a {
         let graph = c.sub_dag();
         self.0.set(graph, value);
+    }
+
+    /// Apply a transformation to the latest value.
+    /// This must be used instead of chaining `set` and `get`, since setting a value doesn't make it
+    /// returned by `get` until the graph is recomputed.
+    pub fn modify<'a, F: FnOnce(&T) -> T>(self, c: impl MutRxContext<'a, 'c>, modify: F) where 'c: 'a {
+        let graph = c.sub_dag();
+        self.0.modify(graph, modify)
     }
 
     pub fn derive<U, GetFn: Fn(&T) -> &U, SetFn: Fn(&T, U) -> T>(self, get: GetFn, set: SetFn) -> DVar<'c, T, U, GetFn, SetFn> {
@@ -502,8 +540,8 @@ impl<'c, S, T, GetFn: Fn(&S) -> &T, SetFn: Fn(&S, T) -> S> DVar<'c, S, T, GetFn,
 
     pub fn set<'a>(&self, c: impl MutRxContext<'a, 'c>, value: T) where 'c: 'a, S: 'a {
         let graph = c.sub_dag();
-        let old_value = self.source.get(graph);
-        let new_value = (self.set)(old_value, value);
+        let old_value = self.source.take_latest(graph);
+        let new_value = (self.set)(old_value.as_ref(), value);
         self.source.set(graph, new_value)
     }
 }
@@ -545,9 +583,19 @@ impl<T> RxTrait for RxImpl<T> {
         self.get() as *const T as *const ()
     }
 
-    unsafe fn _set_dyn(&self, ptr: *const (), size: usize) {
-        let mut value = MaybeUninit::<T>::uninit();
-        ptr::copy(ptr, value.as_mut_ptr() as *mut (), size);
+    unsafe fn _take_latest_dyn(&self, ptr: *mut MaybeUninit<CurrentOrNext<'_, ()>>, size: usize) {
+        debug_assert_eq!(size, size_of::<T>(), "_take_latest_dyn called with wrong size");
+        let ptr = ptr as *mut MaybeUninit<CurrentOrNext<'_, T>>;
+        let value = self.take_latest();
+
+        ptr.write(MaybeUninit::new(value));
+    }
+
+    unsafe fn _set_dyn(&self, ptr: *mut MaybeUninit<()>, size: usize) {
+        debug_assert_eq!(size, size_of::<T>(), "_set_dyn called with wrong size");
+        let ptr = ptr as *mut MaybeUninit<T>;
+        let value = std::mem::replace(&mut *ptr, MaybeUninit::uninit());
+
         self.set(value.assume_init());
     }
 }
@@ -615,12 +663,20 @@ impl<'c, F: FnMut(&mut Vec<usize>, RxInput<'_, 'c>, &mut dyn Iterator<Item=&Rx<'
 impl<'c> dyn RxTrait + 'c {
     unsafe fn set_dyn<T>(&self, value: T) {
         debug_assert_eq!(size_of::<*const T>(), size_of::<*const ()>(), "won't work");
-        self._set_dyn(&value as *const T as *const (), size_of::<T>());
+        let mut value = MaybeUninit::new(value);
+        self._set_dyn(&mut value as *mut MaybeUninit<T> as *mut MaybeUninit<()>, size_of::<T>());
     }
 
     unsafe fn get_dyn<T>(&self) -> &T {
         debug_assert_eq!(size_of::<*const T>(), size_of::<*const ()>(), "won't work");
         &*(self._get_dyn() as *const T)
+    }
+
+    unsafe fn take_latest_dyn<T>(&self) -> CurrentOrNext<'_, T> {
+        debug_assert_eq!(size_of::<*const T>(), size_of::<*const ()>(), "won't work");
+        let mut value = MaybeUninit::<CurrentOrNext<'_, T>>::uninit();
+        self._take_latest_dyn(&mut value as *mut MaybeUninit<CurrentOrNext<'_, T>> as *mut MaybeUninit<CurrentOrNext<'_, ()>>, size_of::<T>());
+        value.assume_init()
     }
 }
 
@@ -640,6 +696,15 @@ impl<'c, F: FnMut(&mut Vec<usize>, RxInput<'_, 'c>, &mut dyn Iterator<Item=&Rx<'
             .field("num_outputs", &self.num_outputs)
             .field("input_backwards_offsets", &self.input_backwards_offsets)
             .finish_non_exhaustive()
+    }
+}
+
+impl<'a, T> AsRef<T> for CurrentOrNext<'a, T> {
+    fn as_ref(&self) -> &T {
+        match self {
+            CurrentOrNext::Current(x) => x,
+            CurrentOrNext::Next(x) => x
+        }
     }
 }
 
@@ -672,8 +737,35 @@ pub mod tests {
         assert_eq!(crx.get(g.now()), &8);
         assert_eq!(side_effect.get(), 15);
 
-        // We need to explicitly drop g before we drop side_effect.
-        // This is probably a bug in the rust compiler
+        // We need to explicitly drop g before we drop `side_effect`.
+        // Otherwise we get a compile error.
+        // The issue is that `RxDAG` has a nested type with a custom `Drop`, so it could use `side_effect`.
+        // However we dpn't and the custom `Drop` doesn't have access to `side_effect`, so this error is wrong/
+        // Unfortunately I don't know how to work around it and convince Rust dropping `side_effect` first is OK.
+        drop(g);
+    }
+
+    #[test]
+    fn test_rx_modify() {
+        let mut g = RxDAG::new();
+        let rx = g.new_var(1);
+        let crx = g.new_crx(move |g| *rx.get(g) * 2);
+        let side_effect = Cell::new(1);
+        let side_effect2 = &side_effect;
+        g.run_crx(move |g| {
+            side_effect2.set(side_effect2.get() + crx.get(g));
+        });
+        assert_eq!(rx.get(g.now()), &1);
+        assert_eq!(crx.get(g.now()), &2);
+        assert_eq!(side_effect.get(), 3);
+
+        rx.modify(&g, |g| g + 3);
+        rx.modify(&g, |g| g + 5);
+        assert_eq!(rx.get(g.now()), &9);
+        assert_eq!(crx.get(g.now()), &18);
+        assert_eq!(side_effect.get(), 21);
+
+        // See above
         drop(g);
     }
 
@@ -702,7 +794,7 @@ pub mod tests {
             });
             let (crx4_1, crx4_2, crx4_3) = g.new_crx3(move |g| {
                 let v2 = *rx.get(g);
-                let v3 = *crx3_1.get(g);
+                let v3 = *crx3_2.get(g);
                 let v4 = rx3.get(g)[0];
                 (v2, v3, v4 * 100)
             });
@@ -727,7 +819,7 @@ pub mod tests {
             assert_eq!(rx2.get(g.now()), &6);
             assert_eq!(rx3.get(g.now()), &vec![7, 8, 9]);
             assert_eq!(crx.get(g.now()), &vec![50, 60]);
-            assert_eq!(crx2.get(g.now()), &vec![5, 7, 8, 50, 60]);
+            assert_eq!(crx2.get(g.now()), &vec![5, 7, 8, 9, 50, 60]);
             assert_eq!(crx3_1.get(g.now()), &500);
             assert_eq!(crx3_2.get(g.now()), &600);
             assert_eq!(crx4_1.get(g.now()), &5);
@@ -736,7 +828,7 @@ pub mod tests {
         }
     }
 
-    /* #[test]
+    #[test]
     fn test_drx_split() {
         let mut g = RxDAG::new();
         let rx = g.new_var(vec![1, 2, 3]);
@@ -750,15 +842,15 @@ pub mod tests {
             let drx2 = rx.derive_using_clone(|x| &x[2], |x, new| {
                 x[2] = new;
             });
-            assert_eq!(drx0.get(g.now()).deref(), &1);
-            assert_eq!(drx1.get(g.now()).deref(), &2);
-            assert_eq!(drx2.get(g.now()).deref(), &3);
+            assert_eq!(drx0.get(g.now()), &1);
+            assert_eq!(drx1.get(g.now()), &2);
+            assert_eq!(drx2.get(g.now()), &3);
             drx0.set(&g, 2);
             drx1.set(&g, 3);
             drx2.set(&g, 4);
         }
-        assert_eq!(rx.get(g.now()).deref(), &vec![2, 3, 4]);
-    } */
+        assert_eq!(rx.get(g.now()), &vec![2, 3, 4]);
+    }
 
     #[test]
     fn test_crx() {
@@ -774,11 +866,11 @@ pub mod tests {
             rx.set(&g, vec![2, 3, 4]);
             assert_eq!(*crx.get(g.now()), 4);
             assert_eq!(*crx2.get(g.now()), 34);
-            assert_eq!(&*crx3.get(g.now()), "4");
+            assert_eq!(&*crx3.get(g.now()), "34");
             rx.set(&g, vec![3, 4, 5]);
             assert_eq!(*crx.get(g.now()), 6);
             assert_eq!(*crx2.get(g.now()), 46);
-            assert_eq!(&*crx3.get(g.now()), "6");
+            assert_eq!(&*crx3.get(g.now()), "46");
         }
     }
 
