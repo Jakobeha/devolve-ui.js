@@ -6,6 +6,7 @@ pub mod ident;
 pub mod io_write_2_fmt_write;
 pub mod is_thread_safe;
 pub mod fmt_mode;
+pub mod frozen_vec;
 pub(crate) mod map_lock_result;
 pub(crate) mod map_split_n;
 pub mod notify_flag;

@@ -19,9 +19,9 @@ use std::marker::PhantomData;
 use std::mem::{MaybeUninit, size_of, transmute};
 use std::ops::Deref;
 use std::ptr;
-use elsa::FrozenVec;
 use stable_deref_trait::StableDeref;
 use derivative::Derivative;
+use crate::core::misc::frozen_vec::FrozenVec;
 use crate::core::misc::assert_variance::assert_is_covariant;
 use crate::core::misc::slice_split3::SliceSplit3;
 
@@ -66,7 +66,7 @@ pub struct RxDAGSnapshot<'a, 'c: 'a>(&'a RxDAG<'c>);
 
 #[derive(Debug, Clone, Copy)]
 pub struct RxSubDAG<'a, 'c: 'a> {
-    before: &'a [RxDAGElem<'c>],
+    before: &'a FrozenVec<RxDAGElem<'c>>,
     index: usize,
     id: RxDAGUid<'c>
 }
@@ -303,7 +303,7 @@ impl<'c> RxDAGUid<'c> {
 impl<'a, 'c: 'a> RxContext<'a, 'c> for RxDAGSnapshot<'a, 'c> {
     fn sub_dag(self) -> RxSubDAG<'a, 'c> {
         RxSubDAG {
-            before: unsafe { &*transmute::<&FrozenVec<_>, &UnsafeCell<Vec<_>>>(&self.0.0).get() },
+            before: &self.0.0,
             index: self.0.0.len(),
             id: self.0.1
         }
