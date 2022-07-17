@@ -6,7 +6,6 @@ pub mod ident;
 pub mod io_write_2_fmt_write;
 pub mod is_thread_safe;
 pub mod fmt_mode;
-pub mod frozen_vec;
 pub(crate) mod map_lock_result;
 pub(crate) mod map_split_n;
 pub mod notify_flag;
@@ -16,3 +15,7 @@ pub mod hash_map_ref_stack;
 pub mod ref_stack;
 pub mod shorthand;
 pub mod slice_split3;
+
+// TODO move
+pub(crate) mod frozen_vec;
+pub(crate) mod stable_deref2;

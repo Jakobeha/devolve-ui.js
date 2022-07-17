@@ -13,15 +13,14 @@
 //! value directly, instead you use an associated function like `run_rx` to access it in a closure
 //! which can re-run whenever the dependency changes. You can create new `Rx`s from old ones.
 
-use std::cell::{Cell, UnsafeCell};
+use std::cell::Cell;
 use std::fmt::{Debug, Formatter};
 use std::marker::PhantomData;
 use std::mem::{MaybeUninit, size_of, transmute};
-use std::ops::Deref;
 use std::ptr;
-use stable_deref_trait::StableDeref;
 use derivative::Derivative;
-use crate::core::misc::frozen_vec::FrozenVec;
+use crate::core::misc::stable_deref2::{Deref2, StableDeref2};
+use crate::core::misc::frozen_vec::{FrozenVec, FrozenSlice};
 use crate::core::misc::assert_variance::assert_is_covariant;
 use crate::core::misc::slice_split3::SliceSplit3;
 
@@ -45,9 +44,8 @@ pub trait MutRxContext<'a, 'c: 'a> {
 /// The edges will recompute and change their output nodes if any of their inputs got recomputed.
 ///
 /// The DAG has interior mutability, in that it can add nodes without a mutable borrow.
-/// See `elsa` crate for why this is sound (though honestly the soundness argument is kinda sus).
-/// `RxDAGElem` implements `Deref` and `StableDeref` but panics if it's an edge, however `Deref` is
-/// only accessible internally and should never be able to reach the panic case.
+/// See `elsa` crate for why this is sound (though actually the soundness argument is contested).
+/// Internally we use a modified version because of `elsa` and `stable-deref-trait`
 ///
 /// Setting `Rx` values is also interior mutability, and OK because we don't use those values until `RxDAGElem::recompute`.
 ///
@@ -56,6 +54,7 @@ pub trait MutRxContext<'a, 'c: 'a> {
 ///
 /// Currently no `Rx`s are deallocated until the entire DAG is deallocated,
 /// so if you keep creating and discarding `Rx`s you will leak memory (TODO fix this?)
+#[derive(Debug)]
 pub struct RxDAG<'c>(FrozenVec<RxDAGElem<'c>>, RxDAGUid<'c>);
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -66,7 +65,7 @@ pub struct RxDAGSnapshot<'a, 'c: 'a>(&'a RxDAG<'c>);
 
 #[derive(Debug, Clone, Copy)]
 pub struct RxSubDAG<'a, 'c: 'a> {
-    before: &'a FrozenVec<RxDAGElem<'c>>,
+    before: FrozenSlice<'a, RxDAGElem<'c>>,
     index: usize,
     id: RxDAGUid<'c>
 }
@@ -79,6 +78,12 @@ pub struct RxInput<'a, 'c: 'a>(RxSubDAG<'a, 'c>);
 enum RxDAGElem<'c> {
     Node(Box<Rx<'c>>),
     Edge(Box<RxEdge<'c>>)
+}
+
+#[derive(Debug)]
+enum RxDAGElemRef<'a, 'c> {
+    Node(&'a Rx<'c>),
+    Edge(&'a RxEdge<'c>)
 }
 
 type Rx<'c> = dyn RxTrait + 'c;
@@ -195,9 +200,8 @@ impl<'c> RxDAG<'c> {
         let compute_edge = RxEdgeImpl::<'c, _>::new(input_backwards_offsets, 1, move |mut input_backwards_offsets: &mut Vec<usize>, input: RxInput<'_, 'c>, outputs: &mut dyn Iterator<Item=&Rx<'c>>| {
             input_backwards_offsets.clear();
             let output = Self::run_compute(&mut compute, input, &mut input_backwards_offsets);
-            // unsafe { outputs.next().unwrap().set_dyn(output); }
+            unsafe { outputs.next().unwrap().set_dyn(output); }
             // but there's another confusing lifetime issue I don't know how to fix. For some reason they always involve get_dyn and set_dyn
-            unsafe { transmute::<&Rx<'c>, &'static Rx<'static>>(outputs.next().unwrap()).set_dyn(output); }
             debug_assert!(outputs.next().is_none());
         });
         self.0.push(RxDAGElem::Edge(Box::new(compute_edge)));
@@ -215,8 +219,8 @@ impl<'c> RxDAG<'c> {
         let compute_edge = RxEdgeImpl::<'c, _>::new(input_backwards_offsets, 2, move |mut input_backwards_offsets: &mut Vec<usize>, input: RxInput<'_, 'c>, outputs: &mut dyn Iterator<Item=&Rx<'c>>| {
             input_backwards_offsets.clear();
             let (output1, output2) = Self::run_compute(&mut compute, input, &mut input_backwards_offsets);
-            unsafe { transmute::<&Rx<'c>, &'static Rx<'static>>(outputs.next().unwrap()).set_dyn(output1); }
-            unsafe { transmute::<&Rx<'c>, &'static Rx<'static>>(outputs.next().unwrap()).set_dyn(output2); }
+            unsafe { outputs.next().unwrap().set_dyn(output1); }
+            unsafe { outputs.next().unwrap().set_dyn(output2); }
             debug_assert!(outputs.next().is_none());
         });
         self.0.push(RxDAGElem::Edge(Box::new(compute_edge)));
@@ -236,9 +240,9 @@ impl<'c> RxDAG<'c> {
         let compute_edge = RxEdgeImpl::<'c, _>::new(input_backwards_offsets, 2, move |mut input_backwards_offsets: &mut Vec<usize>, input: RxInput<'_, 'c>, outputs: &mut dyn Iterator<Item=&Rx<'c>>| {
             input_backwards_offsets.clear();
             let (output1, output2, output3) = Self::run_compute(&mut compute, input, &mut input_backwards_offsets);
-            unsafe { transmute::<&Rx<'c>, &'static Rx<'static>>(outputs.next().unwrap()).set_dyn(output1); }
-            unsafe { transmute::<&Rx<'c>, &'static Rx<'static>>(outputs.next().unwrap()).set_dyn(output2); }
-            unsafe { transmute::<&Rx<'c>, &'static Rx<'static>>(outputs.next().unwrap()).set_dyn(output3); }
+            unsafe { outputs.next().unwrap().set_dyn(output1); }
+            unsafe { outputs.next().unwrap().set_dyn(output2); }
+            unsafe { outputs.next().unwrap().set_dyn(output3); }
             debug_assert!(outputs.next().is_none());
         });
         self.0.push(RxDAGElem::Edge(Box::new(compute_edge)));
@@ -303,7 +307,7 @@ impl<'c> RxDAGUid<'c> {
 impl<'a, 'c: 'a> RxContext<'a, 'c> for RxDAGSnapshot<'a, 'c> {
     fn sub_dag(self) -> RxSubDAG<'a, 'c> {
         RxSubDAG {
-            before: &self.0.0,
+            before: FrozenSlice::from(&self.0.0),
             index: self.0.0.len(),
             id: self.0.1
         }
@@ -317,9 +321,9 @@ impl<'a, 'c: 'a> MutRxContext<'a, 'c> for &'a RxDAG<'c> {
 }
 
 impl<'a, 'c: 'a> RxSubDAG<'a, 'c> {
-    fn get(self, index: usize) -> &'a RxDAGElem<'c> {
+    fn index(self, index: usize) -> RxDAGElemRef<'a, 'c> {
         debug_assert!(index < self.index, "index out of sub-dag bounds");
-        &self.before[index]
+        self.before.index(index)
     }
 }
 
@@ -342,13 +346,6 @@ impl<'a, 'c: 'a> RxInput<'a, 'c> {
 }
 
 impl<'c> RxDAGElem<'c> {
-    fn post_read(&self) -> bool {
-        match self {
-            RxDAGElem::Node(node) => node.post_read(),
-            RxDAGElem::Edge(_) => false
-        }
-    }
-
     fn recompute(&mut self, index: usize, before: &[RxDAGElem<'c>], after: &[RxDAGElem<'c>], graph_id: RxDAGUid<'c>) {
         match self {
             RxDAGElem::Node(x) => x.recompute(),
@@ -367,6 +364,23 @@ impl<'c> RxDAGElem<'c> {
     fn as_node(&self) -> Option<&Rx<'c>> {
         match self {
             RxDAGElem::Node(x) => Some(x.as_ref()),
+            _ => None
+        }
+    }
+}
+
+impl<'a, 'c> RxDAGElemRef<'a, 'c> {
+    fn post_read(self) -> bool {
+        match self {
+            RxDAGElemRef::Node(node) => node.post_read(),
+            RxDAGElemRef::Edge(_) => false
+        }
+    }
+
+    //noinspection RsSelfConvention because this is itself a reference
+    fn as_node(self) -> Option<&'a Rx<'c>> {
+        match self {
+            RxDAGElemRef::Node(x) => Some(x),
             _ => None
         }
     }
@@ -402,20 +416,16 @@ impl<'c, T> RxRef<'c, T> {
     }
 
     fn get<'a>(self, graph: RxSubDAG<'a, 'c>) -> &'a T where 'c: 'a {
-        // unsafe { self.get_rx(graph).get_dyn() }
-        // but there is a lifetime issue I just don't understand and don't know how to fix
-        unsafe { transmute::<RxRef<'c, T>, RxRef<'static, T>>(self).get_rx(transmute::<RxSubDAG<'a, 'c>, RxSubDAG<'static, 'static>>(graph)).get_dyn() }
+        unsafe { self.get_rx(graph).get_dyn() }
     }
 
     fn set(self, graph: RxSubDAG<'_, 'c>, value: T) {
-        // unsafe { self.get_rx(graph).set_dyn(value); }
-        // but there is a lifetime issue I just don't understand and don't know how to fix
-        unsafe { transmute::<RxRef<'c, T>, RxRef<'static, T>>(self).get_rx(transmute::<RxSubDAG<'_, 'c>, RxSubDAG<'static, 'static>>(graph)).set_dyn(value) }
+        unsafe { self.get_rx(graph).set_dyn(value); }
     }
 
     fn get_rx<'a>(self, graph: RxSubDAG<'a, 'c>) -> &'a Rx<'c> where 'c: 'a {
         debug_assert!(self.graph_id == graph.id, "RxRef::get_rx: different graph");
-        graph.get(self.index).as_node().expect("RxRef corrupt: index is an edge")
+        graph.index(self.index).as_node().expect("RxRef is corrupt: it points to an edge")
     }
 }
 
@@ -543,15 +553,18 @@ impl<T> RxTrait for RxImpl<T> {
     }
 }
 
-impl<'c> Deref for RxDAGElem<'c> {
-    type Target = Rx<'c>;
+impl<'c> Deref2 for RxDAGElem<'c> {
+    type Target<'a> = RxDAGElemRef<'a, 'c> where Self: 'a;
 
-    fn deref(&self) -> &Self::Target {
-        self.as_node().expect("RxRef is corrupt: index is an edge (cannot deref RxDAGElem which is an edge)")
+    fn deref2(&self) -> Self::Target<'_> {
+        match self {
+            RxDAGElem::Node(x) => RxDAGElemRef::Node(x.deref2()),
+            RxDAGElem::Edge(x) => RxDAGElemRef::Edge(x.deref2())
+        }
     }
 }
 
-unsafe impl<'c> StableDeref for RxDAGElem<'c> {}
+unsafe impl<'c> StableDeref2 for RxDAGElem<'c> {}
 
 impl<'c, F: FnMut(&mut Vec<usize>, RxInput<'_, 'c>, &mut dyn Iterator<Item=&Rx<'c>>) + 'c> RxEdgeImpl<'c, F> {
     fn new(input_backwards_offsets: Vec<usize>, num_outputs: usize, compute: F) -> Self {
@@ -573,7 +586,7 @@ impl<'c, F: FnMut(&mut Vec<usize>, RxInput<'_, 'c>, &mut dyn Iterator<Item=&Rx<'
 
 impl<'c, F: FnMut(&mut Vec<usize>, RxInput<'_, 'c>, &mut dyn Iterator<Item=&Rx<'c>>) + 'c> RxEdgeTrait for RxEdgeImpl<'c, F> {
     fn recompute<'c2>(&mut self, index: usize, before: &[RxDAGElem<'c2>], after: &[RxDAGElem<'c2>], graph_id: RxDAGUid<'c2>) {
-        // 'c2 must outlive 'c, this is a workaround beause there aren't covariant trait lifetime parameters
+        // 'c2 must outlive 'c, this is a workaround because there aren't covariant trait lifetime parameters
         let (before, after, graph_id) = unsafe {
             transmute::<(&[RxDAGElem<'c2>], &[RxDAGElem<'c2>], RxDAGUid<'c2>), (&[RxDAGElem<'c>], &[RxDAGElem<'c>], RxDAGUid<'c>)>((before, after, graph_id))
         };
@@ -590,7 +603,7 @@ impl<'c, F: FnMut(&mut Vec<usize>, RxInput<'_, 'c>, &mut dyn Iterator<Item=&Rx<'
                 after[offset].as_node().expect("broken RxDAG: RxEdge output must be a node")
             });
             let input_dag = RxInput(RxSubDAG {
-                before,
+                before: FrozenSlice::from(before),
                 index,
                 id: graph_id
             });
@@ -600,7 +613,7 @@ impl<'c, F: FnMut(&mut Vec<usize>, RxInput<'_, 'c>, &mut dyn Iterator<Item=&Rx<'
     }
 }
 
-impl dyn RxTrait {
+impl<'c> dyn RxTrait + 'c {
     unsafe fn set_dyn<T>(&self, value: T) {
         debug_assert_eq!(size_of::<*const T>(), size_of::<*const ()>(), "won't work");
         self._set_dyn(&value as *const T as *const (), size_of::<T>());
@@ -609,15 +622,6 @@ impl dyn RxTrait {
     unsafe fn get_dyn<T>(&self) -> &T {
         debug_assert_eq!(size_of::<*const T>(), size_of::<*const ()>(), "won't work");
         &*(self._get_dyn() as *const T)
-    }
-}
-
-impl<'c> Debug for RxDAG<'c> {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        f.debug_tuple("RxDAG")
-            .field(unsafe { &*transmute::<&FrozenVec<RxDAGElem<'c>>, &UnsafeCell<Vec<RxDAGElem<'c>>>>(&self.0).get() })
-            .field(&self.1)
-            .finish()
     }
 }
 
