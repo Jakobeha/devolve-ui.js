@@ -201,7 +201,6 @@ impl<'c> RxDAG<'c> {
             input_backwards_offsets.clear();
             let output = Self::run_compute(&mut compute, input, &mut input_backwards_offsets);
             unsafe { outputs.next().unwrap().set_dyn(output); }
-            // but there's another confusing lifetime issue I don't know how to fix. For some reason they always involve get_dyn and set_dyn
             debug_assert!(outputs.next().is_none());
         });
         self.0.push(RxDAGElem::Edge(Box::new(compute_edge)));
