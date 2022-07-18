@@ -3,9 +3,11 @@ members = [
     "devolve-ui",
     "devolve-ui-derive",
     "devolve-ui-forms",
+    "mini-rx"
 ]
 default-members = [
     "devolve-ui",
     "devolve-ui-derive",
     "devolve-ui-forms",
+    "mini-rx"
 ]

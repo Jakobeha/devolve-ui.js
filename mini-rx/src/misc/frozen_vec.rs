@@ -5,10 +5,9 @@ use std::cell::UnsafeCell;
 use std::cmp::Ordering;
 use std::fmt::{Debug, Formatter};
 use std::iter::{Iterator, IntoIterator};
-use std::ops::Index;
 use std::mem::transmute;
 
-use crate::core::misc::stable_deref2::StableDeref2;
+use crate::misc::stable_deref2::StableDeref2;
 
 /// Version of `std::vec::Vec` where insertion does not require mutable access,
 /// but without mutable access, you may only retrieve pointers which deref to the same location after move.
@@ -346,12 +345,12 @@ impl<'a, T: StableDeref2> FrozenSlice<'a, T> {
         FrozenSliceIter(self.0.iter())
     }
 
-    pub fn get(&self, index: usize) -> Option<T::Target<'a>> {
-        self.0.get(index).map(|x| x.deref2())
+    pub unsafe fn get_unchecked(&self, index: usize) -> T::Target<'a> {
+        self.0.get_unchecked(index).deref2()
     }
 
-    pub fn index(&self, index: usize) -> T::Target<'a> {
-        self.0.index(index).deref2()
+    pub fn len(&self) -> usize {
+        self.0.len()
     }
 
     // TODO add more

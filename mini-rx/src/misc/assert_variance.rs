@@ -8,8 +8,8 @@
 ///
 /// This can ensure that any type has the expected variance for lifetime or type parameters.
 /// This can be especially useful when making data structures:
-/// ```
-/// use crate::core::misc::assert_variance::assert_is_covariant; fn main() {}
+/// ```ignore
+/// use mini_rx::misc::assert_variance::assert_is_covariant; fn main() {}
 /// struct Foo<T> {
 ///     x: *const T
 /// }
@@ -21,8 +21,8 @@
 ///
 /// Testing generics can be done with the `for[]` clause. Note that the type or lifetime parameter
 /// being tested must not appear in the `for[]` clause.
-/// ```
-/// use crate::core::misc::assert_variance::assert_is_covariant; fn main() {}
+/// ```ignore
+/// use mini_rx::misc::assert_variance::assert_is_covariant; fn main() {}
 /// assert_is_covariant! {
 ///     for['a, T] (&'a &'b T) over 'b
 /// }
@@ -32,7 +32,7 @@
 /// The following example fails to compile because `&mut T` is invariant over `T` (in this case,
 /// `&'b i32`).
 /// ```compile_fail
-/// use crate::core::misc::assert_variance::assert_is_contravariant; fn main() {}
+/// use mini_rx::misc::assert_variance::assert_is_contravariant; fn main() {}
 /// // WILL NOT COMPILE
 /// assert_is_covariant! {
 ///     for['a] (&'a mut &'b i32) over 'b
@@ -102,8 +102,8 @@ pub macro assert_is_covariant {
 ///
 /// This can ensure that any type has the expected variance for lifetime or type parameters.
 /// This can be especially useful when making data structures:
-/// ```
-/// use crate::core::misc::assert_variance::assert_is_contravariant; fn main() {}
+/// ```ignore
+/// use mini_rx::misc::assert_variance::assert_is_contravariant; fn main() {}
 /// struct Foo<'a, T> {
 ///     x: fn(&'a T) -> bool,
 /// }
@@ -115,8 +115,8 @@ pub macro assert_is_covariant {
 ///
 ///
 /// The `for[...]` clause is unnecessary if it would be empty:
-/// ```
-/// use crate::core::misc::assert_variance::assert_is_contravariant; fn main() {}
+/// ```ignore
+/// use mini_rx::misc::assert_variance::assert_is_contravariant; fn main() {}
 /// assert_is_contravariant!{
 ///     (fn(T)) over T
 /// }
@@ -126,7 +126,7 @@ pub macro assert_is_covariant {
 /// over `'a`.
 ///
 /// ```compile_fail
-/// use crate::core::misc::assert_variance::assert_is_contravariant; fn main() {}
+/// use mini_rx::misc::assert_variance::assert_is_contravariant; fn main() {}
 /// // WILL NOT COMPILE
 /// assert_is_contravariant! {
 ///     (&'a mut f64) over 'a
