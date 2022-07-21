@@ -22,12 +22,16 @@
 #![feature(cell_update)]
 #![feature(unboxed_closures)]
 #![feature(fn_traits)]
+#![feature(into_future)]
 #![cfg_attr(not(version("1.63")), feature(explicit_generic_args_with_impl_trait))]
 #![cfg_attr(feature = "backtrace", feature(backtrace))]
 
 pub mod core;
+// TODO: Move everything outside of core to their own packages and move crate::core to crate.
+//   This stuff isn't features
 #[cfg(feature = "wasm")]
 pub mod wasm;
+pub mod prompt;
 pub mod engines;
 pub mod view_data;
 
