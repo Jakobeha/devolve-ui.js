@@ -13,7 +13,7 @@ pub struct NonUpdatingState<T: Any, ViewData: VViewData> {
     phantom: PhantomData<(T, ViewData)>
 }
 
-pub trait InternalHooks <'a, 'a0: 'a, ViewData: VViewData + 'a> {
+pub trait InternalHooks<'a, 'a0: 'a, ViewData: VViewData + 'a> {
     fn use_non_updating_state<T: Any>(&mut self, get_initial: impl FnOnce(&mut Self) -> T) -> NonUpdatingState<T, ViewData>;
 }
 
