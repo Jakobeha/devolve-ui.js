@@ -146,9 +146,9 @@ pub macro make_component_macro {
 /// make_component!(pub basic, Basic<TParam> where (TParam: Any) {
 ///     optional_field: String = "default value".to_string(),
 ///     another_optional: usize = 1
-/// } [ required_field: String ] @ _p ViewData);
+/// } [ required_field: String ]);
 ///
-/// fn basic<TParam: Any, ViewData: HasTuiViewData>((c, Bc1 { optional_field, another_optional, required_field, _p }): VComponentContext2<Bc1<TParam, ViewData>, ViewData>) -> VNode<ViewData> {
+/// fn basic<TParam: Any, ViewData: HasTuiViewData>((c, Basic { optional_field, another_optional, required_field }): VComponentContext2<Basic<TParam, ViewData>, ViewData>) -> VNode<ViewData> {
 ///     vbox(d(), d(), vec![
 ///         text!({}, {}, format!("{} and {}", required_field, optional_field)),
 ///         text!({}, {}, "Hello world!".to_string())

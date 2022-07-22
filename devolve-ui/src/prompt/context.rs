@@ -24,14 +24,14 @@ pub struct VPrompt<
     phantom: PhantomData<Props>
 }
 
-type VRawPromptComponentContext<'a, 'a0, Props, ViewData> = (VComponentContext1<'a, 'a0, Props, ViewData>, &'a Props, &'a mut RawPromptResume);
-pub type VPromptComponentContext<'a, 'a0, Props, ViewData, R> = (VComponentContext1<'a, 'a0, Props, ViewData>, &'a Props, PromptResume<'a, R>);
+type VRawPromptComponentContext<'a, 'a0, Props, ViewData> = (VComponentContext1<'a, 'a0, Props, ViewData>, &'a mut RawPromptResume, &'a Props);
+pub type VPromptComponentContext<'a, 'a0, Props, ViewData, R> = (VComponentContext1<'a, 'a0, Props, ViewData>, PromptResume<'a, R>, &'a Props);
 pub type VPromptContext2<'a, PromptProps, Props, ViewData> = (&'a mut dyn VPromptContext<Props, ViewData>, PromptProps);
 
 pub trait VPromptContext<Props: Any, ViewData: VViewData> {
     fn yield_<'a, R>(
         &'a mut self,
-        render: impl FnMut(&VComponentContext1<'_, '_, Props, ViewData>, PromptResume<'a, R>) -> VNode<ViewData>
+        render: impl FnMut(VPromptComponentContext<'_, '_, Props, ViewData, R>) -> VNode<ViewData>
     ) -> &'a mut PromptResume<'a, R>;
 }
 
@@ -55,7 +55,7 @@ impl<
 
     pub fn current(&mut self, (c, props): VComponentContext2<'_, '_, Props, ViewData>) -> VNode<ViewData> {
         let current = self.current.expect("prompt is still being created, you can't get current component yet");
-        current((c, props, &mut self.resume))
+        current((c, &mut self.resume, props))
     }
 }
 
@@ -66,8 +66,9 @@ impl<
 > VPromptContext<Props, ViewData> for VPrompt<Props, ViewData, F> {
     fn yield_<'a, R>(&'a mut self, render: impl FnMut(VPromptComponentContext<'_, '_, Props, ViewData, R>) -> VNode<ViewData>) -> &'a mut PromptResume<'a, R> {
         let mut resume = PromptResume::new(&mut self.resume_shared);
-        self.current = Some(Box::new(|(c, props, resume)| {
-            render((c, props, PromptResume::new(resume)))
+        self.current = Some(Box::new(|(c, resume, props)| {
+            let resume = PromptResume::new(resume);
+            render((c, resume, props))
         }));
         &mut resume
     }
