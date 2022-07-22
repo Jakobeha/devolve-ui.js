@@ -17,7 +17,7 @@ use std::any::Any;
 use crate::core::component::context::{VComponentContext, VContext, VContextIndex};
 use crate::core::component::update_details::{UpdateBacktrace, UpdateDetails};
 use crate::core::view::view::VViewData;
-use crate::core::hooks::state_internal::{NonUpdatingState, InternalHooks};
+use crate::core::hooks::state_internal::{NonUpdatingState, NonUpdatingStateHook};
 
 #[derive(Debug)]
 pub struct State<T: Any, ViewData: VViewData>(NonUpdatingState<T, ViewData>);

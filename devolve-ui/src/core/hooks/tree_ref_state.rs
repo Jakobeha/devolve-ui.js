@@ -23,7 +23,7 @@ use crate::core::component::context::{VComponentContext, VContext, VContextIndex
 use crate::core::component::path::VComponentPath;
 use crate::core::component::update_details::UpdateDetails;
 use crate::core::data::obs_ref::st::{ObsRef, ObsRefableRoot, SubCtx};
-use crate::core::hooks::state_internal::InternalHooks;
+use crate::core::hooks::state_internal::NonUpdatingStateHook;
 use crate::core::misc::map_lock_result::MappableLockResult;
 use crate::core::view::view::VViewData;
 

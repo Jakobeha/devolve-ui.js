@@ -11,7 +11,7 @@ use std::mem;
 use std::slice::Iter;
 use crate::core::component::context::{VComponentContext1, VDestructorContext2, VEffectContext2, with_destructor_context};
 use crate::core::view::view::VViewData;
-use crate::core::hooks::state_internal::InternalHooks;
+use crate::core::hooks::state_internal::NonUpdatingStateHook;
 
 pub trait CollectionOfPartialEqs {
     type Item: PartialEq;

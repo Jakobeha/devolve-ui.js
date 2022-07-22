@@ -19,7 +19,7 @@ use crate::core::hooks::BuiltinHooks;
 #[cfg(feature = "input")]
 use crate::core::renderer::input::{KeyEvent, MouseEvent, ResizeEvent};
 use crate::core::hooks::effect::{NoDependencies, UseEffectRerun};
-use crate::core::hooks::state_internal::InternalHooks;
+use crate::core::hooks::state_internal::NonUpdatingStateHook;
 use crate::core::renderer::listeners::RendererListenerId;
 use crate::core::view::view::VViewData;
 

@@ -35,7 +35,7 @@ pub mod effect;
 /// Listeners for time and input events
 pub mod event;
 /// Non-updating state which doesn't trigger updates
-mod state_internal;
+pub mod state_internal;
 
 pub trait BuiltinHooks <'a, 'a0: 'a, Props: Any, ViewData: VViewData + 'static> {
     fn use_state<T: Any>(&mut self, get_initial: impl FnOnce(&mut Self) -> T) -> State<T, ViewData>;

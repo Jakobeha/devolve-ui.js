@@ -3,16 +3,14 @@
 //! because regular components render instantaneously but prompt-component functions run over a lifetime.
 
 use std::any::Any;
-use std::cell::Cell;
+use std::fmt::{Debug, Formatter};
 use std::future::{Future, IntoFuture};
 use std::marker::PhantomData;
-use crate::core::component::component::{VComponentContexts, VComponentHead};
 use crate::core::component::context::{VComponentContext1, VComponentContext2};
 use crate::core::component::node::VNode;
-use crate::core::view::view::{VView, VViewData};
+use crate::core::view::view::VViewData;
 use crate::prompt::resume::{PromptResume, RawPromptResume};
 
-#[derive(Debug)]
 pub struct VPrompt<
     Props: Any,
     ViewData: VViewData,
@@ -26,13 +24,35 @@ pub struct VPrompt<
 
 type VRawPromptComponentContext<'a, 'a0, Props, ViewData> = (VComponentContext1<'a, 'a0, Props, ViewData>, &'a mut RawPromptResume, &'a Props);
 pub type VPromptComponentContext<'a, 'a0, Props, ViewData, R> = (VComponentContext1<'a, 'a0, Props, ViewData>, PromptResume<'a, R>, &'a Props);
-pub type VPromptContext2<'a, PromptProps, Props, ViewData> = (&'a mut dyn VPromptContext<Props, ViewData>, PromptProps);
+pub type VPromptContext2<'a, Props, ViewData, PromptProps> = (&'a mut dyn VPromptContext<Props, ViewData> + 'a, PromptProps);
 
 pub trait VPromptContext<Props: Any, ViewData: VViewData> {
-    fn yield_<'a, R>(
+    unsafe fn yield_raw<'a>(
         &'a mut self,
-        render: impl FnMut(VPromptComponentContext<'_, '_, Props, ViewData, R>) -> VNode<ViewData>
-    ) -> &'a mut PromptResume<'a, R>;
+        render: Box<dyn FnMut(VRawPromptComponentContext<'_, '_, Props, ViewData>) -> VNode<ViewData>>
+    ) -> &'a mut RawPromptResume;
+}
+
+impl<Props: Any, ViewData: VViewData> dyn VPromptContext<Props, ViewData> + '_ {
+    pub fn yield_<'a, R>(
+        &'a mut self,
+        mut render: impl FnMut(VPromptComponentContext<'_, '_, Props, ViewData, R>) -> VNode<ViewData> + 'static
+    ) -> PromptResume<'a, R> {
+        unsafe {
+            let resume = self.yield_raw(Box::new(move |(c, resume, props)| {
+                let resume = PromptResume::new(resume);
+                render((c, resume, props))
+            }));
+            PromptResume::new(resume)
+        }
+    }
+
+    pub fn yield_void<'a>(
+        &'a mut self,
+        render: impl FnMut(VPromptComponentContext<'_, '_, Props, ViewData, ()>) -> VNode<ViewData> + 'static
+    ) -> PromptResume<'a, ()> {
+        self.yield_(render)
+    }
 }
 
 impl<
@@ -40,7 +60,7 @@ impl<
     ViewData: VViewData,
     F: Future<Output=()>
 > VPrompt<Props, ViewData, F> {
-    pub fn new<PromptProps>(prompt_fn: impl FnOnce(VPromptContext2<'_, PromptProps, Props, ViewData>) -> F + 'static, prompt_props: PromptProps) -> Self {
+    pub fn new<PromptProps>(prompt_fn: impl FnOnce(VPromptContext2<'_, Props, ViewData, PromptProps>) -> F, prompt_props: PromptProps) -> Self {
         let mut this = Self {
             future: None,
             current: None,
@@ -54,7 +74,7 @@ impl<
     }
 
     pub fn current(&mut self, (c, props): VComponentContext2<'_, '_, Props, ViewData>) -> VNode<ViewData> {
-        let current = self.current.expect("prompt is still being created, you can't get current component yet");
+        let current = self.current.as_mut().expect("prompt is still being created, you can't get current component yet");
         current((c, &mut self.resume, props))
     }
 }
@@ -64,13 +84,9 @@ impl<
     ViewData: VViewData,
     F: Future<Output=()>
 > VPromptContext<Props, ViewData> for VPrompt<Props, ViewData, F> {
-    fn yield_<'a, R>(&'a mut self, render: impl FnMut(VPromptComponentContext<'_, '_, Props, ViewData, R>) -> VNode<ViewData>) -> &'a mut PromptResume<'a, R> {
-        let mut resume = PromptResume::new(&mut self.resume_shared);
-        self.current = Some(Box::new(|(c, resume, props)| {
-            let resume = PromptResume::new(resume);
-            render((c, resume, props))
-        }));
-        &mut resume
+    unsafe fn yield_raw<'a>(&'a mut self, render: Box<dyn FnMut(VRawPromptComponentContext<'_, '_, Props, ViewData>) -> VNode<ViewData>>) -> &'a mut RawPromptResume {
+        self.current = Some(render);
+        &mut self.resume
     }
 }
 
@@ -85,5 +101,19 @@ impl<
     /// Returns a future which will complete when the wrapped prompt function does.
     fn into_future(self) -> Self::IntoFuture {
         self.future.expect("prompt is still being created, you can't await it yet")
+    }
+}
+
+impl<
+    Props: Any,
+    ViewData: VViewData,
+    F: Future<Output=()>
+> Debug for VPrompt<Props, ViewData, F> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("VPrompt")
+            .field("future.is_some()", &self.future.is_some())
+            .field("current.is_some()", &self.current.is_some())
+            .field("resume", &self.resume)
+            .finish()
     }
 }

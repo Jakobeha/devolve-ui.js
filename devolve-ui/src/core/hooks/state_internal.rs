@@ -1,6 +1,8 @@
 //! A component's state which doesn't trigger a re-render when set.
-//! This means that it can't be used in the component's render.
-//! Instead it's used internally by other hooks.
+//!
+//! Normally you should not use this, which is why it's exported in a separate module than the other hooks.
+//! Originally this was only used internally by other hooks.
+//! However we realized there are public use cases for this as well.
 
 use std::any::Any;
 use std::marker::PhantomData;
@@ -13,11 +15,11 @@ pub struct NonUpdatingState<T: Any, ViewData: VViewData> {
     phantom: PhantomData<(T, ViewData)>
 }
 
-pub trait InternalHooks<'a, 'a0: 'a, ViewData: VViewData + 'a> {
+pub trait NonUpdatingStateHook<'a, 'a0: 'a, ViewData: VViewData + 'a> {
     fn use_non_updating_state<T: Any>(&mut self, get_initial: impl FnOnce(&mut Self) -> T) -> NonUpdatingState<T, ViewData>;
 }
 
-impl <'a, 'a0: 'a, ViewData: VViewData + 'a, Context: VComponentContext<'a, 'a0, ViewData=ViewData>> InternalHooks<'a, 'a0, ViewData> for Context {
+impl <'a, 'a0: 'a, ViewData: VViewData + 'a, Context: VComponentContext<'a, 'a0, ViewData=ViewData>> NonUpdatingStateHook<'a, 'a0, ViewData> for Context {
     fn use_non_updating_state<T: Any>(&mut self, get_initial: impl FnOnce(&mut Self) -> T) -> NonUpdatingState<T, ViewData> {
         _use_non_updating_state(self, get_initial)
     }

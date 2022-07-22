@@ -148,7 +148,7 @@ pub macro make_component_macro {
 ///     another_optional: usize = 1
 /// } [ required_field: String ]);
 ///
-/// fn basic<TParam: Any, ViewData: HasTuiViewData>((c, Basic { optional_field, another_optional, required_field }): VComponentContext2<Basic<TParam, ViewData>, ViewData>) -> VNode<ViewData> {
+/// fn basic<TParam: Any, ViewData: HasTuiViewData>((c, Basic { optional_field, another_optional, required_field }): VComponentContext2<Basic<TParam>, ViewData>) -> VNode<ViewData> {
 ///     vbox(d(), d(), vec![
 ///         text!({}, {}, format!("{} and {}", required_field, optional_field)),
 ///         text!({}, {}, "Hello world!".to_string())

@@ -1,12 +1,5 @@
 //! Create component constructors for your custom prompts,
 
-use std::fmt::Debug;
-use crate::core::component::component::{VComponent};
-use crate::core::component::context::{VComponentContext, VPromptContext2};
-use crate::core::component::node::VNode;
-use crate::core::component::path::VComponentKey;
-use crate::core::view::view::VViewData;
-
 /// See `make_prompt_macro`, this one is required for macro expansion.
 pub macro _make_prompt_macro(
     ($d:tt) @
@@ -31,7 +24,7 @@ pub macro _make_prompt_macro(
                 $d ( $d opt_field : $d opt_field_value, )*
                 ..$crate::core::misc::partial_default::PartialDefault::partial_default(($d ( $d req_prop_id, )*))
             };
-            make_prompt(
+            $crate::core::component::constr::make_component(
                 &mut $d c,
                 $d key,
                 props,
@@ -82,14 +75,14 @@ pub macro _make_prompt_macro(
 ///     }
 /// }
 ///
-/// async fn app((c, ()): &mut VPromptContext2<AppProps, TuiViewData, ()>) {
-///     c.yield_(|(c, resume, AppProps { required_field1, required_field2 })| {
+/// async fn app((c, ()): &mut VPromptContext2<'_, AppProps, TuiViewData, ()>) {
+///     c.yield_void(|(c, resume, AppProps { required_field1, required_field2 })| {
 ///         text!({}, {}, "Hello world!".to_string())
 ///     }).await;
 /// }
 ///
-/// async fn app_fn_with_weird_name((c, AppProps { required_field1, required_field2 }): &mut VPromptContext2<AppProps, TuiViewData, ()>) {
-///     c.yield_(|(c, resume, AppProps { required_field1, required_field2 })| {
+/// async fn app_fn_with_weird_name((c, AppProps { required_field1, required_field2 }): &mut VPromptContext2<'_, AppProps, TuiViewData, ()>) {
+///     c.yield_void(|(c, resume, AppProps { required_field1, required_field2 })| {
 ///         text!({}, {}, "Hello world!".to_string())
 ///     }).await;
 /// }
@@ -144,8 +137,8 @@ pub macro make_prompt_macro {
 ///     another_optional: usize = 1
 /// } [ required_field: String ]);
 ///
-/// async fn basic<TParam: Any, ViewData: HasTuiViewData>((c, ()): VPromptContext2<Basic<TParam, ViewData>, ViewData, ()>) {
-///     c.yield_(|(c, resume, Basic { optional_field, another_optional, required_field })| {
+/// async fn basic<TParam: Any, ViewData: HasTuiViewData>((c, ()): VPromptContext2<'_, Basic<TParam>, ViewData, ()>) {
+///     c.yield_void(|(c, resume, Basic { optional_field, another_optional, required_field })| {
 ///         vbox(d(), d(), vec![
 ///             text!({}, {}, format!("{} and {}", required_field, optional_field)),
 ///             text!({}, {}, "Hello world!".to_string())
@@ -155,8 +148,8 @@ pub macro make_prompt_macro {
 ///
 /// // Use
 ///
-/// async fn pass_this_to_renderer_construct<ViewData: HasTuiViewData>((mut c, ()): VPromptContext2<(), ViewData, ()>) {
-///     c.yield_(|(c, resume, ())| {
+/// async fn pass_this_to_renderer_construct<ViewData: HasTuiViewData>((mut c, ()): VPromptContext2<'_, (), ViewData, ()>) {
+///     c.yield_void(|(c, resume, ())| {
 ///         basic!((), {
 ///             optional_field: "overridden value".to_string(),
 ///         }, "required value".to_string())
@@ -213,8 +206,8 @@ mod tests {
         pub settings: &'static str,
     }
 
-    async fn my_component2_fn<ViewData: HasTuiViewData>((c, ()): VPromptContext2<MyComponent2Props, ViewData, ()>) {
-        c.yield_(|(c, resume, MyComponent2Props { settings: _settings, text })| {
+    async fn my_component2_fn<ViewData: HasTuiViewData>((c, ()): VPromptContext2<'_, MyComponent2Props, ViewData, ()>) {
+        c.yield_void(|(_c, _resume, MyComponent2Props { settings: _settings, text })| {
             vbox!({}, {}, vec![
                 text!({}, {}, "Hello world!".to_string()),
                 text!({}, {}, text.to_string()),
@@ -234,8 +227,8 @@ mod tests {
         title: String = String::from("Untitled")
     } [children: Vec<VNode<ViewData>>]);
 
-    async fn my_component<ViewData: HasTuiViewData + Clone + 'static>((c, ()): VPromptContext2<MyComponentProps<ViewData>, ViewData, ()>) {
-        c.yield_(|(c, resume, MyComponentProps { title, children })| {
+    async fn my_component<ViewData: HasTuiViewData + Clone + 'static>((c, ()): VPromptContext2<'_, MyComponentProps<ViewData>, ViewData, ()>) {
+        c.yield_void(|(_c, _resume, MyComponentProps { title, children })| {
             vbox!({ width: smt!(100%) }, {}, vec![
                 text!({}, {}, title.clone()),
                 vbox!({}, {}, children.clone())
