@@ -24,7 +24,7 @@ pub struct VPrompt<
 
 type VRawPromptComponentContext<'a, 'a0, Props, ViewData> = (VComponentContext1<'a, 'a0, Props, ViewData>, &'a mut RawPromptResume, &'a Props);
 pub type VPromptComponentContext<'a, 'a0, Props, ViewData, R> = (VComponentContext1<'a, 'a0, Props, ViewData>, PromptResume<'a, R>, &'a Props);
-pub type VPromptContext2<'a, Props, ViewData, PromptProps> = (&'a mut dyn VPromptContext<Props, ViewData> + 'a, PromptProps);
+pub type VPromptContext2<'a, Props, ViewData, PromptProps> = (&'a mut (dyn VPromptContext<Props, ViewData> + 'a), PromptProps);
 
 pub trait VPromptContext<Props: Any, ViewData: VViewData> {
     unsafe fn yield_raw<'a>(
