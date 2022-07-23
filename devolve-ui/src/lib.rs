@@ -23,6 +23,8 @@
 #![feature(unboxed_closures)]
 #![feature(fn_traits)]
 #![feature(into_future)]
+#![feature(new_uninit)]
+#![feature(local_key_cell_methods)]
 #![cfg_attr(not(version("1.63")), feature(explicit_generic_args_with_impl_trait))]
 #![cfg_attr(feature = "backtrace", feature(backtrace))]
 
