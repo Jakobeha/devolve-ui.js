@@ -11,7 +11,7 @@ pub mod context;
 pub mod resume;
 
 pub fn prompt_fn_into_component_fn<PromptProps, Props: Any, ViewData: VViewData + 'static, F: Future<Output=()> + 'static>(
-    prompt_fn: impl Fn(VPromptContext2<'_, Props, ViewData, PromptProps>) -> F + 'static,
+    prompt_fn: impl Fn(VPromptContext2<Props, ViewData, PromptProps>) -> F + 'static,
     get_prompt_props: impl Fn() -> PromptProps + 'static
 ) -> impl Fn(VComponentContext2<Props, ViewData>) -> VNode<ViewData> + 'static {
     move |(mut c, props)| {
@@ -24,7 +24,7 @@ pub fn prompt_fn_into_component_fn<PromptProps, Props: Any, ViewData: VViewData 
         // We can't just use interior mutability because we need a mutable borrow of c anyways.
         // We could store c2 in a separate structure like a thread_local vector or hashmap
         // and non_updating_state would store the key, but I don't think it's worth it.
-        let c2 = unsafe { &mut *(&mut c[c2_idx] as *mut VPrompt<Props, ViewData, _>) };
+        let c2 = unsafe { &mut *(&mut c[c2_idx] as *mut VPrompt<Props, ViewData, F>) };
         c2.current((c, props))
     }
 }
