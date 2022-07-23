@@ -243,8 +243,8 @@ impl<Props: Any, ViewData: VViewData> PromptContextData<Props, ViewData> {
         // SAFETY: We only set and return a value which implements Unpin
         let this = self.get_unchecked_mut();
         this.current = Some(render);
-        // TODO: If in a regular component, signal to the renderer that we need to update
         assert_is_unpin(&mut this.resume)
+        // TODO: If in a regular component, signal to the renderer that we need to update
     }
 }
 
