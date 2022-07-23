@@ -6,43 +6,15 @@ use std::any::Any;
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::fmt::{Debug, Formatter};
-use std::future::{Future, IntoFuture, Ready, ready};
+use std::future::Future;
 use std::marker::PhantomData;
 use std::pin::Pin;
-use std::ptr::{addr_of, addr_of_mut, null_mut};
-use std::task::{Context, Poll, RawWaker, RawWakerVTable, Waker};
-use crate::core::component::context::{VComponentContext1, VComponentContext2};
+use std::ptr::null_mut;
+use crate::core::component::context::VComponentContext1;
 use crate::core::component::node::VNode;
-use crate::core::view::view::{VViewData, VViewType};
-use crate::core::misc::either_future::EitherFuture;
-use crate::core::view::layout::parent_bounds::SubLayout;
+use crate::core::view::view::VViewData;
+use crate::prompt::misc;
 use crate::prompt::resume::{PromptResume, RawPromptResume};
-
-// region type declarations
-pub struct VPrompt<
-    Props: Any,
-    ViewData: VViewData,
-    F: Future<Output=()>
->(Pin<Box<PromptPinned<Props, ViewData, F>>>);
-
-struct PromptPinned<
-    Props: Any,
-    ViewData: VViewData,
-    F: Future<Output=()>
-> {
-    future_poll_fn: fn(Pin<&mut F>, &mut Context<'_>) -> Poll<()>,
-    future: RefCell<Option<F>>,
-    context_data: PromptContextData<Props, ViewData>
-}
-
-struct PromptContextData<
-    Props: Any,
-    ViewData: VViewData
-> {
-    current: Option<Box<dyn FnMut(VRawPromptComponentContext<'_, '_, Props, ViewData>) -> VNode<ViewData>>>,
-    resume: RawPromptResume,
-    phantom: PhantomData<Props>
-}
 
 /// Context within a prompt-function. This provies [yield_], which allows you to actually render prompts.
 ///
@@ -50,171 +22,25 @@ struct PromptContextData<
 /// the context will simply block forever the next time you try to yield anything.
 pub struct VPromptContext<Props: Any, ViewData: VViewData>(*mut PromptContextData<Props, ViewData>);
 
-type VRawPromptComponentContext<'a, 'a0, Props, ViewData> = (VComponentContext1<'a, 'a0, Props, ViewData>, &'a mut RawPromptResume, &'a Props);
 pub type VPromptComponentContext<'a, 'a0, Props, ViewData, R> = (VComponentContext1<'a, 'a0, Props, ViewData>, PromptResume<'a, R>, &'a Props);
 pub type VPromptContext2<Props, ViewData, PromptProps> = (VPromptContext<Props, ViewData>, PromptProps);
+type VRawPromptComponentContext<'a, 'a0, Props, ViewData> = (VComponentContext1<'a, 'a0, Props, ViewData>, &'a mut RawPromptResume, &'a Props);
 
-struct PromptWaker;
+pub(super) struct PromptContextData<
+    Props: Any,
+    ViewData: VViewData
+> {
+    pub(super) current: Option<Box<dyn FnMut(VRawPromptComponentContext<'_, '_, Props, ViewData>) -> VNode<ViewData>>>,
+    pub(super) resume: RawPromptResume,
+    pub(super) phantom: PhantomData<Props>
+}
 
 #[derive(Debug, PartialEq, Eq)]
 enum WhichPartOfThePromptContextDiedFirst {
     ContextData,
     ContextPtrWrapper
 }
-// endregion
 
-impl<
-    Props: Any,
-    ViewData: VViewData + 'static,
-    F: Future<Output=()> + 'static
-> VPrompt<Props, ViewData, F> {
-    pub fn new<PromptProps>(prompt_fn: impl FnOnce(VPromptContext2<Props, ViewData, PromptProps>) -> F, prompt_props: PromptProps) -> Self {
-        // Setup uninit addresses
-        let mut pinned = Box::<PromptPinned<Props, ViewData, F>>::new_uninit();
-        let future_poll_fn = unsafe { addr_of_mut!((*pinned.as_mut_ptr()).future_poll_fn) };
-        let future = unsafe { addr_of_mut!((*pinned.as_mut_ptr()).future) };
-        let context_data = unsafe { addr_of_mut!((*pinned.as_mut_ptr()).context_data) };
-
-        // (future poll fn is statically known)
-        unsafe { future_poll_fn.write(F::poll) };
-
-        // Setup context data
-        let the_context_data = PromptContextData {
-            current: None,
-            resume: RawPromptResume::new(),
-            phantom: PhantomData
-        };
-        unsafe { context_data.write(the_context_data); }
-        let context = VPromptContext::new(context_data);
-
-        // Get future with pinned setup context data data
-        let the_future = prompt_fn((context, prompt_props));
-        unsafe { future.write(RefCell::new(Some(the_future))) };
-
-        // Poll the future once, PromptWaker will take care of future polling
-        PromptWaker::poll(pinned.as_ptr() as *const ());
-
-        // Check that we set current to something before await
-        assert!(unsafe { &*context_data }.current.is_some(), "prompt functions must yield something before awaiting. Yield a \"loading\" or empty component if you're not ready");
-
-        // Ok we are ready
-        Self(unsafe { Pin::new_unchecked(pinned.assume_init()) })
-    }
-}
-
-impl<
-    Props: Any,
-    ViewData: VViewData,
-    F: Future<Output=()>
-> VPrompt<Props, ViewData, F> {
-    pub fn current(&mut self, (c, props): VComponentContext2<'_, '_, Props, ViewData>) -> VNode<ViewData> {
-        // SAFETY: we aren't moving any of the data in this, except possibly context_data.resume, but that is Unpin
-        let pinned = unsafe { self.0.as_mut().get_unchecked_mut() };
-        let current = pinned.context_data.current.as_mut().expect("prompt is still being created, you can't get current component yet");
-        current((c, assert_is_unpin(&mut pinned.context_data.resume), props))
-    }
-}
-
-impl<
-    Props: Any,
-    ViewData: VViewData,
-    F: Future<Output=()>
-> IntoFuture for VPrompt<Props, ViewData, F> {
-    type Output = ();
-    type IntoFuture = EitherFuture<Ready<()>, F, ()>;
-
-    /// Returns a future which will complete when the wrapped prompt function does.
-    fn into_future(self) -> Self::IntoFuture {
-        match self.0.future.take() {
-            None => EitherFuture::Left(ready(())),
-            Some(future) => EitherFuture::Right(future)
-        }
-    }
-}
-
-enum Dummy {}
-enum DummyProps {}
-enum DummyViewData {}
-struct DummyFuture<Output>(Dummy, PhantomData<Output>);
-struct DummyIterator<T>(Dummy, PhantomData<T>);
-
-impl VViewData for DummyViewData {
-    type Children<'a> = DummyIterator<&'a VNode<Self>>;
-    type ChildrenMut<'a> = DummyIterator<&'a mut VNode<Self>>;
-
-    fn typ(&self) -> VViewType {
-        unreachable!()
-    }
-
-    fn children(&self) -> Option<(Self::Children<'_>, SubLayout)> {
-        unreachable!()
-    }
-
-    fn children_mut(&mut self) -> Option<(Self::ChildrenMut<'_>, SubLayout)> {
-        unreachable!()
-    }
-}
-
-impl<T> Iterator for DummyIterator<T> {
-    type Item = T;
-
-    fn next(&mut self) -> Option<Self::Item> {
-        unreachable!()
-    }
-}
-
-impl<Output> Future for DummyFuture<Output> {
-    type Output = Output;
-
-    fn poll(self: Pin<&mut Self>, _cx: &mut Context<'_>) -> Poll<Self::Output> {
-        unreachable!()
-    }
-}
-
-impl PromptWaker {
-    const VTABLE: RawWakerVTable = RawWakerVTable::new(
-        |ptr| Self::new(ptr),
-        |ptr| Self::poll(ptr),
-        |ptr| Self::poll(ptr),
-        |_ptr| {},
-    );
-
-
-    fn new(ptr: *const ()) -> RawWaker {
-        RawWaker::new(ptr, &Self::VTABLE)
-    }
-
-    pub fn poll(ptr: *const ()) {
-        let ptr_casted = ptr as *const PromptPinned<DummyProps, DummyViewData, DummyFuture<()>>;
-
-        let future_poll_fn = unsafe { &*addr_of!((*ptr_casted).future_poll_fn) };
-        let future = unsafe { &*addr_of!((*ptr_casted).future) };
-
-        // If borrow fails = we are already waking the prompt
-        // If None = the future was already ready by the time we reached here
-        // (idk if either situation is actually allowed to happen, doesn't matter)
-        if let Ok(mut future_ref) = future.try_borrow_mut() {
-            if let Some(future) = future_ref.as_mut() {
-                let future = unsafe { Pin::new_unchecked(future) };
-                let waker = unsafe { Waker::from_raw(Self::new(ptr)) };
-                let mut context = Context::from_waker(&waker);
-
-                // Ok, poll. This is the only line which actually does stuff
-                let poll = future_poll_fn(future, &mut context);
-
-                match poll {
-                    Poll::Ready(()) => {
-                        // Set to None so we don't poll again or return on .await
-                        *future_ref = None;
-                    },
-                    Poll::Pending => {},
-                }
-            }
-        }
-    }
-}
-
-// region PromptContextData and VPromptContext
 impl<Props: Any, ViewData: VViewData> PromptContextData<Props, ViewData> {
     pub fn yield_<'a, R>(
         self: Pin<&'a mut Self>,
@@ -243,8 +69,9 @@ impl<Props: Any, ViewData: VViewData> PromptContextData<Props, ViewData> {
         // SAFETY: We only set and return a value which implements Unpin
         let this = self.get_unchecked_mut();
         this.current = Some(render);
-        assert_is_unpin(&mut this.resume)
+        misc::assert_is_unpin(&mut this.resume)
         // TODO: If in a regular component, signal to the renderer that we need to update
+        //   (probably with on_yield)
     }
 }
 
@@ -253,7 +80,7 @@ impl<Props: Any, ViewData: VViewData> !Sync for PromptContextData<Props, ViewDat
 impl<Props: Any, ViewData: VViewData> !Send for PromptContextData<Props, ViewData> {}
 
 impl<Props: Any, ViewData: VViewData> VPromptContext<Props, ViewData> {
-    fn new(context_data: *mut PromptContextData<Props, ViewData>) -> Self {
+    pub(super) fn new(context_data: *mut PromptContextData<Props, ViewData>) -> Self {
         VPromptContext(context_data)
     }
 
@@ -374,23 +201,6 @@ impl<Props: Any, ViewData: VViewData> Drop for PromptContextData<Props, ViewData
         });
     }
 }
-// endregion
-// endregion
-
-// region Debug boilerplate
-impl<
-    Props: Any,
-    ViewData: VViewData,
-    F: Future<Output=()>
-> Debug for PromptPinned<Props, ViewData, F> {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("VPrompt")
-            .field("future_poll_fn", &"<fn(Pin<&mut F>, &mut Context<'_>) -> Poll>")
-            .field("future", &"<F>")
-            .field("context_data", &self.context_data)
-            .finish()
-    }
-}
 
 impl<Props: Any, ViewData: VViewData> Debug for PromptContextData<Props, ViewData> {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
@@ -400,10 +210,3 @@ impl<Props: Any, ViewData: VViewData> Debug for PromptContextData<Props, ViewDat
             .finish()
     }
 }
-// endregion
-
-// region assert_is_unpin
-fn assert_is_unpin<T: Unpin>(x: T) -> T {
-    x
-}
-// endregion

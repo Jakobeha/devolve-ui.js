@@ -398,7 +398,7 @@ impl <ViewData: VViewData> VComponentHead<ViewData> {
         }
     }
 
-    /// Mark that the view with given id (the omponent's old view) is stale and should be uncached.
+    /// Mark that the view with given id (the component's old view) is stale and should be uncached.
     fn invalidate_view(&self, view_id: NodeId) {
         if let Some(renderer) = self.renderer.upgrade() {
             renderer.invalidate_view(view_id);

@@ -41,6 +41,9 @@ pub enum UpdateDetails {
     },
     SetTreeState {
         origin: String
+    },
+    Custom {
+        message: String
     }
 }
 
@@ -208,6 +211,9 @@ impl Display for UpdateDetails {
             }
             UpdateDetails::SetTreeState { origin } => {
                 write!(f, "set:tree-state {}", origin)
+            }
+            UpdateDetails::Custom { message } => {
+                write!(f, "custom {}", message)
             }
         }
     }
