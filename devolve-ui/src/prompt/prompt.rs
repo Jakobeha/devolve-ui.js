@@ -6,8 +6,9 @@ use std::pin::Pin;
 use std::fmt::{Debug, Formatter};
 use std::ptr::addr_of_mut;
 use std::task::{Context, Poll};
-use crate::core::component::context::VComponentContext2;
+use crate::core::component::context::{VComponentContext2, VContext};
 use crate::core::component::node::VNode;
+use crate::core::component::path::VComponentRef;
 use crate::core::hooks::state_internal::NonUpdatingStateHook;
 use crate::core::misc::either_future::EitherFuture;
 use crate::core::view::view::VViewData;
@@ -31,8 +32,7 @@ pub fn prompt_fn_into_component_fn<PromptProps, Props: Any, ViewData: VViewData 
         // We could store c2 in a separate structure like a thread_local vector or hashmap
         // and non_updating_state would store the key, but I don't think it's worth it.
         let c2 = unsafe { &mut *(&mut c[c2_idx] as *mut VPrompt<Props, ViewData, F>) };
-        // TODO
-        // c2.on_yield = || c.queue_needs_update("invalidate prompt");
+        c2.set_component_ref(c.component().vref());
         c2.current((c, props))
     }
 }
@@ -65,12 +65,13 @@ impl<
         let future = unsafe { addr_of_mut!((*pinned.as_mut_ptr()).future) };
         let context_data = unsafe { addr_of_mut!((*pinned.as_mut_ptr()).context_data) };
 
-        // (future poll fn is statically known)
+        // future poll fn is statically known
         unsafe { future_poll_fn.write(F::poll) };
 
         // Setup context data
         let the_context_data = PromptContextData {
             current: None,
+            current_ref: None,
             resume: RawPromptResume::new(),
             phantom: PhantomData
         };
@@ -97,6 +98,12 @@ impl<
     ViewData: VViewData,
     F: Future<Output=()>
 > VPrompt<Props, ViewData, F> {
+    fn set_component_ref(&mut self, component_ref: VComponentRef<ViewData>) {
+        // SAFETY: we aren't moving any of the data in this
+        let pinned = unsafe { self.0.as_mut().get_unchecked_mut() };
+        pinned.context_data.current_ref = Some(component_ref);
+    }
+
     pub fn current(&mut self, (c, props): VComponentContext2<'_, '_, Props, ViewData>) -> VNode<ViewData> {
         // SAFETY: we aren't moving any of the data in this, except possibly context_data.resume, but that is Unpin
         let pinned = unsafe { self.0.as_mut().get_unchecked_mut() };

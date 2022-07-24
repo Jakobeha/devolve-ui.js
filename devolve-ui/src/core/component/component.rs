@@ -450,7 +450,7 @@ impl <ViewData: VViewData> VComponentHead<ViewData> {
     /// When you want to get the `VComponent` back you can call `with`.
     ///
     /// **Warning:** Calling `with` on multiple components at the same time (e.g. nested) will cause a runtime error.
-    pub(super) fn vref(&self) -> VComponentRef<ViewData> {
+    pub fn vref(&self) -> VComponentRef<ViewData> {
         VComponentRef {
             renderer: self.renderer.clone(),
             path: self.path().clone()

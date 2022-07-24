@@ -15,6 +15,7 @@ use crate::core::component::root::VComponentRoot;
 use crate::core::view::view::VViewData;
 #[cfg(feature = "serde")]
 use serde::{Serialize, Deserialize};
+use crate::core::component::update_details::UpdateDetails;
 
 /// Identifies a `VComponent` among its siblings.
 /// Needed because the siblings may change and we need to remember the component and check if it was deleted.
@@ -55,7 +56,7 @@ pub(in crate::core) struct VComponentRefResolvedPtr<ViewData: VViewData> {
 }
 
 impl <ViewData: VViewData> VComponentRef<ViewData> {
-    pub fn with<R>(&self, fun: impl FnOnce(Option<VComponentRefResolved<'_, ViewData>>) -> R) -> R {
+    pub(in crate::core) fn with<R>(&self, fun: impl FnOnce(Option<VComponentRefResolved<'_, ViewData>>) -> R) -> R {
         match self.renderer.upgrade() {
             None => fun(None),
             Some(renderer) => {
@@ -69,10 +70,18 @@ impl <ViewData: VViewData> VComponentRef<ViewData> {
         }
     }
 
-    pub fn try_with<R>(&self, fun: impl FnOnce(VComponentRefResolved<'_, ViewData>) -> R) -> Option<R> {
+    pub(in crate::core) fn try_with<R>(&self, fun: impl FnOnce(VComponentRefResolved<'_, ViewData>) -> R) -> Option<R> {
         self.with(|component| {
             component.map(fun)
         })
+    }
+
+    pub fn pending_update(&self, custom_message: impl AsRef<str>) {
+        self.try_with(|VComponentRefResolved { component, parent_contexts: _ }| {
+            component.head.pending_update(UpdateDetails::Custom {
+                message: String::from(custom_message.as_ref())
+            })
+        });
     }
 }
 

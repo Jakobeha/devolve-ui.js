@@ -12,6 +12,7 @@ use std::pin::Pin;
 use std::ptr::null_mut;
 use crate::core::component::context::VComponentContext1;
 use crate::core::component::node::VNode;
+use crate::core::component::path::VComponentRef;
 use crate::core::view::view::VViewData;
 use crate::prompt::misc;
 use crate::prompt::resume::{PromptResume, RawPromptResume};
@@ -31,6 +32,7 @@ pub(super) struct PromptContextData<
     ViewData: VViewData
 > {
     pub(super) current: Option<Box<dyn FnMut(VRawPromptComponentContext<'_, '_, Props, ViewData>) -> VNode<ViewData>>>,
+    pub(super) current_ref: Option<VComponentRef<ViewData>>,
     pub(super) resume: RawPromptResume,
     pub(super) phantom: PhantomData<Props>
 }
@@ -69,9 +71,10 @@ impl<Props: Any, ViewData: VViewData> PromptContextData<Props, ViewData> {
         // SAFETY: We only set and return a value which implements Unpin
         let this = self.get_unchecked_mut();
         this.current = Some(render);
+        if let Some(current_ref) = this.current_ref.take() {
+            current_ref.pending_update("prompt-yield")
+        }
         misc::assert_is_unpin(&mut this.resume)
-        // TODO: If in a regular component, signal to the renderer that we need to update
-        //   (probably with on_yield)
     }
 }
 
