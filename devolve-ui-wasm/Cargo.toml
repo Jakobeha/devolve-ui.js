@@ -1,0 +1,32 @@
+[package]
+name = "devolve-ui-wasm"
+version = "0.1.0"
+authors = ["jakobeha <jakobeha@fastmail.com>"]
+description = "TypeScript interface and WebAssembly port of devolve-ui"
+repository = "https://github.com/jakobeha/devolve-ui.rs"
+license = "Apache-2.0"
+keywords = ["ui", "wasm", "typescript"]
+categories = ["gui"]
+edition = "2021"
+
+[lib]
+# cdylib because this is wasm
+crate-type = ["cdylib"]
+
+[features]
+
+[package.metadata.docs.rs]
+cargo-args = ["-Zunstable-options", "-Zrustdoc-scrape-examples=examples"]
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+devolve-ui = { path = "../devolve-ui" }
+wasm-bindgen = "0.2.81"
+js-sys = "0.3.58"
+
+[dev-dependencies]
+devolve-ui-forms = { path = "../devolve-ui-forms" }
+rand = "0.8.5"
+test-log = "0.2.10"
+env_logger = "0.9.0"

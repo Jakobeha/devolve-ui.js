@@ -4,10 +4,10 @@
 use std::thread;
 use std::time::Duration;
 #[allow(unused_imports)]
-use devolve_ui::core::component::constr::{_make_component_macro, make_component};
-use devolve_ui::core::component::context::{VComponentContext1, VComponentContext2, VEffectContext2};
-use devolve_ui::core::component::node::VNode;
-use devolve_ui::core::view::layout::macros::{mt, smt};
+use devolve_ui::component::constr::{_make_component_macro, make_component};
+use devolve_ui::component::context::{VComponentContext1, VComponentContext2, VEffectContext2};
+use devolve_ui::component::node::VNode;
+use devolve_ui::view::layout::macros::{mt, smt};
 use devolve_ui::view_data::tui::constr::*;
 use devolve_ui::view_data::attrs::BorderStyle;
 use devolve_ui::view_data::tui::tui::HasTuiViewData;

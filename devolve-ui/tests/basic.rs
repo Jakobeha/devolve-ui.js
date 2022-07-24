@@ -12,12 +12,12 @@ use std::io::Write;
 use std::os::unix::ffi::OsStrExt;
 use std::rc::Rc;
 #[allow(unused_imports)] // Needed for IntelliJ macro expansion
-use devolve_ui::core::component::constr::{_make_component_macro, make_component_macro};
-use devolve_ui::core::misc::partial_default::PartialDefault;
-use devolve_ui::core::component::context::VComponentContext2;
-use devolve_ui::core::component::node::VNode;
-use devolve_ui::core::renderer::renderer::{Renderer, RendererOverrides};
-use devolve_ui::core::view::layout::geom::Size;
+use devolve_ui::component::constr::{_make_component_macro, make_component_macro};
+use devolve_ui::misc::partial_default::PartialDefault;
+use devolve_ui::component::context::VComponentContext2;
+use devolve_ui::component::node::VNode;
+use devolve_ui::renderer::renderer::{Renderer, RendererOverrides};
+use devolve_ui::view::layout::geom::Size;
 use devolve_ui::engines::tui::tui::{TuiConfig, TuiEngine, TuiInputMode};
 use devolve_ui::view_data::tui::tui::HasTuiViewData;
 use devolve_ui::view_data::tui::constr::{vbox, text};

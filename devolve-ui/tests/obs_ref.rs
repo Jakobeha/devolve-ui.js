@@ -1,4 +1,4 @@
-use devolve_ui::core::data::obs_ref::st::{ObsRef, ObsRefableRoot};
+use devolve_ui::data::obs_ref::st::{ObsRef, ObsRefableRoot};
 use devolve_ui_derive::ObsRefable;
 use test_log::test;
 

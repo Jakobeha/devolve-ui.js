@@ -126,12 +126,12 @@ impl Field<DataAttr> {
     pub fn same_fn_path_tokens(&self) -> TokenStream {
         match &self.attrs {
             DataAttr::SameFn(f) => quote!(#f),
-            DataAttr::Eq => quote!(::core::cmp::PartialEq::eq),
+            DataAttr::Eq => quote!(::cmp::PartialEq::eq),
             // this should not be called for DataAttr::Ignore
             DataAttr::Ignore => quote!(compiler_error!),
             DataAttr::Empty => {
                 let span = Span::call_site();
-                quote_spanned!(span=> devolve_ui::core::data::Data::same)
+                quote_spanned!(span=> devolve_ui::data::Data::same)
             }
         }
     }

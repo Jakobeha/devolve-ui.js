@@ -13,11 +13,11 @@ use std::path::PathBuf;
 use std::string::FromUtf8Error;
 use std::sync::{Arc, Weak as WeakArc, Mutex};
 use std::sync::mpsc::{channel, Receiver, Sender, TryRecvError};
-use devolve_ui::core::component::context::VComponentContext2;
-use devolve_ui::core::component::node::VNode;
-use devolve_ui::core::misc::notify_flag::NotifyFlag;
-use devolve_ui::core::renderer::renderer::{Renderer, RendererOverrides};
-use devolve_ui::core::view::layout::geom::Size;
+use devolve_ui::component::context::VComponentContext2;
+use devolve_ui::component::node::VNode;
+use devolve_ui::misc::notify_flag::NotifyFlag;
+use devolve_ui::renderer::renderer::{Renderer, RendererOverrides};
+use devolve_ui::view::layout::geom::Size;
 use devolve_ui::engines::tui::tui::{TuiConfig, TuiEngine, TuiInputMode};
 use devolve_ui::view_data::tui::tui::TuiViewData;
 #[cfg(feature = "tui-images")]

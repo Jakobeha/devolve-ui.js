@@ -8,17 +8,17 @@ use std::env;
 use std::path::PathBuf;
 use std::time::Duration;
 #[allow(unused_imports)] // Needed for IntelliJ macro expansion
-use devolve_ui::core::component::constr::{_make_component_macro, make_component};
-use devolve_ui::core::component::context::VComponentContext2;
-use devolve_ui::core::component::node::VNode;
-use devolve_ui::core::hooks::BuiltinHooks;
-use devolve_ui::core::view::color::Color;
-use devolve_ui::core::view::layout::macros::{mt, smt};
+use devolve_ui::component::constr::{_make_component_macro, make_component};
+use devolve_ui::component::context::VComponentContext2;
+use devolve_ui::component::node::VNode;
+use devolve_ui::hooks::BuiltinHooks;
+use devolve_ui::view::color::Color;
+use devolve_ui::view::layout::macros::{mt, smt};
 use devolve_ui::view_data::tui::tui::HasTuiViewData;
 use devolve_ui::view_data::tui::terminal_image::{Source, HandleAspectRatio, TuiImageFormat};
 use devolve_ui::view_data::attrs::BorderStyle;
 use devolve_ui::view_data::tui::constr::{border, hbox, source, text, zbox};
-use devolve_ui::core::hooks::event::CallFirst;
+use devolve_ui::hooks::event::CallFirst;
 use test_log::test;
 
 mod test_output;
