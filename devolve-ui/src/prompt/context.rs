@@ -49,10 +49,11 @@ impl<Props: Any, ViewData: VViewData> PromptContextData<Props, ViewData> {
         mut render: impl FnMut(VPromptComponentContext<'_, '_, Props, ViewData, R>) -> VNode<ViewData> + 'static
     ) -> PromptResume<'a, R> {
         unsafe {
-            let resume = self.yield_raw(Box::new(move |(c, resume, props)| {
+            let resume = self.yield_raw_unprepared(Box::new(move |(c, resume, props)| {
                 let resume = PromptResume::new(resume);
                 render((c, resume, props))
             }));
+            resume.prepare::<R>();
             PromptResume::new(resume)
         }
     }
@@ -64,7 +65,8 @@ impl<Props: Any, ViewData: VViewData> PromptContextData<Props, ViewData> {
         self.yield_(render)
     }
 
-    unsafe fn yield_raw<'a>(
+    /// Unprepared == must prepare with result type
+    unsafe fn yield_raw_unprepared<'a>(
         self: Pin<&'a mut Self>,
         render: Box<dyn FnMut(VRawPromptComponentContext<'_, '_, Props, ViewData>) -> VNode<ViewData>>
     ) -> &'a mut RawPromptResume {

@@ -5,7 +5,6 @@ use std::cell::RefCell;
 use std::pin::Pin;
 use std::fmt::{Debug, Formatter};
 use std::ptr::addr_of_mut;
-use std::task::{Context, Poll};
 use crate::core::component::context::{VComponentContext2, VContext};
 use crate::core::component::node::VNode;
 use crate::core::component::path::VComponentRef;
@@ -48,8 +47,8 @@ pub struct PromptPinned<
     ViewData: VViewData,
     F: Future<Output=()>
 > {
-    pub(super) future_poll_fn: fn(Pin<&mut F>, &mut Context<'_>) -> Poll<()>,
-    pub(super) future: RefCell<Option<F>>,
+    pub(super) poll_future: Box<dyn Fn()>,
+    future: RefCell<Option<F>>,
     context_data: PromptContextData<Props, ViewData>
 }
 
@@ -61,12 +60,14 @@ impl<
     pub fn new<PromptProps>(prompt_fn: impl FnOnce(VPromptContext2<Props, ViewData, PromptProps>) -> F, prompt_props: PromptProps) -> Self {
         // Setup uninit addresses
         let mut pinned = Box::<PromptPinned<Props, ViewData, F>>::new_uninit();
-        let future_poll_fn = unsafe { addr_of_mut!((*pinned.as_mut_ptr()).future_poll_fn) };
+        let poll_future = unsafe { addr_of_mut!((*pinned.as_mut_ptr()).poll_future) };
         let future = unsafe { addr_of_mut!((*pinned.as_mut_ptr()).future) };
         let context_data = unsafe { addr_of_mut!((*pinned.as_mut_ptr()).context_data) };
 
-        // future poll fn is statically known
-        unsafe { future_poll_fn.write(F::poll) };
+        // poll_future is statically known
+        unsafe {
+            poll_future.write(Box::new(move || PromptWaker::poll(poll_future, future)));
+        };
 
         // Setup context data
         let the_context_data = PromptContextData {
@@ -83,7 +84,7 @@ impl<
         unsafe { future.write(RefCell::new(Some(the_future))) };
 
         // Poll the future once, PromptWaker will take care of future polling
-        PromptWaker::poll(pinned.as_ptr() as *const ());
+        unsafe { PromptWaker::wake(poll_future); }
 
         // Check that we set current to something before await
         assert!(unsafe { &*context_data }.current.is_some(), "prompt functions must yield something before awaiting. Yield a \"loading\" or empty component if you're not ready");

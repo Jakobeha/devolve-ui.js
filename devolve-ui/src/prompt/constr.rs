@@ -16,7 +16,7 @@ pub macro _make_prompt_macro(
         (
             $d c:expr,
             $d key:expr,
-            $d ( [ $d ( $d prompt_field:expr ),* $d ( , )? ] )?
+            $d ( [ $d ( $d prompt_field:expr ),* $d ( , )? ] , )?
             { $d ( $d opt_field:ident : $d opt_field_value:expr ),* $d ( , )? }
             $d ( , $d req_prop_id:expr )*
         ) => { {
@@ -137,7 +137,7 @@ pub macro make_prompt_macro {
 ///     another_optional: usize = 1
 /// } [ required_field: String ]);
 ///
-/// async fn basic<TParam: Any, ViewData: HasTuiViewData>((c, ()): VPromptContext2<Basic<TParam>, ViewData, ()>) {
+/// async fn basic<TParam: Any, ViewData: HasTuiViewData>((mut c, ()): VPromptContext2<Basic<TParam>, ViewData, ()>) {
 ///     c.yield_void(|(c, resume, Basic { optional_field, another_optional, required_field })| {
 ///         vbox(d(), d(), vec![
 ///             text!({}, {}, format!("{} and {}", required_field, optional_field)),
@@ -198,6 +198,7 @@ mod tests {
     use crate::engines::tui::tui::{TuiConfig, TuiEngine};
     use crate::view_data::tui::constr::{vbox, text};
     use crate::view_data::tui::tui::HasTuiViewData;
+    use test_log::test;
 
     #[derive(Default)]
     struct MyComponent2Props {

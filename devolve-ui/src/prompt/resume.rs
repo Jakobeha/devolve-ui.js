@@ -3,7 +3,7 @@ use std::fmt::{Debug, Formatter};
 use std::pin::Pin;
 use std::future::Future;
 use std::marker::PhantomData;
-use std::mem::MaybeUninit;
+use std::mem::{MaybeUninit, size_of};
 use std::task::Waker;
 use derive_more::Display;
 
@@ -21,16 +21,24 @@ enum PromptResumeState {
 /// at a time, so we don't have to reallocate. It's also untyped on the result type.
 pub struct RawPromptResume {
     result: Vec<u8>,
+    result_size_for_sanity_check: usize,
     state: PromptResumeState,
     wakers: Vec<Waker>
+}
+
+/// Hopefully this can compile to a regular pointer with 0x0 and 0x1 for the null cases.
+#[derive(Debug)]
+enum PromptResumePtr<'a> {
+    AlreadyResumed,
+    AlwaysPending,
+    Ptr(&'a mut RawPromptResume)
 }
 
 /// Analogous to `resolve` in JavaScript promises.
 /// For `reject`, make `R` a [Result] type, and then call [PromptResume::resume] with an `Err`.
 #[derive(Debug)]
 pub struct PromptResume<'a, R>(
-    // None = always pending. Hopefully this compiles to a regular pointer.
-    Option<&'a mut RawPromptResume>,
+    PromptResumePtr<'a>,
     PhantomData<R>
 );
 
@@ -52,9 +60,22 @@ impl RawPromptResume {
     pub(super) fn new() -> Self {
         Self {
             result: Vec::new(),
+            result_size_for_sanity_check: 0,
             state: PromptResumeState::Inactive,
             wakers: Vec::new()
         }
+    }
+
+    pub(super) fn prepare<R>(&mut self) {
+        debug_assert!(self.state == PromptResumeState::Inactive);
+        debug_assert!(self.wakers.is_empty());
+        debug_assert!(self.result.is_empty());
+
+        self.state = PromptResumeState::Pending;
+        if self.result.len() < size_of::<R>() {
+            self.result.reserve(size_of::<R>() - self.result.len());
+        }
+        self.result_size_for_sanity_check = size_of::<R>();
     }
 
     fn resume<R>(&mut self, result: R) -> PromptResumeResult {
@@ -62,11 +83,12 @@ impl RawPromptResume {
             return Err(PromptResumeError::AlreadyResumed);
         }
         debug_assert!(self.result.is_empty());
+        debug_assert!(self.result_size_for_sanity_check == size_of::<R>());
 
         // Move result into the untyped result buffer
         unsafe {
-            self.result.set_len(std::mem::size_of::<R>());
-            std::ptr::copy_nonoverlapping(&result as *const R as *const u8, self.result.as_mut_ptr(), std::mem::size_of::<R>());
+            self.result.set_len(size_of::<R>());
+            std::ptr::copy_nonoverlapping(&result as *const R as *const u8, self.result.as_mut_ptr(), size_of::<R>());
         }
 
         // Signal we are ready and wake up
@@ -92,7 +114,7 @@ impl RawPromptResume {
                 // Move result out of the untyped result buffer
                 let result = unsafe {
                     let mut result = MaybeUninit::<R>::uninit();
-                    std::ptr::copy_nonoverlapping(self.result.as_ptr(), result.as_mut_ptr() as *mut u8, std::mem::size_of::<R>());
+                    std::ptr::copy_nonoverlapping(self.result.as_ptr(), result.as_mut_ptr() as *mut u8, size_of::<R>());
                     self.result.clear();
                     result.assume_init()
                 };
@@ -108,25 +130,33 @@ impl<'a, R> PromptResume<'a, R> {
     /// Returns a [PromptResume] which is always pending.
     /// Whenever it is [resume](PromptResume::resume)d, it will return an error.
     pub(super) const fn pending() -> Self {
-        Self(None, PhantomData)
+        Self(PromptResumePtr::AlwaysPending, PhantomData)
     }
 
     /// Wraps an untyped prompt-resume. You are responsible for ensuring that data resumed and polled is of the correct type.
     pub(super) unsafe fn new(raw: &'a mut RawPromptResume) -> Self {
-        debug_assert!(raw.state == PromptResumeState::Inactive, "PromptResume created when another PromptResume is active (how?)");
-        debug_assert!(raw.wakers.is_empty(), "PromptResume created when another resume still has wakers (how?)");
-        debug_assert!(raw.result.is_empty(), "PromptResume created when result is not empty (how?)");
+        debug_assert!(raw.result.is_empty(), "PromptResume created when RawPromptResume isn't setup right (remaining result, probably from last resume)");
+        debug_assert!(raw.result_size_for_sanity_check == size_of::<R>(), "PromptResume created when RawPromptResume isn't setup right (wrong type)");
 
-        Self(Some(raw), PhantomData)
+        Self(PromptResumePtr::Ptr(raw), PhantomData)
     }
 
     /// Causes the outer [yield_] to resume with the result the first time it is called.
     /// Afterwards, this will return [PromptResumeError::AlreadyResumed] and the result will just be
     /// dropped. You can handle the error or discard if you don't care.
     pub fn resume(&mut self, result: R) -> PromptResumeResult {
-        match self.0.as_mut() {
-            None => Err(PromptResumeError::AlwaysPending),
-            Some(x) => x.resume(result)
+        match &mut self.0 {
+            PromptResumePtr::AlreadyResumed => Err(PromptResumeError::AlreadyResumed),
+            PromptResumePtr::AlwaysPending => Err(PromptResumeError::AlwaysPending),
+            PromptResumePtr::Ptr(raw) => {
+                raw.resume(result)?;
+                // This will make future calls return AlreadyResumed except on this wrapper
+                // (only by the time any future wrappers are created).
+                // Also if the above returns an error it will subsequently return the error
+                // so we are ok in that case.
+                self.0 = PromptResumePtr::AlreadyResumed;
+                Ok(())
+            }
         }
     }
 }
@@ -136,9 +166,10 @@ impl<'a, R> Future for PromptResume<'a, R> {
 
     /// When you call [PromptResume::resume], this will return `Ready` with the result.
     fn poll(self: Pin<&mut Self>, ctx: &mut Context<'_>) -> Poll<Self::Output> {
-        match self.get_mut().0.as_mut() {
-            None => Poll::Pending,
-            Some(x) => x.poll(ctx)
+        match &mut self.get_mut().0 {
+            PromptResumePtr::AlreadyResumed => panic!("PromptResume polled after resume"),
+            PromptResumePtr::AlwaysPending => Poll::Pending,
+            PromptResumePtr::Ptr(x) => x.poll(ctx)
         }
     }
 }

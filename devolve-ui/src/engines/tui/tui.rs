@@ -438,8 +438,11 @@ impl <Input: Read, Output: Write> RenderEngine for TuiEngine<Input, Output> {
     fn start_rendering(&mut self) {
         do_io(|| {
             if self.config.input_mode == TuiInputMode::Raw {
-                // Enter raw mode
-                terminal::enable_raw_mode()?;
+                // Enter raw mode (don't hard fail if it doesn't work)
+                let result = terminal::enable_raw_mode();
+                if let Err(error) = result {
+                    log::warn!("failed to enter raw mode: {}", error);
+                }
             }
             if self.config.output_ansi_escapes {
                 // Enter TUI mode
