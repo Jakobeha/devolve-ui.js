@@ -14,13 +14,14 @@ crate-type = ["lib"]
 
 [features]
 # Include debug features by default
-default = ["obs-ref", "input", "time", "time-blocking", "debug"]
+default = ["debug"]
 obs-ref = ["smallvec"]
 time = ["tokio"]
 time-blocking = ["time", "tokio/rt"]
 input = ["bitflags"]
 logging = ["serde", "arrayvec/serde", "serde_json", "chrono"]
 color = ["palette"]
+crossterm-conversions = ["crossterm"]
 debug = ["bitflags"]
 
 [package.metadata.docs.rs]
@@ -35,6 +36,7 @@ arrayvec = "0.7.2"
 replace_with = "0.1.7"
 derive_more = "0.99.17"
 log = "0.4.17"
+transmute = "0.1.1"
 mini-rx = { path = "../mini-rx", optional = true }
 palette = { version = "0.6.0", optional = true }
 smallvec = { version = "1.8.0", optional = true }
@@ -44,10 +46,11 @@ backtrace = { version = "0.3.65", optional = true }
 serde = { version = "1.0.137", features = ["derive"], optional = true }
 serde_json = { version = "1.0.81", optional = true }
 chrono = { version = "0.4.19", features = ["serde"], optional = true }
+crossterm = { version = "0.23.2", optional = true }
 
 [dev-dependencies]
-devolve-ui-tui = { path = "../devolve-ui-tui" }
-devolve-ui-forms = { path = "../devolve-ui-forms" }
+devolve-ui-tui = { path = "../devolve-ui-tui", features = ["time", "input", "images"] }
+devolve-ui-tui-forms = { path = "../devolve-ui-tui-forms", features = ["images"] }
 rand = "0.8.5"
 test-log = "0.2.10"
 env_logger = "0.9.0"

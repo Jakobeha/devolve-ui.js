@@ -5,16 +5,16 @@ use std::cell::RefCell;
 use std::pin::Pin;
 use std::fmt::{Debug, Formatter};
 use std::ptr::addr_of_mut;
-use crate::component::context::{VComponentContext2, VContext};
-use crate::component::node::VNode;
-use crate::component::path::VComponentRef;
-use crate::hooks::state_internal::NonUpdatingStateHook;
+use devolve_ui::component::context::{VComponentContext2, VContext};
+use devolve_ui::component::node::VNode;
+use devolve_ui::component::path::VComponentRef;
+use devolve_ui::hooks::state_internal::NonUpdatingStateHook;
 use crate::misc::either_future::EitherFuture;
-use crate::view::view::VViewData;
-use crate::prompt::waker::PromptWaker;
-use crate::prompt::context::{PromptContextData, VPromptContext, VPromptContext2};
-use crate::prompt::misc::assert_is_unpin;
-use crate::prompt::resume::RawPromptResume;
+use devolve_ui::view::view::VViewData;
+use crate::waker::PromptWaker;
+use crate::context::{PromptContextData, VPromptContext, VPromptContext2};
+use crate::misc::assert_is_unpin;
+use crate::resume::RawPromptResume;
 
 pub fn prompt_fn_into_component_fn<PromptProps, Props: Any, ViewData: VViewData + 'static, F: Future<Output=()> + 'static>(
     prompt_fn: impl Fn(VPromptContext2<Props, ViewData, PromptProps>) -> F + 'static,

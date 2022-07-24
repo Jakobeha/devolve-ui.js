@@ -13,6 +13,8 @@ edition = "2021"
 crate-type = ["lib"]
 
 [features]
+time = ["devolve-ui/time"]
+input = ["devolve-ui/input"]
 images = ["semver", "tempfile", "sixel", "sixel-sys", "png", "base64"]
 
 [package.metadata.docs.rs]
@@ -21,7 +23,7 @@ cargo-args = ["-Zunstable-options", "-Zrustdoc-scrape-examples=examples"]
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-devolve-ui = { path = "../devolve-ui" }
+devolve-ui = { path = "../devolve-ui", default-features = false, features = ["crossterm-conversions"] }
 derivative = "2.2.0"
 replace_with = "0.1.7"
 derive_more = "0.99.17"

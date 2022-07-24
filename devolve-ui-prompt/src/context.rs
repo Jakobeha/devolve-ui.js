@@ -10,12 +10,12 @@ use std::future::Future;
 use std::marker::PhantomData;
 use std::pin::Pin;
 use std::ptr::null_mut;
-use crate::component::context::VComponentContext1;
-use crate::component::node::VNode;
-use crate::component::path::VComponentRef;
-use crate::view::view::VViewData;
-use crate::prompt::misc;
-use crate::prompt::resume::{PromptResume, RawPromptResume};
+use devolve_ui::component::context::VComponentContext1;
+use devolve_ui::component::node::VNode;
+use devolve_ui::component::path::VComponentRef;
+use devolve_ui::view::view::VViewData;
+use crate::misc::assert_is_unpin;
+use crate::resume::{PromptResume, RawPromptResume};
 
 /// Context within a prompt-function. This provies [yield_], which allows you to actually render prompts.
 ///
@@ -76,7 +76,7 @@ impl<Props: Any, ViewData: VViewData> PromptContextData<Props, ViewData> {
         if let Some(current_ref) = this.current_ref.take() {
             current_ref.pending_update("prompt-yield")
         }
-        misc::assert_is_unpin(&mut this.resume)
+        assert_is_unpin(&mut this.resume)
     }
 }
 

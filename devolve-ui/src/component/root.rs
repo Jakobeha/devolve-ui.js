@@ -17,7 +17,7 @@ use crate::renderer::listeners::{RendererListener, RendererListenerId};
 use crate::renderer::stale_data::{NeedsUpdateFlag, NeedsUpdateNotifier};
 use crate::view::view::VViewData;
 
-pub(in crate::core) trait VComponentRoot {
+pub(crate) trait VComponentRoot {
     type ViewData: VViewData;
 
     /// Marks the given path needs to be updated

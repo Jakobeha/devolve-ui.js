@@ -50,13 +50,13 @@ pub struct VComponentRefResolved<'a, ViewData: VViewData> {
     pub component: &'a mut Box<VComponent<ViewData>>
 }
 
-pub(in crate::core) struct VComponentRefResolvedPtr<ViewData: VViewData> {
+pub(crate) struct VComponentRefResolvedPtr<ViewData: VViewData> {
     pub parent_contexts: Vec<*mut Box<VComponent<ViewData>>>,
     pub component: *mut Box<VComponent<ViewData>>
 }
 
 impl <ViewData: VViewData> VComponentRef<ViewData> {
-    pub(in crate::core) fn with<R>(&self, fun: impl FnOnce(Option<VComponentRefResolved<'_, ViewData>>) -> R) -> R {
+    pub(crate) fn with<R>(&self, fun: impl FnOnce(Option<VComponentRefResolved<'_, ViewData>>) -> R) -> R {
         match self.renderer.upgrade() {
             None => fun(None),
             Some(renderer) => {
@@ -70,7 +70,7 @@ impl <ViewData: VViewData> VComponentRef<ViewData> {
         }
     }
 
-    pub(in crate::core) fn try_with<R>(&self, fun: impl FnOnce(VComponentRefResolved<'_, ViewData>) -> R) -> Option<R> {
+    pub(crate) fn try_with<R>(&self, fun: impl FnOnce(VComponentRefResolved<'_, ViewData>) -> R) -> Option<R> {
         self.with(|component| {
             component.map(fun)
         })
@@ -86,7 +86,7 @@ impl <ViewData: VViewData> VComponentRef<ViewData> {
 }
 
 impl <'a, ViewData: VViewData> VComponentRefResolved<'a, ViewData> {
-    pub(in crate::core) fn into_ptr(self) -> VComponentRefResolvedPtr<ViewData> {
+    pub(crate) fn into_ptr(self) -> VComponentRefResolvedPtr<ViewData> {
         VComponentRefResolvedPtr {
             parent_contexts: unsafe { mem::transmute(self.parent_contexts) },
             component: self.component as *mut _

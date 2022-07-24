@@ -9,9 +9,9 @@ use crossterm::{Command, cursor};
 use crossterm::style;
 use unicode_width::UnicodeWidthChar;
 use replace_with::replace_with;
-use crate::view::color::PackedColor;
-use crate::view::layout::geom::{BoundingBox, Rectangle};
-use crate::renderer::render::{VRender, VRenderLayer};
+use devolve_ui::view::color::PackedColor;
+use devolve_ui::view::layout::geom::{BoundingBox, Rectangle};
+use devolve_ui::renderer::render::{VRender, VRenderLayer};
 use crate::misc::io_write_2_fmt_write::IoWrite2FmtWrite;
 
 #[derive(Debug, Clone)]

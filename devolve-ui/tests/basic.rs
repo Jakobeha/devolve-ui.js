@@ -3,7 +3,6 @@
 
 #![feature(decl_macro)]
 #![feature(macro_metavar_expr)]
-#![cfg(feature = "tui")]
 
 use std::cell::RefCell;
 use std::ffi::OsStr;
@@ -18,10 +17,10 @@ use devolve_ui::component::context::VComponentContext2;
 use devolve_ui::component::node::VNode;
 use devolve_ui::renderer::renderer::{Renderer, RendererOverrides};
 use devolve_ui::view::layout::geom::Size;
-use devolve_ui::engines::tui::tui::{TuiConfig, TuiEngine, TuiInputMode};
-use devolve_ui::view_data::tui::tui::HasTuiViewData;
-use devolve_ui::view_data::tui::constr::{vbox, text};
-use devolve_ui::view_data::tui::terminal_image::TuiImageFormat;
+use devolve_ui_tui::engine::tui::{TuiConfig, TuiEngine, TuiInputMode};
+use devolve_ui_tui::view_data::tui::HasTuiViewData;
+use devolve_ui_tui::view_data::constr::{vbox, text};
+use devolve_ui_tui::view_data::terminal_image::TuiImageFormat;
 use test_log::test;
 
 pub struct BasicProps {

@@ -2,12 +2,18 @@
 members = [
     "devolve-ui",
     "devolve-ui-derive",
-    "devolve-ui-forms",
+    "devolve-ui-prompt",
+    "devolve-ui-tui",
+    "devolve-ui-tui-forms",
+    "devolve-ui-wasm",
     "mini-rx"
 ]
 default-members = [
     "devolve-ui",
     "devolve-ui-derive",
-    "devolve-ui-forms",
+    "devolve-ui-prompt",
+    "devolve-ui-tui",
+    "devolve-ui-tui-forms",
+    "devolve-ui-wasm",
     "mini-rx"
 ]

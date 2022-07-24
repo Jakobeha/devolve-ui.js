@@ -15,9 +15,9 @@ use devolve_ui::misc::shorthand::d;
 use devolve_ui::renderer::input::{KeyCode, KeyModifiers};
 use devolve_ui::view::layout::macros::{mt, smt};
 use devolve_ui::view::view::VViewData;
-use devolve_ui::view_data::attrs::BorderStyle;
-use devolve_ui::view_data::tui::constr::*;
-use devolve_ui::view_data::tui::tui::HasTuiViewData;
+use devolve_ui_tui::view_data::attrs::BorderStyle;
+use devolve_ui_tui::view_data::constr::*;
+use devolve_ui_tui::view_data::tui::HasTuiViewData;
 
 make_component!(pub focus_provider, FocusProvider<ViewData: VViewData + Clone + 'static> {
     enable_tab: bool = true,
@@ -208,12 +208,12 @@ mod test {
     use devolve_ui::misc::notify_flag::NotifyFlag;
     use devolve_ui::renderer::renderer::Renderer;
     use devolve_ui::view::layout::macros::{mt, smt};
-    use devolve_ui::engines::tui::tui::{TuiConfig, TuiEngine, TuiInputMode};
-    use devolve_ui::view_data::tui::constr::*;
-    use devolve_ui::view_data::attrs::BorderStyle;
-    #[cfg(feature = "tui-images")]
-    use devolve_ui::view_data::tui::terminal_image::TuiImageFormat;
-    use devolve_ui::view_data::tui::tui::HasTuiViewData;
+    use devolve_ui_tui::engine::tui::{TuiConfig, TuiEngine, TuiInputMode};
+    use devolve_ui_tui::view_data::constr::*;
+    use devolve_ui_tui::view_data::attrs::BorderStyle;
+    #[cfg(feature = "images")]
+    use devolve_ui_tui::view_data::terminal_image::TuiImageFormat;
+    use devolve_ui_tui::view_data::tui::HasTuiViewData;
     use crate::{FocusProvider, focus_provider, text_field};
     use test_log::test;
 
@@ -341,7 +341,7 @@ mod test {
             #[cfg(target_family = "unix")]
             termios_fd: None,
             output_ansi_escapes: true,
-            #[cfg(feature = "tui-images")]
+            #[cfg(feature = "images")]
             image_format: TuiImageFormat::FallbackColor
         }));
         renderer.root(|(mut c, ())| test_app!(c, (), {}));

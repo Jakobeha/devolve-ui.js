@@ -60,17 +60,17 @@ pub struct VComponentHead<ViewData: VViewData> {
     /*readonly*/ children: HashMap<VComponentKey, Box<VComponent<ViewData>>>,
     /*readonly*/ renderer: Weak<dyn VComponentRoot<ViewData = ViewData>>,
 
-    pub(in crate::core) h: VComponentStateData,
+    pub(crate) h: VComponentStateData,
 
     local_update_stack: Option<UpdateStack>,
     is_fresh: bool,
 }
 
-pub(in crate::core) struct VComponentStateData {
+pub(crate) struct VComponentStateData {
     pub state: Vec<Box<dyn Any>>,
     pub next_state_index: usize,
-    // pub(in crate::core) provided_contexts: HashMap<Context, Box<dyn Any>>,
-    // pub(in crate::core) consumed_contexts: HashMap<Context, Box<dyn Any>>
+    // pub(crate) provided_contexts: HashMap<Context, Box<dyn Any>>,
+    // pub(crate) consumed_contexts: HashMap<Context, Box<dyn Any>>
 }
 
 #[derive(Debug)]
@@ -129,11 +129,11 @@ struct VComponentReconstructImpl<Props: Any, ViewData: VViewData, F: Fn(VCompone
     phantom: PhantomData<ViewData>
 }
 
-pub(in crate::core) struct VComponentEffects<Props: Any, ViewData: VViewData> {
+pub(crate) struct VComponentEffects<Props: Any, ViewData: VViewData> {
     pub effects: Vec<Box<dyn Fn(VEffectContext2<'_, '_, Props, ViewData>) -> ()>>,
 }
 
-pub(in crate::core) struct VComponentDestructors<Props: Any, ViewData: VViewData> {
+pub(crate) struct VComponentDestructors<Props: Any, ViewData: VViewData> {
     pub update_destructors: Vec<Box<dyn FnOnce(VDestructorContext2<'_, '_, Props, ViewData>) -> ()>>,
     pub next_update_destructors: Vec<Box<dyn FnOnce(VDestructorContext2<'_, '_, Props, ViewData>) -> ()>>,
     pub permanent_destructors: Vec<Box<dyn FnOnce(VDestructorContext2<'_, '_, Props, ViewData>) -> ()>>
@@ -143,7 +143,7 @@ pub(in crate::core) struct VComponentDestructors<Props: Any, ViewData: VViewData
 // region impls
 impl <ViewData: VViewData + 'static> VComponent<ViewData> {
     /// Create a new component *or* update and reuse the existing component, if it has the same parent or key.
-    pub(in crate::core) fn new<Props: 'static, F: Fn(VComponentContext2<'_, '_, Props, ViewData>) -> VNode<ViewData> + 'static>(
+    pub(crate) fn new<Props: 'static, F: Fn(VComponentContext2<'_, '_, Props, ViewData>) -> VNode<ViewData> + 'static>(
         parent: VParent<'_, ViewData>,
         contexts: &mut VComponentContexts<'_>,
         key: VComponentKey,
@@ -239,7 +239,7 @@ impl <ViewData: VViewData> VComponent<ViewData> {
     /// Run pending updates on this component.
     /// If there are any pending updates, updates will also be run on children.
     /// Otherwise they won't but also this should never be called if there are no pending updates.
-    pub(in crate::core) fn update(mut self: &mut Box<Self>, contexts: &mut VComponentContexts<'_>, initial_updates: impl Iterator<Item=UpdateDetails>) {
+    pub(crate) fn update(mut self: &mut Box<Self>, contexts: &mut VComponentContexts<'_>, initial_updates: impl Iterator<Item=UpdateDetails>) {
         assert!(!self.head.is_being_updated(), "why is local_update_stack not empty when calling update? Are we calling it nested?");
         assert!(!self.construct.local_context_changes().is_being_updated(), "why is construct's local_update_stack not empty when calling update? Are we calling it nested?");
 
@@ -362,7 +362,7 @@ impl <ViewData: VViewData> VComponent<ViewData> {
     }
 
     /// Descendent with the given path.
-    pub(in crate::core) fn down_path_mut<'a>(self: &'a mut Box<Self>, path: &VComponentPath, mut is_first: bool, mut parents: Vec<(&'a mut VComponentLocalContexts, &'a mut ContextPendingUpdates)>) -> Option<VComponentRefResolved<'a, ViewData>> {
+    pub(crate) fn down_path_mut<'a>(self: &'a mut Box<Self>, path: &VComponentPath, mut is_first: bool, mut parents: Vec<(&'a mut VComponentLocalContexts, &'a mut ContextPendingUpdates)>) -> Option<VComponentRefResolved<'a, ViewData>> {
         let mut current = self;
         for segment in path.iter() {
             if is_first {
@@ -386,7 +386,7 @@ impl <ViewData: VViewData> VComponent<ViewData> {
 impl <ViewData: VViewData> VComponentHead<ViewData> {
     /// Mark that the component has a pending update.
     /// `details` is used for the debug message if we detect an infinite loop.
-    pub(in crate::core) fn pending_update(&mut self, details: UpdateDetails) {
+    pub(crate) fn pending_update(&mut self, details: UpdateDetails) {
         if let Some(local_update_stack) = &mut self.local_update_stack { // is_being_updated
             local_update_stack.add_to_last(details);
         } else {
@@ -407,7 +407,7 @@ impl <ViewData: VViewData> VComponentHead<ViewData> {
 
     /// A flag for another thread or time which, when set,
     /// marks that this component needs updates and its view is stale (if it still exists).
-    pub(in crate::core) fn needs_update_flag(&self) -> NeedsUpdateFlag {
+    pub(crate) fn needs_update_flag(&self) -> NeedsUpdateFlag {
         match self.renderer.upgrade() {
             None => NeedsUpdateFlag::empty(self.path().clone()),
             Some(renderer) => renderer.needs_update_flag_for(self.path().clone())
@@ -458,27 +458,27 @@ impl <ViewData: VViewData> VComponentHead<ViewData> {
     }
 
     /// Is the component being created? Otherwise it's already created but may or may not be updating.
-    pub(in crate::core) fn is_being_created(&self) -> bool {
+    pub(crate) fn is_being_created(&self) -> bool {
         self.node.is_none()
     }
 
     /// Is the component being updated? If so pending updates will be added to the local update queue,
     /// otherwise they go to the root update queue.
-    pub(in crate::core) fn is_being_updated(&self) -> bool {
+    pub(crate) fn is_being_updated(&self) -> bool {
         self.local_update_stack.is_some()
     }
 
     /// Gets the components root child view and that view's actual component:
     /// If the `node` is another component, recurses, and otherwise the component will be `self`.
     #[allow(clippy::needless_lifetimes)]
-    pub(in crate::core) fn component_and_view<'a>(&'a self) -> VComponentAndView<'a, ViewData> {
+    pub(crate) fn component_and_view<'a>(&'a self) -> VComponentAndView<'a, ViewData> {
         self.node.as_ref().expect("tried to get view of uninitialized component").component_and_view(self)
     }
 
     /// Gets the components root child view: if the `node` is another component, recurses.
     /// *Panics* if the component is not initialized
     #[allow(clippy::needless_lifetimes)]
-    pub(in crate::core) fn view<'a>(&'a self) -> &'a Box<VView<ViewData>> {
+    pub(crate) fn view<'a>(&'a self) -> &'a Box<VView<ViewData>> {
         self.node.as_ref().expect("tried to get view of uninitialized component").view(self)
     }
 
@@ -489,7 +489,7 @@ impl <ViewData: VViewData> VComponentHead<ViewData> {
     }
 
     /// Gets the renderer, which has the root component and controls rendering.
-    pub(in crate::core) fn renderer(&self) -> Weak<dyn VComponentRoot<ViewData = ViewData>> {
+    pub(crate) fn renderer(&self) -> Weak<dyn VComponentRoot<ViewData = ViewData>> {
         self.renderer.clone()
     }
 
@@ -641,7 +641,7 @@ impl ContextPendingUpdates {
         }
     }
 
-    pub(in crate::core) fn pending_update<ViewData: VViewData>(&mut self, details: UpdateDetails, renderer: Weak<dyn VComponentRoot<ViewData=ViewData>>) {
+    pub(crate) fn pending_update<ViewData: VViewData>(&mut self, details: UpdateDetails, renderer: Weak<dyn VComponentRoot<ViewData=ViewData>>) {
         if let Some(update_details) = &mut self.update_details { // is_being_updated
             update_details.push(details);
         } else {
@@ -655,7 +655,7 @@ impl ContextPendingUpdates {
         }
     }
 
-    pub(in crate::core) fn is_being_updated(&self) -> bool {
+    pub(crate) fn is_being_updated(&self) -> bool {
         self.update_details.is_some()
     }
 }

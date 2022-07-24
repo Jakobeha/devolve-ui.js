@@ -23,17 +23,17 @@ use crate::view::view::VViewData;
 
 #[derive(Debug)]
 pub struct VComponentContext1<'a, 'a0: 'a, Props: Any, ViewData: VViewData> {
-    pub(in crate::core) component: &'a mut VComponentHead<ViewData>,
-    pub(in crate::core) contexts: &'a mut VComponentContexts<'a0>,
-    pub(in crate::core) effects: &'a mut VComponentEffects<Props, ViewData>,
+    pub(crate) component: &'a mut VComponentHead<ViewData>,
+    pub(crate) contexts: &'a mut VComponentContexts<'a0>,
+    pub(crate) effects: &'a mut VComponentEffects<Props, ViewData>,
     // This doesn't need to be PhantomData but it needs to be private so crate::core can't construct this
     pub(super) phantom: PhantomData<Props>
 }
 
 pub struct VEffectContext1<'a, 'a0: 'a, Props: Any, ViewData: VViewData> {
-    pub(in crate::core) component: &'a mut VComponentHead<ViewData>,
-    pub(in crate::core) contexts: &'a mut VComponentContexts<'a0>,
-    pub(in crate::core) destructors: &'a mut VComponentDestructors<Props, ViewData>,
+    pub(crate) component: &'a mut VComponentHead<ViewData>,
+    pub(crate) contexts: &'a mut VComponentContexts<'a0>,
+    pub(crate) destructors: &'a mut VComponentDestructors<Props, ViewData>,
     // This doesn't need to be PhantomData but it needs to be private so crate::core can't construct this
     pub(super) phantom: PhantomData<Props>
 }
@@ -41,7 +41,7 @@ pub struct VEffectContext1<'a, 'a0: 'a, Props: Any, ViewData: VViewData> {
 #[derive(Debug)]
 pub struct VDestructorContext1<'a, 'a0: 'a, Props: Any, ViewData: VViewData> {
     pub component: &'a mut VComponentHead<ViewData>,
-    pub(in crate::core) contexts: &'a mut VComponentContexts<'a0>,
+    pub(crate) contexts: &'a mut VComponentContexts<'a0>,
     // This needs to be private so users can't construct this even though all other fields are public
     pub(super) phantom: PhantomData<Props>
 }
@@ -133,11 +133,11 @@ impl <'a, 'a0: 'a, Props: Any, ViewData: VViewData> VContext<'a> for VEffectCont
 }
 
 impl <'a, 'a0: 'a, Props: Any, ViewData: VViewData> VEffectContext1<'a, 'a0, Props, ViewData> {
-    pub(in crate::core) fn component_and_destructors<'b>(&'b mut self) -> (&'b mut VComponentHead<ViewData>, &'b mut VComponentDestructors<Props, ViewData>) where 'a: 'b {
+    pub(crate) fn component_and_destructors<'b>(&'b mut self) -> (&'b mut VComponentHead<ViewData>, &'b mut VComponentDestructors<Props, ViewData>) where 'a: 'b {
         (self.component, self.destructors)
     }
 
-    pub(in crate::core) fn destructors<'b>(&'b mut self) -> &'b mut VComponentDestructors<Props, ViewData> where 'a: 'b {
+    pub(crate) fn destructors<'b>(&'b mut self) -> &'b mut VComponentDestructors<Props, ViewData> where 'a: 'b {
         self.destructors
     }
 

@@ -2,16 +2,16 @@
 
 #![allow(non_upper_case_globals)]
 
-use crate::component::node::VNode;
-use crate::view::color::Color;
+use devolve_ui::component::node::VNode;
+use devolve_ui::view::color::Color;
 #[allow(unused_imports)] // Needed for IntelliJ macro expansion
-use crate::view::constr::{_make_view, constr_view, make_view, VViewConstrArgs};
-use crate::view::layout::measurement::Measurement;
-use crate::view::layout::parent_bounds::{LayoutDirection, SubLayout};
+use devolve_ui::view::constr::{_make_view, constr_view, make_view, VViewConstrArgs};
+use devolve_ui::view::layout::measurement::Measurement;
+use devolve_ui::view::layout::parent_bounds::{LayoutDirection, SubLayout};
 use crate::view_data::attrs::{BorderStyle, DividerDirection, DividerStyle, TextWrapMode};
-#[cfg(feature = "tui-images")]
-use crate::view_data::tui::terminal_image::{HandleAspectRatio, Source};
-use crate::view_data::tui::tui::{HasTuiViewData, TuiViewData};
+#[cfg(feature = "images")]
+use crate::view_data::terminal_image::{HandleAspectRatio, Source};
+use crate::view_data::tui::{HasTuiViewData, TuiViewData};
 
 pub struct BoxConstrArgs {
     pub gap: Measurement,
@@ -27,7 +27,7 @@ pub type Txt1 = TextConstrArgs;
 pub type Bor1 = BorderConstrArgs;
 pub type Hdv1 = HDividerConstrArgs;
 pub type Vdv1 = VDividerConstrArgs;
-#[cfg(feature = "tui-images")]
+#[cfg(feature = "images")]
 pub type Src1 = SourceConstrArgs;
 
 impl Default for BoxConstrArgs {
@@ -44,7 +44,7 @@ macro _box2(($d:tt) @ $name:ident, $layout_direction: expr) {
     pub fn $name<ViewData: HasTuiViewData>(view_args: VViewConstrArgs, data_args: BoxConstrArgs, children: Vec<VNode<ViewData>>) -> VNode<ViewData> {
         constr_view(view_args, ViewData::tui_box(
             children,
-            $crate::view_data::tui::tui::TuiBoxAttrs {
+            $crate::view_data::tui::TuiBoxAttrs {
                 sub_layout: SubLayout {
                     direction: $layout_direction,
                     gap: data_args.gap
@@ -112,7 +112,7 @@ make_view!(pub vdivider, VDividerConstrArgs {
     color: Option<Color>
 } [ style: DividerStyle ], TuiViewData::Divider { direction: DividerDirection::Vertical });
 
-#[cfg(feature = "tui-images")]
+#[cfg(feature = "images")]
 make_view!(pub source, SourceConstrArgs {
     handle_aspect_ratio: HandleAspectRatio
 } [ source: Source ], TuiViewData::Source);

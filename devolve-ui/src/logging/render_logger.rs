@@ -83,7 +83,7 @@ pub trait RenderLogger {
 
 
 impl <ViewData: VViewData + Serialize + Debug + Clone, RenderLayer: Serialize + Debug> RenderLoggerImpl<ViewData, RenderLayer> {
-    pub(in crate::core) fn try_new(args: &LogStart) -> io::Result<Self> {
+    pub(crate) fn try_new(args: &LogStart) -> io::Result<Self> {
         Ok(RenderLoggerImpl {
             logger: GenericLogger::new(args, "renders")?,
 

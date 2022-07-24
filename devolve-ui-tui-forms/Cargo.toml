@@ -1,0 +1,19 @@
+[package]
+name = "devolve-ui-tui-forms"
+version = "0.1.0"
+authors = ["jakobeha"]
+description = "basic form controls for devolve-ui"
+repository = "https://github.com/jakobeha/devolve-ui-tui-forms.rs"
+license = "Apache-2.0"
+edition = "2021"
+
+[features]
+images = ["devolve-ui-tui/images"]
+
+[dependencies]
+devolve-ui = { path = "../devolve-ui", default-features = false, features = ["time-blocking", "input", "logging"] }
+devolve-ui-tui = { path = "../devolve-ui-tui", features = ["time", "input"] }
+
+[dev-dependencies]
+test-log = "0.2.10"
+env_logger = "0.9.0"

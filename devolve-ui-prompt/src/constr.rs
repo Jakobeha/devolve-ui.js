@@ -22,13 +22,13 @@ pub macro _make_prompt_macro(
         ) => { {
             let props = $Props {
                 $d ( $d opt_field : $d opt_field_value, )*
-                ..$crate::misc::partial_default::PartialDefault::partial_default(($d ( $d req_prop_id, )*))
+                ..::devolve_ui::misc::partial_default::PartialDefault::partial_default(($d ( $d req_prop_id, )*))
             };
-            $crate::component::constr::make_component(
+            ::devolve_ui::component::constr::make_component(
                 &mut $d c,
                 $d key,
                 props,
-                $crate::prompt::prompt_fn_into_component_fn($fun, move || (
+                $crate::prompt_fn_into_component_fn($fun, move || (
                     $d ( $d ( $d prompt_field ),* )?
                 ))
             )
@@ -41,7 +41,7 @@ pub macro _make_prompt_macro(
         ] => { {
             let props = $Props {
                 $d ( $d opt_field : $d opt_field_value, )*
-                ..$crate::misc::partial_default::PartialDefault::partial_default(($d ( $d req_prop_id, )*))
+                ..::devolve_ui::misc::partial_default::PartialDefault::partial_default(($d ( $d req_prop_id, )*))
             };
             $fun((c, props, move || (
                 $d ( $d ( $d prompt_field ),* )?
@@ -52,12 +52,12 @@ pub macro _make_prompt_macro(
 
 /// Usage:
 /// ```rust
-/// use devolve_ui::prompt::constr::make_prompt_macro;
-/// use devolve_ui::prompt::context::VPromptContext2;
+/// use devolve_ui_prompt::constr::make_prompt_macro;
+/// use devolve_ui_prompt::context::VPromptContext2;
 /// use devolve_ui::component::node::VNode;
 /// use devolve_ui::misc::partial_default::PartialDefault;
-/// use devolve_ui::view_data::tui::constr::text;
-/// use devolve_ui::view_data::tui::tui::TuiViewData;
+/// use devolve_ui_tui::view_data::constr::text;
+/// use devolve_ui_tui::view_data::tui::TuiViewData;
 ///
 /// pub struct AppProps {
 ///     required_field1: String,
@@ -123,12 +123,12 @@ pub macro make_prompt_macro {
 ///
 /// ```
 /// use std::any::Any;
-/// use devolve_ui::prompt::constr::{_make_prompt_macro, make_prompt};
-/// use devolve_ui::prompt::context::VPromptContext2;
+/// use devolve_ui_prompt::constr::{_make_prompt_macro, make_prompt};
+/// use devolve_ui_prompt::context::VPromptContext2;
 /// use devolve_ui::component::node::VNode;
 /// use devolve_ui::misc::shorthand::d;
-/// use devolve_ui::view_data::tui::constr::{vbox, text};
-/// use devolve_ui::view_data::tui::tui::{HasTuiViewData, TuiViewData};
+/// use devolve_ui_tui::view_data::constr::{vbox, text};
+/// use devolve_ui_tui::view_data::tui::{HasTuiViewData, TuiViewData};
 ///
 /// // Define
 ///
@@ -167,7 +167,7 @@ pub macro make_prompt(
         $( pub $req_prop_id : $req_prop_ty, )*
     }
 
-    impl $( < $( $T $( : $TTy $( + $TTyRest )* )? ),* > )? $crate::misc::partial_default::PartialDefault for $Props $( < $( $T ),* > )? $( where $( $more_bounds )* )? {
+    impl $( < $( $T $( : $TTy $( + $TTyRest )* )? ),* > )? ::devolve_ui::misc::partial_default::PartialDefault for $Props $( < $( $T ),* > )? $( where $( $more_bounds )* )? {
         type RequiredArgs = ( $( $req_prop_ty, )* );
 
         fn partial_default(($( $req_prop_id, )*): Self::RequiredArgs) -> Self {
@@ -187,17 +187,16 @@ pub macro make_prompt(
 }
 
 #[cfg(test)]
-#[cfg(feature = "tui")]
 mod tests {
-    use crate::prompt::context::VPromptContext2;
+    use crate::context::VPromptContext2;
     #[allow(unused_imports)]
-    use crate::prompt::constr::{_make_prompt_macro, make_prompt, make_prompt_macro};
-    use crate::component::node::VNode;
-    use crate::renderer::renderer::Renderer;
-    use crate::view::layout::macros::smt;
-    use crate::engines::tui::tui::{TuiConfig, TuiEngine};
-    use crate::view_data::tui::constr::{vbox, text};
-    use crate::view_data::tui::tui::HasTuiViewData;
+    use crate::constr::{_make_prompt_macro, make_prompt, make_prompt_macro};
+    use devolve_ui::component::node::VNode;
+    use devolve_ui::renderer::renderer::Renderer;
+    use devolve_ui::view::layout::macros::smt;
+    use devolve_ui_tui::engine::tui::{TuiConfig, TuiEngine};
+    use devolve_ui_tui::view_data::constr::{vbox, text};
+    use devolve_ui_tui::view_data::tui::HasTuiViewData;
     use test_log::test;
 
     #[derive(Default)]

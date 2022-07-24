@@ -1,11 +1,11 @@
-use crate::component::node::VNode;
-use crate::view::color::Color;
-use crate::view::layout::parent_bounds::SubLayout;
-use crate::view::view::{VViewData, VViewType};
+use devolve_ui::component::node::VNode;
+use devolve_ui::view::color::Color;
+use devolve_ui::view::layout::parent_bounds::SubLayout;
+use devolve_ui::view::view::{VViewData, VViewType};
 use crate::view_data::attrs::{BorderStyle, DividerDirection, DividerStyle, TextWrapMode};
 use std::slice::{Iter, IterMut};
-#[cfg(feature = "tui-images")]
-use crate::view_data::tui::terminal_image::{HandleAspectRatio, Source};
+#[cfg(feature = "images")]
+use crate::view_data::terminal_image::{HandleAspectRatio, Source};
 
 #[derive(Debug, Clone)]
 pub struct TuiBoxAttrs {
@@ -37,7 +37,7 @@ pub enum TuiViewData {
         direction: DividerDirection,
         style: DividerStyle,
     },
-    #[cfg(feature = "tui-images")]
+    #[cfg(feature = "images")]
     Source {
         source: Source,
         handle_aspect_ratio: HandleAspectRatio
@@ -79,7 +79,7 @@ impl VViewData for TuiViewData {
             TuiViewData::Color { .. } => VViewType::from("Tui::Color"),
             TuiViewData::Border { .. } => VViewType::from("Tui::Border"),
             TuiViewData::Divider { .. } => VViewType::from("Tui::Divider"),
-            #[cfg(feature = "tui-images")]
+            #[cfg(feature = "images")]
             TuiViewData::Source { .. } => VViewType::from("Tui::Source"),
         }
     }

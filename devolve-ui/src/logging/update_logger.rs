@@ -20,7 +20,7 @@ pub struct UpdateLogger<ViewData: VViewData> {
 }
 
 impl <ViewData: VViewData> UpdateLogger<ViewData> {
-    pub(in crate::core) fn try_new(args: &LogStart) -> io::Result<Self> {
+    pub(crate) fn try_new(args: &LogStart) -> io::Result<Self> {
         Ok(UpdateLogger {
             logger: GenericLogger::new(args, "updates")?,
             phantom: PhantomData
@@ -31,7 +31,7 @@ impl <ViewData: VViewData> UpdateLogger<ViewData> {
         self.logger.log(entry)
     }
 
-    pub(in crate::core) fn log_update(&mut self, path: VComponentPath, update_stack: UpdateStack) {
+    pub(crate) fn log_update(&mut self, path: VComponentPath, update_stack: UpdateStack) {
         self.log(UpdateLogEntry::Update(path, update_stack))
     }
 }

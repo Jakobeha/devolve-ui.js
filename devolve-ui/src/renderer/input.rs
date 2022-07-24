@@ -7,7 +7,7 @@
 //! although not every environment / platform will support those.
 use bitflags::bitflags;
 use crate::view::layout::geom::{Pos, Size};
-#[cfg(feature = "crossterm")]
+#[cfg(feature = "crossterm-conversions")]
 use crossterm::event::{
     Event as CrosstermEvent,
     KeyCode as CrosstermKeyCode,
@@ -107,7 +107,7 @@ bitflags! {
 
 impl KeyModifiers {
     /// Convenience function: I wish something like this was on `bitflags`.
-    #[cfg(feature = "crossterm")]
+    #[cfg(feature = "crossterm-conversions")]
     pub(crate) fn iff(&self, predicate: bool) -> Self {
         if predicate {
             *self
@@ -246,7 +246,7 @@ pub enum ResizeEvent {
 // APIs are almost the same but we don't assume this will always be true
 // So there is a lot of boilerplate conversion here
 
-#[cfg(feature = "crossterm")]
+#[cfg(feature = "crossterm-conversions")]
 impl From<CrosstermEvent> for Event {
     fn from(event: CrosstermEvent) -> Self {
         match event {
@@ -260,7 +260,7 @@ impl From<CrosstermEvent> for Event {
     }
 }
 
-#[cfg(feature = "crossterm")]
+#[cfg(feature = "crossterm-conversions")]
 impl From<CrosstermKeyEvent> for KeyEvent {
     fn from(event: CrosstermKeyEvent) -> Self {
         Self {
@@ -270,7 +270,7 @@ impl From<CrosstermKeyEvent> for KeyEvent {
     }
 }
 
-#[cfg(feature = "crossterm")]
+#[cfg(feature = "crossterm-conversions")]
 impl From<CrosstermKeyCode> for KeyCode {
     fn from(code: CrosstermKeyCode) -> Self {
         match code {
@@ -296,7 +296,7 @@ impl From<CrosstermKeyCode> for KeyCode {
     }
 }
 
-#[cfg(feature = "crossterm")]
+#[cfg(feature = "crossterm-conversions")]
 impl From<CrosstermKeyModifiers> for KeyModifiers {
     fn from(modifiers: CrosstermKeyModifiers) -> Self {
         Self::SHIFT.iff(modifiers.contains(CrosstermKeyModifiers::SHIFT)) |
@@ -305,7 +305,7 @@ impl From<CrosstermKeyModifiers> for KeyModifiers {
     }
 }
 
-#[cfg(feature = "crossterm")]
+#[cfg(feature = "crossterm-conversions")]
 impl From<CrosstermMouseEvent> for MouseEvent {
     fn from(event: CrosstermMouseEvent) -> Self {
         Self {
@@ -319,7 +319,7 @@ impl From<CrosstermMouseEvent> for MouseEvent {
     }
 }
 
-#[cfg(feature = "crossterm")]
+#[cfg(feature = "crossterm-conversions")]
 impl From<CrosstermMouseEventKind> for MouseEventKind {
     fn from(kind: CrosstermMouseEventKind) -> Self {
         match kind {
@@ -333,7 +333,7 @@ impl From<CrosstermMouseEventKind> for MouseEventKind {
     }
 }
 
-#[cfg(feature = "crossterm")]
+#[cfg(feature = "crossterm-conversions")]
 impl From<CrosstermMouseButton> for MouseButton {
     fn from(button: CrosstermMouseButton) -> Self {
         match button {

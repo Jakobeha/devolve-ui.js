@@ -14,6 +14,7 @@ edition = "2021"
 crate-type = ["cdylib"]
 
 [features]
+# none yet
 
 [package.metadata.docs.rs]
 cargo-args = ["-Zunstable-options", "-Zrustdoc-scrape-examples=examples"]
@@ -21,12 +22,12 @@ cargo-args = ["-Zunstable-options", "-Zrustdoc-scrape-examples=examples"]
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-devolve-ui = { path = "../devolve-ui" }
+devolve-ui = { path = "../devolve-ui", default-features = false }
 wasm-bindgen = "0.2.81"
 js-sys = "0.3.58"
 
 [dev-dependencies]
-devolve-ui-forms = { path = "../devolve-ui-forms" }
+devolve-ui-tui-forms = { path = "../devolve-ui-tui-forms" }
 rand = "0.8.5"
 test-log = "0.2.10"
 env_logger = "0.9.0"

@@ -2,7 +2,6 @@
 
 #![feature(decl_macro)]
 #![feature(macro_metavar_expr)]
-#![cfg(feature = "tui")]
 
 use std::env;
 use std::path::PathBuf;
@@ -14,10 +13,10 @@ use devolve_ui::component::node::VNode;
 use devolve_ui::hooks::BuiltinHooks;
 use devolve_ui::view::color::Color;
 use devolve_ui::view::layout::macros::{mt, smt};
-use devolve_ui::view_data::tui::tui::HasTuiViewData;
-use devolve_ui::view_data::tui::terminal_image::{Source, HandleAspectRatio, TuiImageFormat};
-use devolve_ui::view_data::attrs::BorderStyle;
-use devolve_ui::view_data::tui::constr::{border, hbox, source, text, zbox};
+use devolve_ui_tui::view_data::tui::HasTuiViewData;
+use devolve_ui_tui::view_data::terminal_image::{Source, HandleAspectRatio, TuiImageFormat};
+use devolve_ui_tui::view_data::attrs::BorderStyle;
+use devolve_ui_tui::view_data::constr::{border, hbox, source, text, zbox};
 use devolve_ui::hooks::event::CallFirst;
 use test_log::test;
 

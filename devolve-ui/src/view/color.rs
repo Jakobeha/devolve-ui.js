@@ -42,6 +42,22 @@ impl PackedColor {
         (self.0.color & 0xFF) == 0xFF
     }
 
+    pub fn red(&self) -> u8 {
+        ((self.0.color & 0xFF000000) >> 24) as u8
+    }
+
+    pub fn green(&self) -> u8 {
+        ((self.0.color & 0x00FF0000) >> 16) as u8
+    }
+
+    pub fn blue(&self) -> u8 {
+        ((self.0.color & 0x0000FF00) >> 8) as u8
+    }
+
+    pub fn alpha(&self) -> u8 {
+        (self.0.color & 0x000000FF) as u8
+    }
+
     pub fn white(&self) -> u8 {
         let blue = (self.0.color >> 8) & 0xFF;
         let green = (self.0.color >> 16) & 0xFF;
@@ -114,7 +130,7 @@ impl PartialEq for PackedColor {
 impl Eq for PackedColor {}
 
 // Not supported
-/* #[cfg(feature = "tui")]
+/* #[cfg(feature = "crossterm-conversions")]
 impl From<crossterm::style::Color> for PackedColor {
     fn from(color: crossterm::style::Color) -> PackedColor {
         PackedColor(match color {
@@ -141,7 +157,7 @@ impl From<crossterm::style::Color> for PackedColor {
     }
 } */
 
-#[cfg(feature = "tui")]
+#[cfg(feature = "crossterm-conversions")]
 impl From<PackedColor> for crossterm::style::Color {
     fn from(color: PackedColor) -> Self {
         // Opacity can't be represented, but we use transparent == default color

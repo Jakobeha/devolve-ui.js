@@ -1,3 +1,9 @@
+#![feature(into_future)]
+#![feature(new_uninit)]
+#![feature(negative_impls)]
+#![feature(local_key_cell_methods)]
+#![feature(decl_macro)]
+
 pub mod constr;
 pub mod context;
 pub mod resume;
@@ -8,22 +14,20 @@ mod misc;
 pub use prompt::*;
 
 #[cfg(test)]
-#[cfg(all(feature = "tui", feature = "time-blocking"))]
 mod tests {
     use std::time::Duration;
-    use crate::prompt::context::VPromptContext2;
+    use crate::context::VPromptContext2;
     #[allow(unused_imports)]
-    use crate::prompt::constr::{_make_prompt_macro, make_prompt, make_prompt_macro};
-    use crate::component::node::VNode;
-    use crate::hooks::BuiltinHooks;
-    use crate::hooks::event::CallFirst;
-    use crate::renderer::renderer::Renderer;
-    use crate::view::layout::macros::smt;
-    use crate::engines::tui::tui::{TuiConfig, TuiEngine};
-    use crate::view_data::tui::constr::{vbox, text};
-    use crate::view_data::tui::tui::HasTuiViewData;
+    use crate::constr::{_make_prompt_macro, make_prompt, make_prompt_macro};
+    use devolve_ui::component::node::VNode;
+    use devolve_ui::hooks::BuiltinHooks;
+    use devolve_ui::hooks::event::CallFirst;
+    use devolve_ui::renderer::renderer::Renderer;
+    use devolve_ui::view::layout::macros::smt;
+    use devolve_ui_tui::engine::tui::{TuiConfig, TuiEngine};
+    use devolve_ui_tui::view_data::constr::{vbox, text};
+    use devolve_ui_tui::view_data::tui::HasTuiViewData;
     use test_log::test;
-    use tokio::time::sleep;
 
     make_prompt!(pub my_component, MyComponentProps<ViewData: HasTuiViewData + Clone> {
         first: String = String::from("Untitled1"),
@@ -65,8 +69,8 @@ mod tests {
             ])
         }).await;
 
-        // TODO: This isn't tokio async so it crashes, figure out how to make it work
-        sleep(wait_time).await;
+        // TODO
+        // sleep(wait_time).await;
 
         for next in remaining {
             c.yield_void(move |(mut c, mut resume, MyComponentProps { children, .. })| {
@@ -95,7 +99,8 @@ mod tests {
                 ])
             }).await;
 
-            sleep(wait_time).await;
+            // TODO
+            // sleep(wait_time).await;
         }
     }
 

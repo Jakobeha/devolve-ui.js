@@ -66,9 +66,9 @@ pub fn constr_view<ViewData: VViewData>(
 /// ```rust
 /// use devolve_ui::view::constr::{_make_view, make_view};
 /// use devolve_ui::view::color::Color;
-/// use devolve_ui::view_data::attrs::{BorderStyle, DividerDirection, DividerStyle, TextWrapMode};
-/// use devolve_ui::view_data::tui::terminal_image::{HandleAspectRatio, Source};
-/// use devolve_ui::view_data::tui::tui::TuiViewData;
+/// use devolve_ui_tui::view_data::attrs::{BorderStyle, DividerDirection, DividerStyle, TextWrapMode};
+/// use devolve_ui_tui::view_data::terminal_image::{HandleAspectRatio, Source};
+/// use devolve_ui_tui::view_data::tui::TuiViewData;
 ///
 /// make_view!(pub text, TextConstrArgs {
 ///     color: Option<Color>,

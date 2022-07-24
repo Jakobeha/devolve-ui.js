@@ -2,8 +2,6 @@
 //! The output is written to a file and compared against another "expected" file,
 //! so it can be viewed with terminal formatting via `less -r` or another command.
 
-#![cfg(feature = "tui")]
-
 use std::cell::RefCell;
 use std::fs::File;
 use std::{env, io, thread};
@@ -18,10 +16,9 @@ use devolve_ui::component::node::VNode;
 use devolve_ui::misc::notify_flag::NotifyFlag;
 use devolve_ui::renderer::renderer::{Renderer, RendererOverrides};
 use devolve_ui::view::layout::geom::Size;
-use devolve_ui::engines::tui::tui::{TuiConfig, TuiEngine, TuiInputMode};
-use devolve_ui::view_data::tui::tui::TuiViewData;
-#[cfg(feature = "tui-images")]
-use devolve_ui::view_data::tui::terminal_image::TuiImageFormat;
+use devolve_ui_tui::engine::tui::{TuiConfig, TuiEngine, TuiInputMode};
+use devolve_ui_tui::view_data::tui::TuiViewData;
+use devolve_ui_tui::view_data::terminal_image::TuiImageFormat;
 
 pub struct TestOutput {
     buf: Rc<RefCell<Vec<u8>>>
@@ -141,7 +138,6 @@ fn assert_render<TestInput: Read + 'static>(
         #[cfg(target_family = "unix")]
         termios_fd: None,
         output_ansi_escapes: true,
-        #[cfg(feature = "tui-images")]
         image_format: TuiImageFormat::FallbackColor
     };
     adjust_config(&mut config);

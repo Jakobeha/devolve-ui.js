@@ -58,7 +58,7 @@ impl UpdateBacktrace {
         Self(())
     }
 
-    pub(in crate::core) fn here() -> Self {
+    pub(crate) fn here() -> Self {
         #[cfg(feature = "backtrace")]
         {
             Self::from(Some(&Backtrace::capture()))

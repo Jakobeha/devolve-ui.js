@@ -2,9 +2,7 @@
 
 pub mod float_ord;
 pub mod ident;
-pub mod io_write_2_fmt_write;
 pub mod is_thread_safe;
-pub mod either_future;
 pub mod fmt_mode;
 pub(crate) mod map_lock_result;
 pub(crate) mod map_split_n;

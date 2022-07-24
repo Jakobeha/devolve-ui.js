@@ -5,36 +5,38 @@ use crossterm::terminal;
 #[cfg(target_family = "unix")]
 use libc::{ioctl, TIOCGWINSZ, winsize};
 use std::io;
-use std::io::{ErrorKind, Read, Stdin, stdin, Stdout, stdout, Write};
+use std::io::{Read, Stdin, stdin, Stdout, stdout, Write};
+#[cfg(all(feature = "time", feature = "input"))]
+use std::io::ErrorKind;
 #[cfg(target_family = "unix")]
 use std::os::unix::io::{AsRawFd, RawFd};
 use std::str::Lines;
 #[cfg(feature = "input")]
 use std::time::Duration;
 use unicode_width::UnicodeWidthChar;
-use crate::renderer::engine::RenderEngine;
-use crate::renderer::render::VRender;
-use crate::renderer::traceback::RenderTraceback;
-use crate::view::color::{Color, PackedColor};
-use crate::view::layout::err::LayoutError;
-use crate::view::layout::geom::{BoundingBox, Rectangle, Size};
-use crate::view::layout::parent_bounds::{DimsStore, ParentBounds};
-use crate::view::view::VView;
-use crate::view_data::tui::tui::{TuiBoxAttrs, TuiViewData};
-use crate::engines::tui::layer::{RenderCell, RenderLayer};
-#[cfg(feature = "tui-images")]
-use crate::engines::tui::terminal_image::{Image, ImageRender};
+use devolve_ui::renderer::engine::RenderEngine;
+use devolve_ui::renderer::render::VRender;
+use devolve_ui::renderer::traceback::RenderTraceback;
+use devolve_ui::view::color::{Color, PackedColor};
+use devolve_ui::view::layout::err::LayoutError;
+use devolve_ui::view::layout::geom::{BoundingBox, Rectangle, Size};
+use devolve_ui::view::layout::parent_bounds::{DimsStore, ParentBounds};
+use devolve_ui::view::view::VView;
+use crate::view_data::tui::{TuiBoxAttrs, TuiViewData};
+use crate::engine::layer::{RenderCell, RenderLayer};
+#[cfg(feature = "images")]
+use crate::engine::terminal_image::{Image, ImageRender};
 use crate::view_data::attrs::{BorderStyle, DividerDirection, DividerStyle, TextWrapMode};
-#[cfg(feature = "tui-images")]
-use crate::view_data::tui::terminal_image;
-#[cfg(feature = "tui-images")]
-use crate::view_data::tui::terminal_image::{HandleAspectRatio, Source, TuiImageFormat};
+#[cfg(feature = "images")]
+use crate::view_data::terminal_image;
+#[cfg(feature = "images")]
+use crate::view_data::terminal_image::{HandleAspectRatio, Source, TuiImageFormat};
 #[cfg(feature = "input")]
-use crate::renderer::engine::InputListeners;
+use devolve_ui::renderer::engine::InputListeners;
 #[cfg(feature = "time")]
-use crate::renderer::renderer::RendererViewForEngineInTick;
+use devolve_ui::renderer::renderer::RendererViewForEngineInTick;
 #[cfg(all(feature = "time", feature = "input"))]
-use crate::renderer::input::{Event, KeyEvent, ResizeEvent};
+use devolve_ui::renderer::input::{Event, KeyEvent, ResizeEvent};
 
 /// Raw mode? Read from stdin or tty?
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -56,7 +58,7 @@ pub struct TuiConfig<Input: Read, Output: Write> {
     pub termios_fd: Option<RawFd>,
     pub input_mode: TuiInputMode,
     pub output_ansi_escapes: bool,
-    #[cfg(feature = "tui-images")]
+    #[cfg(feature = "images")]
     pub image_format: TuiImageFormat
 }
 
@@ -89,7 +91,7 @@ impl Default for TuiConfig<Stdin, Stdout> {
             termios_fd: Some(fd),
             input_mode: TuiInputMode::Raw,
             output_ansi_escapes: true,
-            #[cfg(feature = "tui-images")]
+            #[cfg(feature = "images")]
             image_format: TuiImageFormat::infer_from_env()
         }
     }
@@ -328,7 +330,7 @@ impl <Input: Read, Output: Write> TuiEngine<Input, Output> {
         result
     }
 
-    #[cfg(feature = "tui-images")]
+    #[cfg(feature = "images")]
     fn render_source(&self, bounds: &BoundingBox, column_size: &Size, source: &Source, handle_aspect_ratio: HandleAspectRatio) -> Result<(RenderLayer, Size), LayoutError> {
         let width = bounds.width.map_or(terminal_image::Measurement::Auto, |width| {
             terminal_image::Measurement::Pixels((width * column_size.width) as u16)
@@ -491,7 +493,7 @@ impl <Input: Read, Output: Write> RenderEngine for TuiEngine<Input, Output> {
     fn make_render(
         &self,
         bounds: &BoundingBox,
-        #[allow(unused)] // Will be unused unless #[cfg(feature = "tui-images")] is enabled
+        #[allow(unused)] // Will be unused unless #[cfg(feature = "images")] is enabled
         column_size: &Size,
         view: &Box<VView<Self::ViewData>>,
         mut render: VRender<RenderLayer>,
@@ -555,7 +557,7 @@ impl <Input: Read, Output: Write> RenderEngine for TuiEngine<Input, Output> {
                 let layer = self.render_divider(rect.left, rect.top, length, thickness, color, style, direction);
                 render.insert(bounds.z, Some(&rect), layer);
             },
-            #[cfg(feature = "tui-images")]
+            #[cfg(feature = "images")]
             TuiViewData::Source { source, handle_aspect_ratio } => {
                 let (layer, size) = self.render_source(bounds, column_size, source, *handle_aspect_ratio)?;
                 let rect = bounds.as_rectangle_with_default_size(&size);

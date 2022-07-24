@@ -34,10 +34,10 @@ use sixel;
 use sixel::status::{Error as SixelError};
 use sixel_sys;
 use derive_more::{Display, Error, From};
-use crate::view::color::PackedColor;
-use crate::view::layout::geom::Size;
-use crate::engines::tui::layer::{RenderCell, RenderLayer};
-use crate::view_data::tui::terminal_image::{FailedToGetSize, HandleAspectRatio, InferredFileExtension, Measurement, Source, SourceFormat, TuiImageFormat};
+use devolve_ui::view::color::PackedColor;
+use devolve_ui::view::layout::geom::Size;
+use crate::engine::layer::{RenderCell, RenderLayer};
+use crate::view_data::terminal_image::{FailedToGetSize, HandleAspectRatio, InferredFileExtension, Measurement, Source, SourceFormat, TuiImageFormat};
 
 pub struct Image<R: Read> {
     pub width: u16,

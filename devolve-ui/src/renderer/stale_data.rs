@@ -69,7 +69,7 @@ impl NeedsUpdateFlag {
     }
 
     /// Flag with empty weak reference which does nothing when set
-    pub(in crate::core) fn empty(path: VComponentPath) -> NeedsUpdateFlag {
+    pub(crate) fn empty(path: VComponentPath) -> NeedsUpdateFlag {
         NeedsUpdateFlag {
             stale_data: Weak::new(),
             path
