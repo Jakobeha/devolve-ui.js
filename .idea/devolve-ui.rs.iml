@@ -20,6 +20,10 @@
       <sourceFolder url="file://$MODULE_DIR$/devolve-ui-wasm/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/generic-sync/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/generic-sync/tests" isTestSource="true" />
+      <sourceFolder url="file://$MODULE_DIR$/devolve-ui-prompt/tests" isTestSource="true" />
+      <sourceFolder url="file://$MODULE_DIR$/devolve-ui-tui/tests" isTestSource="true" />
+      <sourceFolder url="file://$MODULE_DIR$/devolve-ui-wasm/js" type="java-resource" />
+      <sourceFolder url="file://$MODULE_DIR$/devolve-ui-wasm/tests" isTestSource="true" />
       <excludeFolder url="file://$MODULE_DIR$/target" />
     </content>
     <orderEntry type="inheritedJdk" />

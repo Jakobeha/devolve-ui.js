@@ -1,72 +1,52 @@
 use js_sys;
+use wasm_bindgen::JsCast;
 use wasm_bindgen::prelude::*;
 
 #[wasm_bindgen(typescript_custom_section)]
 const NODE_TYPE: &'static str = r"
 type Node = any;
-type Component<OptionalProps extends Object, Props extends OptionalProps> = (optionalProps: OptionalProps, requiredProps: Omit<Props, keyof OptionalProps>) => Node;
+type Component<OptionalProps extends Object, RequiredProps extends object> = {
+    _internal: (key: string, props: Partial<OptionalProps> & RequiredProps) => Node
+};
 ";
 
 #[wasm_bindgen(typescript_custom_section)]
-const MAKE_COMPONENT: &'static str = r"
-export function make_component<OptionalProps extends object, Props extends OptionalProps>(
-    fun: (props: Props) => Node,
+const DEFINE_COMPONENT: &'static str = r"
+export function define_component<OptionalProps extends object, RequiredProps extends object>(
+    fun: (props: OptionalProps & RequiredProps) => Node,
     optional_prop_defaults: OptionalProps
-): Component<OptionalProps, Props>;
+): Component<OptionalProps, RequiredProps>;
 ";
 
 #[wasm_bindgen(skip_typescript)]
-pub fn make_component(fun: js_sys::Function, optional_prop_defaults: js_sys::Object) -> JsValue {
-    Closure::new(move |optional_props: js_sys::Object, required_props: js_sys::Object| {
-        let props = js_sys::Object::new();
-        js_sys::Object::assign3(&props, &optional_prop_defaults, &optional_props, &required_props);
+pub fn define_component(fun: js_sys::Function, optional_prop_defaults: js_sys::Object) -> JsValue {
+    Closure::<dyn Fn(js_sys::JsString, js_sys::Object) -> Result<JsValue, JsValue>>::new(move |key: js_sys::JsString, props: js_sys::Object| {
+        let filled_props = js_sys::Object::new();
+        js_sys::Object::assign2(&filled_props, &optional_prop_defaults, &props);
         // TODO: Set context
-        js_sys::Function::call1(fun, &JsValue::NULL, &props)?;
-        // TODO: Pop context
+        let result = js_sys::Function::call1(&fun, &JsValue::NULL, &filled_props);
+        // TODO: Pop context (even if err)
+        result
     }).into_js_value()
 }
 
 #[wasm_bindgen(typescript_custom_section)]
-const CREATE_ELEMENT: &'static str = r"
-export function createElement (
-  element: undefined,
-  props: {},
-  ...children: VJSX[]
-): VNode[];
-export function createElement <Key extends keyof JSXIntrinsics> (
-  element: Key,
-  props: Omit<JSXIntrinsics[Key], 'children'>,
-  ...children: IntoArray<JSXIntrinsics[Key]['children']>
-): VView;
-export function createElement <T extends VView, Props, Children extends any[]> (
-  element: (props: Props & { children?: Children }) => T,
-  props: Props & { key?: string },
-  ...children: Children
-): VComponent & { node: T };
+const CONSTRUCT_COMPONENT: &'static str = r"
+export function constructComponent<OptionalProps extends object, RequiredProps extends object>(
+    component: Component<OptionalProps, RequiredProps>,
+    key: string,
+    props: Partial<OptionalProps> & RequiredProps,
+)
 ";
 
 #[wasm_bindgen(skip_typescript)]
-pub fn create_element(element: JsValue, props: JsValue, children: JsValue) -> Result<JsValue, JsValue> {
-    let props = match props.is_falsy() {
-        false => props,
-        true => js_sys::Object::new()
-    };
+pub fn create_component(component: js_sys::Object, key: js_sys::JsString, props: js_sys::Object) -> Result<JsValue, JsValue> {
+    let component_fun: js_sys::Function = js_sys::Reflect::get(&component, &JsValue::from_str("_internal")).ok()
+        .and_then(|x| x.dyn_into::<js_sys::Function>().ok())
+        .map(Ok)
+        .unwrap_or_else(|| Err(JsValue::from(&js_sys::Error::new("not a component"))))?;
 
-    if element.is_undefined() {
-        // Fragment
-
-    } else if let Some(intrinsic) = element.as_string() {
-        // Intrinsic
-        let intrinsic_fn = intrinsic_fn(intrinsic);
-        let args = js_sys::Array::new();
-        js_sys::push(&args, &props);
-        for child in children {
-            js_sys::push(&args, &child);
-        }
-        js_sys::apply(intrinsic_fn, &JsValue::NULL, &props, &children)
-    } else if let Some(make_component) = js_sys::Function::try_from(element) {
-        // Component
-        js_sys::define_property(&props, &JsValue::from_str("children"), &JsValue::from(children));
-        js_sys::call1(make_component, &JsValue::NULL, &props)
-    }
+    // TODO: Set context
+    js_sys::Function::call2(&component_fun, &JsValue::NULL, &key, &props)
+    // TODO: Pop context
 }

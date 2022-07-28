@@ -6,8 +6,7 @@ members = [
     "devolve-ui-tui",
     "devolve-ui-tui-forms",
     "devolve-ui-wasm",
-    "mini-rx",
-    "generic-sync"
+    "mini-rx"
 ]
 default-members = [
     "devolve-ui",
@@ -16,6 +15,5 @@ default-members = [
     "devolve-ui-tui",
     "devolve-ui-tui-forms",
     "devolve-ui-wasm",
-    "mini-rx",
-    "generic-sync"
+    "mini-rx"
 ]
