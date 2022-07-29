@@ -30,6 +30,32 @@ pub struct VComponentContext1<'a, 'a0: 'a, Props: Any, ViewData: VViewData> {
     pub(super) phantom: PhantomData<Props>
 }
 
+#[derive(Debug, Clone, Copy)]
+pub struct VComponentContextUnsafe {
+    pub component: *mut (),
+    pub contexts: *mut (),
+    pub effects: *mut (),
+}
+
+impl<'a, 'a0: 'a, Props: Any, ViewData: VViewData> VComponentContext1<'a, 'a0, Props, ViewData> {
+    pub unsafe fn from_unsafe(ptr: VComponentContextUnsafe) -> Self {
+        VComponentContext1 {
+            component: &mut *(ptr.component as *mut VComponentHead<ViewData>),
+            contexts: &mut *(ptr.contexts as *mut VComponentContexts<'a0>),
+            effects: &mut *(ptr.effects as *mut VComponentEffects<Props, ViewData>),
+            phantom: PhantomData
+        }
+    }
+
+    pub fn as_unsafe(&mut self) -> VComponentContextUnsafe {
+        VComponentContextUnsafe {
+            component: self.component as *mut _ as *mut (),
+            contexts: self.contexts as *mut _ as *mut (),
+            effects: self.effects as *mut _ as *mut ()
+        }
+    }
+}
+
 pub struct VEffectContext1<'a, 'a0: 'a, Props: Any, ViewData: VViewData> {
     pub(crate) component: &'a mut VComponentHead<ViewData>,
     pub(crate) contexts: &'a mut VComponentContexts<'a0>,
