@@ -114,12 +114,12 @@ impl<T: StableDeref2, A: Allocator> FrozenVec<T, A> {
     }
 
     /// Returns an iterator over the vector.
-    pub fn iter(&self) -> Iter<T> {
+    pub fn iter(&self) -> Iter<T, A> {
         self.into_iter()
     }
 
     /// Converts the frozen vector into a plain vector.
-    pub fn into_vec(self) -> Vec<T> {
+    pub fn into_vec(self) -> Vec<T, A> {
         self.0.into_inner()
     }
 
@@ -127,7 +127,7 @@ impl<T: StableDeref2, A: Allocator> FrozenVec<T, A> {
     ///
     /// This is safe, as it requires a `&mut self`, ensuring nothing is using
     /// the 'frozen' contents.
-    pub fn as_mut(&mut self) -> &mut Vec<T> {
+    pub fn as_mut(&mut self) -> &mut Vec<T, A> {
         unsafe { &mut *self.0.get() }
     }
 
@@ -210,14 +210,14 @@ impl<T: StableDeref2, A: Allocator> FrozenVec<T, A> {
     // TODO add more
 }
 
-impl<T, A: Allocator> Default for FrozenVec<T, A> {
+impl<T, A: Allocator + Default> Default for FrozenVec<T, A> {
     fn default() -> Self {
-        FrozenVec::new()
+        FrozenVec::new_in(Default::default())
     }
 }
 
 impl<T, A: Allocator> From<Vec<T, A>> for FrozenVec<T, A> {
-    fn from(vec: Vec<T>) -> Self {
+    fn from(vec: Vec<T, A>) -> Self {
         Self(UnsafeCell::new(vec))
     }
 }
@@ -323,16 +323,16 @@ mod tests {
     }
 }
 
-impl<T: StableDeref2, A: Allocator> Debug for FrozenVec<T, A> where for<'a> T::Target<'a>: Debug {
+impl<'e, T: StableDeref2 + 'e, A: Allocator + 'e> Debug for FrozenVec<T, A> where T::Target<'e>: Debug {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        let this = unsafe { transmute::<&Self, &'static Self>(&self) };
+        let this = unsafe { transmute::<&Self, &'e Self>(self) };
         f.debug_list().entries(this.iter()).finish()
     }
 }
 
-impl<'a, T: StableDeref2> Debug for FrozenSlice<'a, T> where for<'b> T::Target<'b>: Debug {
+impl<'e, 'a: 'e, T: StableDeref2 + 'e> Debug for FrozenSlice<'a, T> where T::Target<'e>: Debug {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        let this = unsafe { transmute::<&Self, &'static Self>(&self) };
+        let this = unsafe { transmute::<&Self, &'e Self>(self) };
         f.debug_list().entries(this.iter()).finish()
     }
 }
@@ -363,7 +363,7 @@ impl<'a, T, A: Allocator> From<&'a FrozenVec<T, A>> for FrozenSlice<'a, T> {
     /// Get a `FrozenSlice`, which is the "slice" equivalent of a `FrozenVec`.
     /// This is safe, because you can only access the `FrozenSlice` like a frozen vector.
     /// This is useful, because you can also convert regular slices into `FrozenSlice`.
-    fn from(vec: &'a FrozenVec<T>) -> Self {
+    fn from(vec: &'a FrozenVec<T, A>) -> Self {
         FrozenSlice(&unsafe { &*vec.0.get() })
     }
 }

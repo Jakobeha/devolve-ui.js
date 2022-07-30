@@ -55,6 +55,19 @@ pub macro assert_is_covariant {
         };
     },
 
+    (for[$($gen_params_bounded:tt)*][$($gen_params:tt)*] ($type_name:ty) over $lf:lifetime $(where [$($where_body:tt)*])?) => {
+        #[allow(dead_code, unused)]
+        const _: () = {
+            struct Cov<$lf, $($gen_params_bounded)*>($type_name) $(where $($where_body)*)?;
+            fn test_cov<'__a: '__b, '__b, $($gen_params_bounded)*>(
+                subtype: *const Cov<'__a, $($gen_params)*>,
+                mut _supertype: *const Cov<'__b, $($gen_params)*>,
+            ) $(where $($where_body)*)? {
+                _supertype = subtype;
+            }
+        };
+    },
+
     (for[$($gen_params:tt)*] ($type_name:ty) over $lf:lifetime $(where [$($where_body:tt)*])?) => {
         #[allow(dead_code, unused)]
         const _: () = {

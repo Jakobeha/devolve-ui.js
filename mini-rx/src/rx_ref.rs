@@ -2,10 +2,11 @@ use std::alloc::{Allocator, Global};
 use std::fmt::Debug;
 use std::marker::PhantomData;
 use derivative::Derivative;
-use crate::dag::{RxDAG, RxSubDAG, RxContext, MutRxContext};
+use crate::dag::{RxDAG, RxContext, MutRxContext};
 use crate::dag_uid::RxDAGUid;
 use crate::clone_set_fn::CloneSetFn;
-use crate::rx_impl::{CurrentOrNext, Rx};
+use crate::rx_impl::Rx;
+use crate::RxSubDAG;
 
 /// Index into the DAG which will give you a node, which may be a variable or computed value.
 /// It is untyped though, so you can't interact with it directly.
@@ -81,7 +82,7 @@ pub type SDVar<'c, S, T, A = Global> = DVar<'c, S, T, fn(&S) -> &T, fn(&S, T) ->
 pub type SDCRx<'c, S, T, A = Global> = DCRx<'c, S, T, fn(&S) -> &T, A>;
 
 impl<'c, A: Allocator> UntypedRxRef<'c, A> {
-    fn new(graph: &RxDAG<'c>, index: usize) -> Self {
+    fn new(graph: &RxDAG<'c, A>, index: usize) -> Self {
         UntypedRxRef {
             index,
             graph_id: graph.id(),
@@ -89,8 +90,7 @@ impl<'c, A: Allocator> UntypedRxRef<'c, A> {
     }
 
     /// Get the underlying [Rx] where the data is stored.
-    fn get_rx<'a>(self, c: impl RxContext<'a, 'c, A>) -> &'a Rx<'c, A> where 'c: 'a {
-        let graph = c.sub_dag();
+    fn get_rx<'a>(self, graph: RxSubDAG<'a, 'c, A>) -> &'a Rx<'c, A> where 'c: 'a {
         debug_assert!(self.graph_id == graph.id, "RxRef::get_rx: different graph");
         debug_assert!(self.index < graph.before.len(), "RxRef refers to a future node (not a DAG?)");
         // Since we already checked the index, we can use get_unchecked
@@ -99,8 +99,8 @@ impl<'c, A: Allocator> UntypedRxRef<'c, A> {
     }
 }
 
-impl<'c, T, A: Allocator> RxRef<'c, T, A> {
-    pub(crate) fn new(graph: &RxDAG<'c>, index: usize) -> Self {
+impl<'c, T, A: Allocator + 'c> RxRef<'c, T, A> {
+    pub(crate) fn new(graph: &RxDAG<'c, A>, index: usize) -> Self {
         RxRef(UntypedRxRef::new(graph, index), PhantomData)
     }
 
@@ -119,18 +119,12 @@ impl<'c, T, A: Allocator> RxRef<'c, T, A> {
 
     /// Read the node. You can do this on both [Var] and [CRx].
     pub fn get<'a>(self, c: impl RxContext<'a, 'c, A>) -> &'a T where 'c: 'a {
-        unsafe { self.0.get_rx(c).get_dyn() }
-    }
-
-    /// Take `next` if set, otherwise returns a reference to `current`.
-    /// The value should then be re-passed to `next` via `set`
-    fn take_latest<'a>(self, c: impl RxContext<'a, 'c, A>) -> CurrentOrNext<'a, T> where 'c: 'a {
-        unsafe { self.0.get_rx(c).take_latest_dyn() }
+        unsafe { self.0.get_rx(c.sub_dag()).get_dyn() }
     }
 
     /// Write a new value to the node. The changes will be applied on recompute.
-    fn set(self, c: impl RxContext<'_, 'c, A>, value: T) {
-        unsafe { self.0.get_rx(c).set_dyn(value); }
+    fn set<'a>(self, c: impl MutRxContext<'a, 'c, A>, value: T) where 'c: 'a {
+        unsafe { self.0.get_rx(c.sub_dag()).set_dyn(value); }
     }
 
     /// Apply a transformation to the latest value. If `set` this will apply to the recently-set value.
@@ -138,8 +132,8 @@ impl<'c, T, A: Allocator> RxRef<'c, T, A> {
     /// returned by [RxRef::get] until the graph is recomputed.
     ///
     /// Like `set` the changes only actually reflect in [RxRef::get] on recompute.
-    fn modify<F: FnOnce(&T) -> T>(self, c: impl RxContext<'_, 'c, A>, modify: F) {
-        let rx = self.0.get_rx(c);
+    fn modify<'a, F: FnOnce(&T) -> T>(self, c: impl MutRxContext<'a, 'c, A>, modify: F) where 'c: 'a {
+        let rx = self.0.get_rx(c.sub_dag());
 
         let latest = unsafe { rx.take_latest_dyn() };
         let next = modify(latest.as_ref());
@@ -147,7 +141,7 @@ impl<'c, T, A: Allocator> RxRef<'c, T, A> {
     }
 }
 
-impl<'c, T, A: Allocator> Var<'c, T, A> {
+impl<'c, T, A: Allocator + 'c> Var<'c, T, A> {
     pub(crate) fn new(internal: RxRef<'c, T, A>) -> Self {
         Var(internal)
     }
@@ -165,14 +159,12 @@ impl<'c, T, A: Allocator> Var<'c, T, A> {
 
     /// Read the variable
     pub fn get<'a>(self, c: impl RxContext<'a, 'c, A>) -> &'a T where 'c: 'a {
-        let graph = c.sub_dag();
-        self.0._get(graph)
+        self.0.get(c)
     }
 
     /// Write a new value to the variable. The changes will be applied on recompute.
     pub fn set<'a>(self, c: impl MutRxContext<'a, 'c, A>, value: T) where 'c: 'a {
-        let graph = c.sub_dag();
-        self.0.set(graph, value);
+        self.0.set(c, value);
     }
 
     /// Apply a transformation to the latest value. If [Var::set] this will apply to the recently-set value.
@@ -181,8 +173,7 @@ impl<'c, T, A: Allocator> Var<'c, T, A> {
     ///
     /// Like `set` the changes only actually reflect in [Var::get] on recompute.
     pub fn modify<'a, F: FnOnce(&T) -> T>(self, c: impl MutRxContext<'a, 'c, A>, modify: F) where 'c: 'a {
-        let graph = c.sub_dag();
-        self.0.modify(graph, modify)
+        self.0.modify(c, modify)
     }
 
     /// Create a view of part of the variable.
@@ -190,7 +181,7 @@ impl<'c, T, A: Allocator> Var<'c, T, A> {
     /// Do know that `SetFn` will take the most recently-set value even if the graph hasn't been recomputed.
     /// This means you can create multiple `derive`s and set them all before recompute, and you don't have to worry
     /// about the later derived values setting their part on the stale whole.
-    pub fn derive<U, GetFn: Fn(&T) -> &U, SetFn: Fn(&T, U) -> T>(self, get: GetFn, set: SetFn) -> DVar<'c, T, U, GetFn, SetFn> {
+    pub fn derive<U, GetFn: Fn(&T) -> &U, SetFn: Fn(&T, U) -> T>(self, get: GetFn, set: SetFn) -> DVar<'c, T, U, GetFn, SetFn, A> {
         DVar {
             source: self.0,
             get,
@@ -203,12 +194,12 @@ impl<'c, T, A: Allocator> Var<'c, T, A> {
     /// Do know that `SetFn` will take the most recently-set value even if the graph hasn't been recomputed.
     /// This means you can create multiple `derive`s and set them all before recompute, and you don't have to worry
     /// about the later derived values setting their part on the stale whole.
-    pub fn derive_using_clone<U, GetFn: Fn(&T) -> &U, SetFn: Fn(&mut T, U)>(self, get: GetFn, set: SetFn) -> DVar<'c, T, U, GetFn, CloneSetFn<T, U, SetFn>> where T: Clone {
+    pub fn derive_using_clone<U, GetFn: Fn(&T) -> &U, SetFn: Fn(&mut T, U)>(self, get: GetFn, set: SetFn) -> DVar<'c, T, U, GetFn, CloneSetFn<T, U, SetFn>, A> where T: Clone {
         self.derive(get, CloneSetFn::new(set))
     }
 }
 
-impl<'c, T, A: Allocator> CRx<'c, T, A> {
+impl<'c, T, A: Allocator + 'c> CRx<'c, T, A> {
     pub(crate) fn new(internal: RxRef<'c, T, A>) -> Self {
         CRx(internal)
     }
@@ -226,12 +217,11 @@ impl<'c, T, A: Allocator> CRx<'c, T, A> {
 
     /// Read the computed value
     pub fn get<'a>(self, c: impl RxContext<'a, 'c, A>) -> &'a T where 'c: 'a {
-        let graph = c.sub_dag();
-        self.0._get(graph)
+        self.0.get(c)
     }
 
     /// Create a view of part of the computed value.
-    pub fn derive<U, GetFn: Fn(&T) -> &U>(self, get: GetFn) -> DCRx<'c, T, U, GetFn> {
+    pub fn derive<U, GetFn: Fn(&T) -> &U>(self, get: GetFn) -> DCRx<'c, T, U, GetFn, A> {
         DCRx {
             source: self.0,
             get
@@ -239,11 +229,10 @@ impl<'c, T, A: Allocator> CRx<'c, T, A> {
     }
 }
 
-impl<'c, S, T, GetFn: Fn(&S) -> &T, SetFn: Fn(&S, T) -> S, A: Allocator> DVar<'c, S, T, GetFn, SetFn, A> {
+impl<'c, S, T, GetFn: Fn(&S) -> &T, SetFn: Fn(&S, T) -> S, A: Allocator + 'c> DVar<'c, S, T, GetFn, SetFn, A> {
     /// Read the part of the variable this view gets.
     pub fn get<'a>(&self, c: impl RxContext<'a, 'c, A>) -> &'a T where 'c: 'a, S: 'a {
-        let graph = c.sub_dag();
-        (self.get)(self.source._get(graph))
+        (self.get)(self.source.get(c))
     }
 
     /// Write a new value to the part of the variable this view gets.
@@ -252,18 +241,16 @@ impl<'c, S, T, GetFn: Fn(&S) -> &T, SetFn: Fn(&S, T) -> S, A: Allocator> DVar<'c
     /// This means you can create multiple `derive`s and set them all before recompute, and you don't have to worry
     /// about the later derived values setting their part on the stale whole.
     pub fn set<'a>(&self, c: impl MutRxContext<'a, 'c, A>, value: T) where 'c: 'a, S: 'a {
-        let graph = c.sub_dag();
-        let old_value = self.source.take_latest(graph);
-        let new_value = (self.set)(old_value.as_ref(), value);
-        self.source.set(graph, new_value)
+        self.source.modify(c, move |old_value| {
+            (self.set)(old_value, value)
+        })
     }
 }
 
-impl<'c, S, T, GetFn: Fn(&S) -> &T, A: Allocator> DCRx<'c, S, T, GetFn, A> {
+impl<'c, S, T, GetFn: Fn(&S) -> &T, A: Allocator + 'c> DCRx<'c, S, T, GetFn, A> {
     /// Read the part of the computed value this view gets.
     pub fn get<'a>(&self, c: impl RxContext<'a, 'c, A>) -> &'a T where 'c: 'a, S: 'a {
-        let graph = c.sub_dag();
-        (self.get)(self.source._get(graph))
+        (self.get)(self.source.get(c))
     }
 }
 

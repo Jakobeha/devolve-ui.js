@@ -52,8 +52,9 @@ use std::sync::{Arc, MutexGuard, RwLockReadGuard, RwLockWriteGuard};
 
 use core::cell::{Ref, RefMut};
 use std::rc::Rc;
+use std::alloc::Allocator;
 
-impl_stable_deref2_from_deref!([T: ?Sized] (Box<T>));
+impl_stable_deref2_from_deref!([T: ?Sized, A: Allocator] (Box<T, A>));
 impl_stable_deref2_from_deref!((String));
 impl_stable_deref2_from_deref!((CString));
 impl_stable_deref2_from_deref!((OsString));

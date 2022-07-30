@@ -1,4 +1,4 @@
-use std::alloc::{Allocator, Global};
+use std::alloc::Allocator;
 use std::cell::Cell;
 use std::fmt::{Debug, Formatter};
 use std::marker::PhantomData;
@@ -22,9 +22,9 @@ pub(crate) enum RxDAGElemRef<'a, 'c, A: Allocator> {
 }
 
 pub(crate) type Rx<'c, A> = dyn RxTrait<A> + 'c;
-assert_is_covariant!((Rx<'c>) over 'c);
+assert_is_covariant!(for[A] (Rx<'c, A>) over 'c);
 pub(crate) type RxEdge<'c, A> = dyn RxEdgeTrait<A> + 'c;
-assert_is_covariant!((RxEdge<'c>) over 'c);
+assert_is_covariant!(for[A] (RxEdge<'c, A>) over 'c);
 
 pub(crate) trait RxTrait<A: Allocator>: Debug {
     fn post_read(&self) -> bool;

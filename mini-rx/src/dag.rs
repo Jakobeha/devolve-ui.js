@@ -1,5 +1,6 @@
 use std::alloc::{Allocator, Global};
-use std::fmt::Debug;
+use std::fmt::{Debug, Formatter};
+use derivative::Derivative;
 use crate::dag_uid::RxDAGUid;
 use crate::rx_impl::{RxDAGElem, RxImpl, Rx, RxEdgeImpl};
 use crate::rx_ref::{RxRef, Var, CRx};
@@ -12,7 +13,7 @@ use crate::misc::slice_split3::SliceSplit3;
 /// Note that [RxContext] and [MutRxContext] are neither subset nor superset of each other.
 /// You can't read snapshots without recomputing, and you can't write inputs.
 pub trait RxContext<'a, 'c: 'a, A: Allocator = Global> {
-    fn sub_dag(self) -> RxSubDAG<'a, 'c, A: Allocator>;
+    fn sub_dag(self) -> RxSubDAG<'a, 'c, A>;
 }
 
 /// Returns a slice of [RxDAG] you can write variables in.
@@ -20,7 +21,7 @@ pub trait RxContext<'a, 'c: 'a, A: Allocator = Global> {
 /// Note that [RxContext] and [MutRxContext] are neither subset nor superset of each other.
 /// You can't read snapshots without recomputing, and you can't write inputs.
 pub trait MutRxContext<'a, 'c: 'a, A: Allocator = Global> {
-    fn sub_dag(self) -> RxSubDAG<'a, 'c, A: Allocator>;
+    fn sub_dag(self) -> RxSubDAG<'a, 'c, A>;
 }
 
 /// The centralized structure which contains all your interconnected reactive values.
@@ -58,38 +59,65 @@ pub trait MutRxContext<'a, 'c: 'a, A: Allocator = Global> {
 ///
 /// The DAG and refs have an ID so that you can't use one ref on another DAG, however this is checked at runtime.
 /// The lifetimes are checked at compile-time though.
-#[derive(Debug)]
-pub struct RxDAG<'c, A: Allocator = Global>(FrozenVec<RxDAGElem<'c, A>>, RxDAGUid<'c, A>);
+pub struct RxDAG<'c, A: Allocator = Global>(FrozenVec<RxDAGElem<'c, A>, A>, RxDAGUid<'c, A>, A);
+
+impl<'c, A: Allocator + Debug + 'c> Debug for RxDAG<'c, A> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        f.debug_tuple("RxDAG")
+            .field(&self.0)
+            .field(&self.1)
+            .field(&self.2)
+            .finish()
+    }
+}
 
 /// Allows you to read from an [RxDAG].
-#[derive(Debug, Clone, Copy)]
-pub struct RxDAGSnapshot<'a, 'c: 'a, A: Allocator = Global>(&'a RxDAG<'c, A>);
+#[derive(Debug, Derivative)]
+#[derivative(Clone(bound = ""), Copy(bound = ""))]
+pub struct RxDAGSnapshot<'a, 'c: 'a, A: Allocator + 'c = Global>(&'a RxDAG<'c, A>);
 
 /// Slice of an [RxDAG]
 #[doc(hidden)]
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Derivative)]
+#[derivative(Clone(bound = ""), Copy(bound = ""))]
 pub struct RxSubDAG<'a, 'c: 'a, A: Allocator = Global> {
     pub(crate) before: FrozenSlice<'a, RxDAGElem<'c, A>>,
     pub(crate) index: usize,
     pub(crate) id: RxDAGUid<'c, A>
 }
-assert_is_covariant!(for['a, A: Allocator] (RxSubDAG<'a, 'c, A>) over 'c);
+assert_is_covariant!(for['a, A: Allocator]['a, A] (RxSubDAG<'a, 'c, A>) over 'c);
 
 /// Allows you to read from a slice of an [RxDAG].
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Derivative)]
+#[derivative(Clone(bound = ""), Copy(bound = ""))]
 pub struct RxInput<'a, 'c: 'a, A: Allocator = Global>(pub(crate) RxSubDAG<'a, 'c, A>);
 
-impl<'c, A: Allocator> RxDAG<'c, A> {
-    /// Create an empty DAG
+impl<'c> RxDAG<'c> {
+    /// Create and empty DAG
     pub fn new() -> Self {
-        Self(FrozenVec::new(), RxDAGUid::next())
+        Self::new_in(Global)
+    }
+}
+
+impl<'c, A: Allocator + Clone + 'c> RxDAG<'c, A> {
+    /// Create an empty DAG in the specified allocator.
+    pub fn new_in(alloc: A) -> Self {
+        Self(FrozenVec::new_in(alloc.clone()), RxDAGUid::next(), alloc)
+    }
+
+    fn alloc(&self) -> A {
+        self.2.clone()
+    }
+
+    fn new_box<T>(&self, inner: T) -> Box<T, A> {
+        Box::new_in(inner, self.alloc())
     }
 
     /// Create a variable ([Var]) in this DAG.
-    pub fn new_var<T: 'c>(&self, init: T) -> Var<'c, T> {
+    pub fn new_var<T: 'c>(&self, init: T) -> Var<'c, T, A> {
         let index = self.next_index();
         let rx = RxImpl::new(init);
-        self.0.push(RxDAGElem::Node(Box::new(rx)));
+        self.0.push(RxDAGElem::Node(Box::new_in(rx, self.alloc())));
         Var::new(RxRef::new(self, index))
     }
 
@@ -104,11 +132,11 @@ impl<'c, A: Allocator> RxDAG<'c, A> {
             let () = Self::run_compute(&mut compute, input, &mut input_backwards_offsets);
             debug_assert!(outputs.next().is_none());
         });
-        self.0.push(RxDAGElem::Edge(Box::new(compute_edge)));
+        self.0.push(RxDAGElem::Edge(self.new_box(compute_edge)));
     }
 
     /// Create a computed value ([CRx]) in this DAG.
-    pub fn new_crx<T: 'c, F: FnMut(RxInput<'_, 'c, A>) -> T + 'c>(&self, mut compute: F) -> CRx<'c, T> {
+    pub fn new_crx<T: 'c, F: FnMut(RxInput<'_, 'c, A>) -> T + 'c>(&self, mut compute: F) -> CRx<'c, T, A> {
         let mut input_backwards_offsets = Vec::new();
         let init = Self::run_compute(&mut compute, RxInput(self.sub_dag()), &mut input_backwards_offsets);
         let compute_edge = RxEdgeImpl::<'c, _, A>::new(input_backwards_offsets, 1, move |mut input_backwards_offsets: &mut Vec<usize>, input: RxInput<'_, 'c, A>, outputs: &mut dyn Iterator<Item=&Rx<'c, A>>| {
@@ -117,16 +145,16 @@ impl<'c, A: Allocator> RxDAG<'c, A> {
             unsafe { outputs.next().unwrap().set_dyn(output); }
             debug_assert!(outputs.next().is_none());
         });
-        self.0.push(RxDAGElem::Edge(Box::new(compute_edge)));
+        self.0.push(RxDAGElem::Edge(self.new_box(compute_edge)));
 
         let index = self.next_index();
         let rx = RxImpl::new(init);
-        self.0.push(RxDAGElem::<'c>::Node(Box::new(rx)));
+        self.0.push(RxDAGElem::<'c>::Node(self.new_box(rx)));
         CRx::new(RxRef::new(self, index))
     }
 
     /// Create 2 computed values ([CRx]s) in this DAG which are created from the same function.
-    pub fn new_crx2<T1: 'c, T2: 'c, F: FnMut(RxInput<'_, 'c, A>) -> (T1, T2) + 'c>(&self, mut compute: F) -> (CRx<'c, T1>, CRx<'c, T2>) {
+    pub fn new_crx2<T1: 'c, T2: 'c, F: FnMut(RxInput<'_, 'c, A>) -> (T1, T2) + 'c>(&self, mut compute: F) -> (CRx<'c, T1, A>, CRx<'c, T2, A>) {
         let mut input_backwards_offsets = Vec::new();
         let (init1, init2) = Self::run_compute(&mut compute, RxInput(self.sub_dag()), &mut input_backwards_offsets);
         let compute_edge = RxEdgeImpl::<'c, _, A>::new(input_backwards_offsets, 2, move |mut input_backwards_offsets: &mut Vec<usize>, input: RxInput<'_, 'c, A>, outputs: &mut dyn Iterator<Item=&Rx<'c, A>>| {
@@ -136,18 +164,18 @@ impl<'c, A: Allocator> RxDAG<'c, A> {
             unsafe { outputs.next().unwrap().set_dyn(output2); }
             debug_assert!(outputs.next().is_none());
         });
-        self.0.push(RxDAGElem::Edge(Box::new(compute_edge)));
+        self.0.push(RxDAGElem::Edge(self.new_box(compute_edge)));
 
         let index = self.next_index();
         let rx1 = RxImpl::new(init1);
         let rx2 = RxImpl::new(init2);
-        self.0.push(RxDAGElem::<'c>::Node(Box::new(rx1)));
-        self.0.push(RxDAGElem::<'c>::Node(Box::new(rx2)));
+        self.0.push(RxDAGElem::<'c>::Node(self.new_box(rx1)));
+        self.0.push(RxDAGElem::<'c>::Node(self.new_box(rx2)));
         (CRx::new(RxRef::new(self, index)), CRx::new(RxRef::new(self, index + 1)))
     }
 
     /// Create 3 computed values ([CRx]s) in this DAG which are created from the same function.
-    pub fn new_crx3<T1: 'c, T2: 'c, T3: 'c, F: FnMut(RxInput<'_, 'c, A>) -> (T1, T2, T3) + 'c>(&self, mut compute: F) -> (CRx<'c, T1>, CRx<'c, T2>, CRx<'c, T3>) {
+    pub fn new_crx3<T1: 'c, T2: 'c, T3: 'c, F: FnMut(RxInput<'_, 'c, A>) -> (T1, T2, T3) + 'c>(&self, mut compute: F) -> (CRx<'c, T1, A>, CRx<'c, T2, A>, CRx<'c, T3, A>) {
         let mut input_backwards_offsets = Vec::new();
         let (init1, init2, init3) = Self::run_compute(&mut compute, RxInput(self.sub_dag()), &mut input_backwards_offsets);
         let compute_edge = RxEdgeImpl::<'c, _, A>::new(input_backwards_offsets, 3, move |mut input_backwards_offsets: &mut Vec<usize>, input: RxInput<'_, 'c, A>, outputs: &mut dyn Iterator<Item=&Rx<'c, A>>| {
@@ -158,20 +186,20 @@ impl<'c, A: Allocator> RxDAG<'c, A> {
             unsafe { outputs.next().unwrap().set_dyn(output3); }
             debug_assert!(outputs.next().is_none());
         });
-        self.0.push(RxDAGElem::Edge(Box::new(compute_edge)));
+        self.0.push(RxDAGElem::Edge(self.new_box(compute_edge)));
 
         let index = self.next_index();
         let rx1 = RxImpl::new(init1);
         let rx2 = RxImpl::new(init2);
         let rx3 = RxImpl::new(init3);
-        self.0.push(RxDAGElem::<'c>::Node(Box::new(rx1)));
-        self.0.push(RxDAGElem::<'c>::Node(Box::new(rx2)));
-        self.0.push(RxDAGElem::<'c>::Node(Box::new(rx3)));
+        self.0.push(RxDAGElem::<'c>::Node(self.new_box(rx1)));
+        self.0.push(RxDAGElem::<'c>::Node(self.new_box(rx2)));
+        self.0.push(RxDAGElem::<'c>::Node(self.new_box(rx3)));
         (CRx::new(RxRef::new(self, index)), CRx::new(RxRef::new(self, index + 1)), CRx::new(RxRef::new(self, index + 2)))
     }
 
     /// Create 4 computed values ([CRx]s) in this DAG which are created from the same function.
-    pub fn new_crx4<T1: 'c, T2: 'c, T3: 'c, T4: 'c, F: FnMut(RxInput<'_, 'c, A>) -> (T1, T2, T3, T4) + 'c>(&self, mut compute: F) -> (CRx<'c, T1>, CRx<'c, T2>, CRx<'c, T3>, CRx<'c, T4>) {
+    pub fn new_crx4<T1: 'c, T2: 'c, T3: 'c, T4: 'c, F: FnMut(RxInput<'_, 'c, A>) -> (T1, T2, T3, T4) + 'c>(&self, mut compute: F) -> (CRx<'c, T1, A>, CRx<'c, T2, A>, CRx<'c, T3, A>, CRx<'c, T4, A>) {
         let mut input_backwards_offsets = Vec::new();
         let (init1, init2, init3, init4) = Self::run_compute(&mut compute, RxInput(self.sub_dag()), &mut input_backwards_offsets);
         let compute_edge = RxEdgeImpl::<'c, _, A>::new(input_backwards_offsets, 4, move |mut input_backwards_offsets: &mut Vec<usize>, input: RxInput<'_, 'c, A>, outputs: &mut dyn Iterator<Item=&Rx<'c, A>>| {
@@ -183,22 +211,22 @@ impl<'c, A: Allocator> RxDAG<'c, A> {
             unsafe { outputs.next().unwrap().set_dyn(output4); }
             debug_assert!(outputs.next().is_none());
         });
-        self.0.push(RxDAGElem::Edge(Box::new(compute_edge)));
+        self.0.push(RxDAGElem::Edge(self.new_box(compute_edge)));
 
         let index = self.next_index();
         let rx1 = RxImpl::new(init1);
         let rx2 = RxImpl::new(init2);
         let rx3 = RxImpl::new(init3);
         let rx4 = RxImpl::new(init4);
-        self.0.push(RxDAGElem::<'c>::Node(Box::new(rx1)));
-        self.0.push(RxDAGElem::<'c>::Node(Box::new(rx2)));
-        self.0.push(RxDAGElem::<'c>::Node(Box::new(rx3)));
-        self.0.push(RxDAGElem::<'c>::Node(Box::new(rx4)));
+        self.0.push(RxDAGElem::<'c>::Node(self.new_box(rx1)));
+        self.0.push(RxDAGElem::<'c>::Node(self.new_box(rx2)));
+        self.0.push(RxDAGElem::<'c>::Node(self.new_box(rx3)));
+        self.0.push(RxDAGElem::<'c>::Node(self.new_box(rx4)));
         (CRx::new(RxRef::new(self, index)), CRx::new(RxRef::new(self, index + 1)), CRx::new(RxRef::new(self, index + 2)), CRx::new(RxRef::new(self, index + 3)))
     }
 
     /// Create 5 computed values ([CRx]s) in this DAG which are created from the same function.
-    pub fn new_crx5<T1: 'c, T2: 'c, T3: 'c, T4: 'c, T5: 'c, F: FnMut(RxInput<'_, 'c, A>) -> (T1, T2, T3, T4, T5) + 'c>(&self, mut compute: F) -> (CRx<'c, T1>, CRx<'c, T2>, CRx<'c, T3>, CRx<'c, T4>, CRx<'c, T5>) {
+    pub fn new_crx5<T1: 'c, T2: 'c, T3: 'c, T4: 'c, T5: 'c, F: FnMut(RxInput<'_, 'c, A>) -> (T1, T2, T3, T4, T5) + 'c>(&self, mut compute: F) -> (CRx<'c, T1, A>, CRx<'c, T2, A>, CRx<'c, T3, A>, CRx<'c, T4, A>, CRx<'c, T5, A>) {
         let mut input_backwards_offsets = Vec::new();
         let (init1, init2, init3, init4, init5) = Self::run_compute(&mut compute, RxInput(self.sub_dag()), &mut input_backwards_offsets);
         let compute_edge = RxEdgeImpl::<'c, _, A>::new(input_backwards_offsets, 5, move |mut input_backwards_offsets: &mut Vec<usize>, input: RxInput<'_, 'c, A>, outputs: &mut dyn Iterator<Item=&Rx<'c, A>>| {
@@ -211,7 +239,7 @@ impl<'c, A: Allocator> RxDAG<'c, A> {
             unsafe { outputs.next().unwrap().set_dyn(output5); }
             debug_assert!(outputs.next().is_none());
         });
-        self.0.push(RxDAGElem::Edge(Box::new(compute_edge)));
+        self.0.push(RxDAGElem::Edge(self.new_box(compute_edge)));
 
         let index = self.next_index();
         let rx1 = RxImpl::new(init1);
@@ -219,16 +247,17 @@ impl<'c, A: Allocator> RxDAG<'c, A> {
         let rx3 = RxImpl::new(init3);
         let rx4 = RxImpl::new(init4);
         let rx5 = RxImpl::new(init5);
-        self.0.push(RxDAGElem::<'c>::Node(Box::new(rx1)));
-        self.0.push(RxDAGElem::<'c>::Node(Box::new(rx2)));
-        self.0.push(RxDAGElem::<'c>::Node(Box::new(rx3)));
-        self.0.push(RxDAGElem::<'c>::Node(Box::new(rx4)));
-        self.0.push(RxDAGElem::<'c>::Node(Box::new(rx5)));
+        self.0.push(RxDAGElem::<'c>::Node(self.new_box(rx1)));
+        self.0.push(RxDAGElem::<'c>::Node(self.new_box(rx2)));
+        self.0.push(RxDAGElem::<'c>::Node(self.new_box(rx3)));
+        self.0.push(RxDAGElem::<'c>::Node(self.new_box(rx4)));
+        self.0.push(RxDAGElem::<'c>::Node(self.new_box(rx5)));
         (CRx::new(RxRef::new(self, index)), CRx::new(RxRef::new(self, index + 1)), CRx::new(RxRef::new(self, index + 2)), CRx::new(RxRef::new(self, index + 3)), CRx::new(RxRef::new(self, index + 4)))
     }
-
     // endregion
+}
 
+impl<'c, A: Allocator> RxDAG<'c, A> {
     fn next_index(&self) -> usize {
         self.0.len()
     }
@@ -276,8 +305,8 @@ impl<'c, A: Allocator> RxDAG<'c, A> {
     }
 }
 
-impl<'a, 'c: 'a, A: Allocator> RxContext<'a, 'c> for RxDAGSnapshot<'a, 'c, A> {
-    fn sub_dag(self) -> RxSubDAG<'a, 'c> {
+impl<'a, 'c: 'a, A: Allocator> RxContext<'a, 'c, A> for RxDAGSnapshot<'a, 'c, A> {
+    fn sub_dag(self) -> RxSubDAG<'a, 'c, A> {
         RxSubDAG {
             before: FrozenSlice::from(&self.0.0),
             index: self.0.0.len(),
@@ -286,14 +315,14 @@ impl<'a, 'c: 'a, A: Allocator> RxContext<'a, 'c> for RxDAGSnapshot<'a, 'c, A> {
     }
 }
 
-impl<'a, 'c: 'a, A: Allocator> MutRxContext<'a, 'c> for &'a RxDAG<'c, A> {
-    fn sub_dag(self) -> RxSubDAG<'a, 'c> {
+impl<'a, 'c: 'a, A: Allocator + 'c> MutRxContext<'a, 'c, A> for &'a RxDAG<'c, A> {
+    fn sub_dag(self) -> RxSubDAG<'a, 'c, A> {
         RxDAGSnapshot(self).sub_dag()
     }
 }
 
-impl<'a, 'c: 'a, A: Allocator> RxContext<'a, 'c> for RxInput<'a, 'c, A> {
-    fn sub_dag(self) -> RxSubDAG<'a, 'c> {
+impl<'a, 'c: 'a, A: Allocator> RxContext<'a, 'c, A> for RxInput<'a, 'c, A> {
+    fn sub_dag(self) -> RxSubDAG<'a, 'c, A> {
         self.0
     }
 }
