@@ -39,23 +39,23 @@ pub struct VComponentPath(Vec<VComponentKey>);
 
 // region ref
 #[derive(Clone)]
-pub struct VComponentRef<ViewData: VViewData> {
+pub struct VComponentRef<ViewData: VViewData + ?Sized> {
     pub(super) renderer: Weak<dyn VComponentRoot<ViewData = ViewData>>,
     pub(super) path: VComponentPath
 }
 
 #[derive(Debug)]
-pub struct VComponentRefResolved<'a, ViewData: VViewData> {
+pub struct VComponentRefResolved<'a, ViewData: VViewData + ?Sized> {
     pub parent_contexts: Vec<(&'a mut VComponentLocalContexts, &'a mut ContextPendingUpdates)>,
     pub component: &'a mut Box<VComponent<ViewData>>
 }
 
-pub(crate) struct VComponentRefResolvedPtr<ViewData: VViewData> {
+pub(crate) struct VComponentRefResolvedPtr<ViewData: VViewData + ?Sized> {
     pub parent_contexts: Vec<*mut Box<VComponent<ViewData>>>,
     pub component: *mut Box<VComponent<ViewData>>
 }
 
-impl <ViewData: VViewData> VComponentRef<ViewData> {
+impl <ViewData: VViewData + ?Sized> VComponentRef<ViewData> {
     pub(crate) fn with<R>(&self, fun: impl FnOnce(Option<VComponentRefResolved<'_, ViewData>>) -> R) -> R {
         match self.renderer.upgrade() {
             None => fun(None),
@@ -85,7 +85,7 @@ impl <ViewData: VViewData> VComponentRef<ViewData> {
     }
 }
 
-impl <'a, ViewData: VViewData> VComponentRefResolved<'a, ViewData> {
+impl <'a, ViewData: VViewData + ?Sized> VComponentRefResolved<'a, ViewData> {
     pub(crate) fn into_ptr(self) -> VComponentRefResolvedPtr<ViewData> {
         VComponentRefResolvedPtr {
             parent_contexts: unsafe { mem::transmute(self.parent_contexts) },
@@ -94,7 +94,7 @@ impl <'a, ViewData: VViewData> VComponentRefResolved<'a, ViewData> {
     }
 }
 
-impl <ViewData: VViewData> VComponentRefResolvedPtr<ViewData> {
+impl <ViewData: VViewData + ?Sized> VComponentRefResolvedPtr<ViewData> {
     pub(super) unsafe fn with_into_mut<R>(self, fun: impl FnOnce(VComponentRefResolved<'_, ViewData>) -> R) -> R {
         fun(VComponentRefResolved {
             parent_contexts: mem::transmute(self.parent_contexts),
@@ -227,7 +227,7 @@ impl TryFrom<String> for VComponentKey {
     }
 }
 
-impl <ViewData: VViewData> Debug for VComponentRef<ViewData> {
+impl <ViewData: VViewData + ?Sized> Debug for VComponentRef<ViewData> {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("VComponentRef")
             .field("path", &self.path)
@@ -235,7 +235,7 @@ impl <ViewData: VViewData> Debug for VComponentRef<ViewData> {
     }
 }
 
-impl <ViewData: VViewData> PartialEq for VComponentRef<ViewData> {
+impl <ViewData: VViewData + ?Sized> PartialEq for VComponentRef<ViewData> {
     fn eq(&self, other: &Self) -> bool {
         self.path == other.path
     }

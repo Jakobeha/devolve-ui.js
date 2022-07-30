@@ -35,7 +35,7 @@ bitflags! {
 pub trait RenderEngine {
     /// View data for the render engine. Different render engines render different views.
     /// For example, an HTML render engine may have view-data enum variants representing HTML elements.
-    type ViewData: VViewData;
+    type ViewData: VViewData + ?Sized;
     /// Representation of the rendered output. e.g. it's a matrix of characters in `TuiRenderEngine`.
     type RenderLayer;
 

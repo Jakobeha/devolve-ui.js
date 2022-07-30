@@ -90,7 +90,7 @@ pub(super) fn _use_effect<
     'a0: 'a,
     Props : Any,
     Destructor: FnOnce(VDestructorContext2<'_, '_, Props, ViewData>) + 'static,
-    ViewData: VViewData + 'static
+    ViewData: VViewData + ?Sized + 'static
 >(
     c: &mut VComponentContext1<'a, 'a0, Props, ViewData>,
     rerun: UseEffectRerun<NoDependencies>,
@@ -104,7 +104,7 @@ pub(super) fn _use_effect_on_create<
     'a0: 'a,
     Props : Any,
     Destructor: FnOnce(VDestructorContext2<'_, '_, Props, ViewData>) + 'static,
-    ViewData: VViewData + 'static
+    ViewData: VViewData + ?Sized + 'static
 >(
     c: &mut VComponentContext1<'a, 'a0, Props, ViewData>,
     effect: impl FnOnce(VEffectContext2<'_, '_, Props, ViewData>) -> Destructor + 'static
@@ -122,7 +122,7 @@ pub(super) fn _use_effect_with_deps<
     Props: Any,
     Dependencies: CollectionOfPartialEqs + 'static,
     Destructor: FnOnce(VDestructorContext2<'_, '_, Props, ViewData>) + 'static,
-    ViewData: VViewData + 'static
+    ViewData: VViewData + ?Sized + 'static
 >(
     c: &mut VComponentContext1<'a, 'a0, Props, ViewData>,
     rerun: UseEffectRerun<Dependencies>,

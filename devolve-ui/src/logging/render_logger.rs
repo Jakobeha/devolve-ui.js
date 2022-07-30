@@ -14,7 +14,7 @@ use crate::component::node::{NodeId, VComponentAndView, VNode};
 use crate::component::path::VComponentKey;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub enum RenderLogEntry<ViewData: VViewData, RenderLayer> {
+pub enum RenderLogEntry<ViewData: VViewData + ?Sized, RenderLayer> {
     StartRendering,
     StopRendering,
     WriteRender(LoggedRenderTree<ViewData, RenderLayer>),
@@ -30,7 +30,7 @@ pub struct LoggedRender<RenderLayer> {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct LoggedRenderView<ViewData: VViewData, RenderLayer> {
+pub struct LoggedRenderView<ViewData: VViewData + ?Sized, RenderLayer> {
     pub view: Box<VView<ViewData>>,
 
     pub component_key: VComponentKey,
@@ -41,18 +41,18 @@ pub struct LoggedRenderView<ViewData: VViewData, RenderLayer> {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub enum LoggedRenderTreeChild<ViewData: VViewData, RenderLayer> {
+pub enum LoggedRenderTreeChild<ViewData: VViewData + ?Sized, RenderLayer> {
     Found(LoggedRenderTree<ViewData, RenderLayer>),
     Lost
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct LoggedRenderTree<ViewData: VViewData, RenderLayer> {
+pub struct LoggedRenderTree<ViewData: VViewData + ?Sized, RenderLayer> {
     pub view: LoggedRenderView<ViewData, RenderLayer>,
     pub children: Vec<LoggedRenderTreeChild<ViewData, RenderLayer>>
 }
 
-pub struct RenderLoggerImpl<ViewData: VViewData, RenderLayer> {
+pub struct RenderLoggerImpl<ViewData: VViewData + ?Sized, RenderLayer> {
     logger: GenericLogger<RenderLogEntry<ViewData, RenderLayer>>,
 
     view_map: HashMap<NodeId, LoggedRenderView<ViewData, RenderLayer>>,
@@ -62,7 +62,7 @@ pub struct RenderLoggerImpl<ViewData: VViewData, RenderLayer> {
 }
 
 pub trait RenderLogger {
-    type ViewData: VViewData;
+    type ViewData: VViewData + ?Sized;
     type RenderLayer;
 
     fn log_start_rendering(&mut self);
@@ -82,7 +82,7 @@ pub trait RenderLogger {
 }
 
 
-impl <ViewData: VViewData + Serialize + Debug + Clone, RenderLayer: Serialize + Debug> RenderLoggerImpl<ViewData, RenderLayer> {
+impl <ViewData: VViewData + ?Sized + Serialize + Debug + Clone, RenderLayer: Serialize + Debug> RenderLoggerImpl<ViewData, RenderLayer> {
     pub(crate) fn try_new(args: &LogStart) -> io::Result<Self> {
         Ok(RenderLoggerImpl {
             logger: GenericLogger::new(args, "renders")?,
@@ -128,7 +128,7 @@ impl <ViewData: VViewData + Serialize + Debug + Clone, RenderLayer: Serialize + 
     }
 }
 
-impl <ViewData: VViewData + Serialize + Debug + Clone, RenderLayer: Serialize + Debug> RenderLogger for RenderLoggerImpl<ViewData, RenderLayer> {
+impl <ViewData: VViewData + ?Sized + Serialize + Debug + Clone, RenderLayer: Serialize + Debug> RenderLogger for RenderLoggerImpl<ViewData, RenderLayer> {
     type ViewData = ViewData;
     type RenderLayer = RenderLayer;
 

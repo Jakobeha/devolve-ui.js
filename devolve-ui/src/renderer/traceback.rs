@@ -18,11 +18,11 @@ use crate::view::view::{VView, VViewData};
 
 #[derive(Derivative)]
 #[derivative(Debug(bound=""), Clone(bound=""))]
-pub struct RenderTraceback<ViewData: VViewData>(Vec<RenderFrame<ViewData>>);
+pub struct RenderTraceback<ViewData: VViewData + ?Sized>(Vec<RenderFrame<ViewData>>);
 
 #[derive(Derivative)]
 #[derivative(Debug(bound=""), Clone(bound=""))]
-struct RenderFrame<ViewData: VViewData> {
+struct RenderFrame<ViewData: VViewData + ?Sized> {
     view: Option<RenderFrameViewData>,
     resolved_bounds: Option<BoundingBox>,
     prev_sibling_rect: Option<Rectangle>,
@@ -35,7 +35,7 @@ struct RenderFrameViewData {
     bounds: Bounds
 }
 
-impl <ViewData: VViewData> RenderTraceback<ViewData> {
+impl <ViewData: VViewData + ?Sized> RenderTraceback<ViewData> {
     pub fn root() -> Self {
         Self(vec![RenderFrame::root()])
     }
@@ -59,7 +59,7 @@ impl <ViewData: VViewData> RenderTraceback<ViewData> {
     }
 }
 
-impl <ViewData: VViewData> RenderFrame<ViewData> {
+impl <ViewData: VViewData + ?Sized> RenderFrame<ViewData> {
     fn root() -> Self {
         RenderFrame {
             view: None,
@@ -89,7 +89,7 @@ impl <ViewData: VViewData> RenderFrame<ViewData> {
     }
 }
 
-impl <ViewData: VViewData> From<&Box<VView<ViewData>>> for RenderFrameViewData {
+impl <ViewData: VViewData + ?Sized> From<&Box<VView<ViewData>>> for RenderFrameViewData {
     fn from(view: &Box<VView<ViewData>>) -> Self {
         RenderFrameViewData {
             id: view.id(),
@@ -98,7 +98,7 @@ impl <ViewData: VViewData> From<&Box<VView<ViewData>>> for RenderFrameViewData {
     }
 }
 
-impl <ViewData: VViewData> Display for RenderTraceback<ViewData> {
+impl <ViewData: VViewData + ?Sized> Display for RenderTraceback<ViewData> {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(f, "  Traceback:\n")?;
         for frame in self.0.iter().rev() {
@@ -108,7 +108,7 @@ impl <ViewData: VViewData> Display for RenderTraceback<ViewData> {
     }
 }
 
-impl <ViewData: VViewData> Display for RenderFrame<ViewData> {
+impl <ViewData: VViewData + ?Sized> Display for RenderFrame<ViewData> {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match &self.view {
             None => write!(f, "{:>8} {:>32}", "null", "null")?,

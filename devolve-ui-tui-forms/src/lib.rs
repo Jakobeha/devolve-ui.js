@@ -19,12 +19,12 @@ use devolve_ui_tui::view_data::attrs::BorderStyle;
 use devolve_ui_tui::view_data::constr::*;
 use devolve_ui_tui::view_data::tui::HasTuiViewData;
 
-make_component!(pub focus_provider, FocusProvider<ViewData: VViewData + Clone + 'static> {
+make_component!(pub focus_provider, FocusProvider<ViewData: VViewData + Clone + 'static> where (ViewData: ?Sized) {
     enable_tab: bool = true,
     _p: PhantomData<ViewData> = PhantomData
 } [content: Box<dyn Fn(VComponentContext1<FocusProvider<ViewData>, ViewData>) -> VNode<ViewData>>]);
 
-make_component!(pub text_field, TextField<Props: Any, ViewData: VViewData + HasTuiViewData> {
+make_component!(pub text_field, TextField<Props: Any, ViewData: VViewData + HasTuiViewData> where (ViewData: ?Sized) {
     initial_value: Cow<'static, str> = "".into(),
     placeholder: Cow<'static, str> = "".into(),
     is_enabled: bool = true,
@@ -40,12 +40,12 @@ pub struct FocusContext {
     pub focused_id: Option<usize>
 }
 
-pub struct LocalFocus<ViewData: VViewData> {
+pub struct LocalFocus<ViewData: VViewData + ?Sized> {
     focus_context: ProvidedState<FocusContext, ViewData>,
     my_id: State<usize, ViewData>
 }
 
-impl <ViewData: VViewData> LocalFocus<ViewData> {
+impl <ViewData: VViewData + ?Sized> LocalFocus<ViewData> {
     fn is_focused<'a>(&self, c: &mut impl VContext<'a, ViewData=ViewData>) -> bool {
         self.focus_context.get(c).focused_id == Some(*self.my_id.get(c))
     }
@@ -57,7 +57,7 @@ impl <ViewData: VViewData> LocalFocus<ViewData> {
 
 static FOCUS_PROVIDER_CONTEXT: ProviderIdSource<FocusContext> = ProviderIdSource::new();
 
-pub fn focus_provider<ViewData: VViewData + Clone + 'static>((mut c, FocusProvider {
+pub fn focus_provider<ViewData: VViewData + ?Sized + Clone + 'static>((mut c, FocusProvider {
     content,
     enable_tab,
     _p
@@ -91,7 +91,7 @@ pub fn focus_provider<ViewData: VViewData + Clone + 'static>((mut c, FocusProvid
     content(c)
 }
 
-pub fn use_focus<Props: Any, ViewData: VViewData + 'static>(c: &mut VComponentContext1<Props, ViewData>) -> LocalFocus<ViewData> {
+pub fn use_focus<Props: Any, ViewData: VViewData + ?Sized + 'static>(c: &mut VComponentContext1<Props, ViewData>) -> LocalFocus<ViewData> {
     let focus_context = c.use_consume(&FOCUS_PROVIDER_CONTEXT);
     let my_id = c.use_state(|c| {
         let is_first = focus_context.get(c).focusable_ids.is_empty();

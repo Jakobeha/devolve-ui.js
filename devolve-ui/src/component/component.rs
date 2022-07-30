@@ -42,7 +42,7 @@ use crate::view::view::{VView, VViewData};
 
 // region VComponent and sub-structures
 /// You don't usually use this directly
-pub struct VComponent<ViewData: VViewData> {
+pub struct VComponent<ViewData: VViewData + ?Sized> {
     /// Part of component which doesn't depend on `Props`.
     pub head: VComponentHead<ViewData>,
     /// Part of component with data whose size depends on `Props`, so it's runtime-sized.
@@ -51,7 +51,7 @@ pub struct VComponent<ViewData: VViewData> {
 
 /// Part of component which doesn't depend on `Props`.
 /// You don't usually call methods on this directly but instead pass it to hooks and other constructors.
-pub struct VComponentHead<ViewData: VViewData> {
+pub struct VComponentHead<ViewData: VViewData + ?Sized> {
     /* readonly pub */  id: NodeId,
     /* readonly pub */  path: VComponentPath,
 
@@ -86,7 +86,7 @@ pub type VComponentContexts<'a> = HashMapWithAssocMutStack<'a, UntypedProviderId
 
 /// Part of the component with data whose size depends on `Props`, so it's a runtime-sized trait object.
 pub(super) trait VComponentConstruct: Debug {
-    type ViewData: VViewData;
+    type ViewData: VViewData + ?Sized;
 
     fn reuse(self: Box<Self>, reconstruct: Box<dyn VComponentReconstruct<ViewData=Self::ViewData>>) -> Box<dyn VComponentConstruct<ViewData=Self::ViewData>>;
 
@@ -103,37 +103,37 @@ pub(super) trait VComponentConstruct: Debug {
 }
 
 pub(super) trait VComponentReconstruct {
-    type ViewData: VViewData;
+    type ViewData: VViewData + ?Sized;
 
     unsafe fn _complete(self: Box<Self>, props_id: TypeId, s: *mut ()) -> Box<dyn VComponentConstruct<ViewData=Self::ViewData>>;
 }
 
 /// Part of the component with data whose size depends on `Props`. This is the compile-time sized implementation
 /// which requires a specific `Props`.
-struct VComponentConstructImpl<Props: Any, ViewData: VViewData, F: Fn(VComponentContext2<'_, '_, Props, ViewData>) -> VNode<ViewData> + 'static> {
+struct VComponentConstructImpl<Props: Any, ViewData: VViewData + ?Sized, F: Fn(VComponentContext2<'_, '_, Props, ViewData>) -> VNode<ViewData> + 'static> {
     props: Props,
     construct: F,
     s: VComponentConstructState<Props, ViewData>
 }
 
-struct VComponentConstructState<Props: Any, ViewData: VViewData> {
+struct VComponentConstructState<Props: Any, ViewData: VViewData + ?Sized> {
     pub local_contexts: VComponentLocalContexts,
     pub pending_updates: ContextPendingUpdates,
     pub effects: VComponentEffects<Props, ViewData>,
     pub destructors: VComponentDestructors<Props, ViewData>
 }
 
-struct VComponentReconstructImpl<Props: Any, ViewData: VViewData, F: Fn(VComponentContext2<'_, '_, Props, ViewData>) -> VNode<ViewData> + 'static> {
+struct VComponentReconstructImpl<Props: Any, ViewData: VViewData + ?Sized, F: Fn(VComponentContext2<'_, '_, Props, ViewData>) -> VNode<ViewData> + 'static> {
     props: Props,
     construct: F,
     phantom: PhantomData<ViewData>
 }
 
-pub(crate) struct VComponentEffects<Props: Any, ViewData: VViewData> {
+pub(crate) struct VComponentEffects<Props: Any, ViewData: VViewData + ?Sized> {
     pub effects: Vec<Box<dyn Fn(VEffectContext2<'_, '_, Props, ViewData>) -> ()>>,
 }
 
-pub(crate) struct VComponentDestructors<Props: Any, ViewData: VViewData> {
+pub(crate) struct VComponentDestructors<Props: Any, ViewData: VViewData + ?Sized> {
     pub update_destructors: Vec<Box<dyn FnOnce(VDestructorContext2<'_, '_, Props, ViewData>) -> ()>>,
     pub next_update_destructors: Vec<Box<dyn FnOnce(VDestructorContext2<'_, '_, Props, ViewData>) -> ()>>,
     pub permanent_destructors: Vec<Box<dyn FnOnce(VDestructorContext2<'_, '_, Props, ViewData>) -> ()>>
@@ -141,7 +141,7 @@ pub(crate) struct VComponentDestructors<Props: Any, ViewData: VViewData> {
 // endregion
 
 // region impls
-impl <ViewData: VViewData + 'static> VComponent<ViewData> {
+impl <ViewData: VViewData + ?Sized + 'static> VComponent<ViewData> {
     /// Create a new component *or* update and reuse the existing component, if it has the same parent or key.
     pub(crate) fn new<Props: 'static, F: Fn(VComponentContext2<'_, '_, Props, ViewData>) -> VNode<ViewData> + 'static>(
         parent: VParent<'_, ViewData>,
@@ -150,7 +150,7 @@ impl <ViewData: VViewData + 'static> VComponent<ViewData> {
         props: Props,
         construct: F
     ) -> Box<VComponent<ViewData>> {
-        enum Action<'a, ViewData_: VViewData, Props_, F_> {
+        enum Action<'a, ViewData_: VViewData + ?Sized, Props_, F_> {
             Reuse(Box<VComponent<ViewData_>>),
             Create(VParent<'a, ViewData_>, Props_, F_)
         }
@@ -235,7 +235,7 @@ impl <ViewData: VViewData + 'static> VComponent<ViewData> {
     }
 }
 
-impl <ViewData: VViewData> VComponent<ViewData> {
+impl <ViewData: VViewData + ?Sized> VComponent<ViewData> {
     /// Run pending updates on this component.
     /// If there are any pending updates, updates will also be run on children.
     /// Otherwise they won't but also this should never be called if there are no pending updates.
@@ -383,7 +383,7 @@ impl <ViewData: VViewData> VComponent<ViewData> {
     }
 }
 
-impl <ViewData: VViewData> VComponentHead<ViewData> {
+impl <ViewData: VViewData + ?Sized> VComponentHead<ViewData> {
     /// Mark that the component has a pending update.
     /// `details` is used for the debug message if we detect an infinite loop.
     pub(crate) fn pending_update(&mut self, details: UpdateDetails) {
@@ -504,7 +504,7 @@ impl <ViewData: VViewData> VComponentHead<ViewData> {
     }
 }
 
-impl <ViewData: VViewData> dyn VComponentConstruct<ViewData=ViewData> {
+impl <ViewData: VViewData + ?Sized> dyn VComponentConstruct<ViewData=ViewData> {
     /// Runtime-cast `props` to whatever we want, but it panics if they're not the same type.
     #[allow(clippy::needless_lifetimes)]
     pub(super) fn local_contexts_and_cast_props<'a, Props: Any>(&'a mut self) -> (&'a mut VComponentLocalContexts, &'a mut ContextPendingUpdates, &'a Props) {
@@ -514,7 +514,7 @@ impl <ViewData: VViewData> dyn VComponentConstruct<ViewData=ViewData> {
     }
 }
 
-impl <Props: Any, ViewData: VViewData, F: Fn(VComponentContext2<'_, '_, Props, ViewData>) -> VNode<ViewData> + 'static> VComponentConstruct for VComponentConstructImpl<Props, ViewData, F> {
+impl <Props: Any, ViewData: VViewData + ?Sized, F: Fn(VComponentContext2<'_, '_, Props, ViewData>) -> VNode<ViewData> + 'static> VComponentConstruct for VComponentConstructImpl<Props, ViewData, F> {
     type ViewData = ViewData;
 
     fn reuse(self: Box<Self>, reconstruct: Box<dyn VComponentReconstruct<ViewData=ViewData>>) -> Box<dyn VComponentConstruct<ViewData=ViewData>> {
@@ -597,7 +597,7 @@ impl <Props: Any, ViewData: VViewData, F: Fn(VComponentContext2<'_, '_, Props, V
     }
 }
 
-impl <ViewData: VViewData> dyn VComponentReconstruct<ViewData=ViewData> {
+impl <ViewData: VViewData + ?Sized> dyn VComponentReconstruct<ViewData=ViewData> {
     fn complete<Props: Any>(self: Box<Self>, s: VComponentConstructState<Props, ViewData>) -> Box<dyn VComponentConstruct<ViewData=ViewData>> {
         let mut s = MaybeUninit::new(s);
         let s = &mut s as *mut _ as *mut ();
@@ -605,7 +605,7 @@ impl <ViewData: VViewData> dyn VComponentReconstruct<ViewData=ViewData> {
     }
 }
 
-impl <Props: Any, ViewData: VViewData + 'static, F: Fn(VComponentContext2<'_, '_, Props, ViewData>) -> VNode<ViewData> + 'static> VComponentReconstruct for VComponentReconstructImpl<Props, ViewData, F> {
+impl <Props: Any, ViewData: VViewData + ?Sized + 'static, F: Fn(VComponentContext2<'_, '_, Props, ViewData>) -> VNode<ViewData> + 'static> VComponentReconstruct for VComponentReconstructImpl<Props, ViewData, F> {
     type ViewData = ViewData;
 
     unsafe fn _complete(self: Box<Self>, props_id: TypeId, s: *mut ()) -> Box<dyn VComponentConstruct<ViewData=ViewData>> {
@@ -622,7 +622,7 @@ impl <Props: Any, ViewData: VViewData + 'static, F: Fn(VComponentContext2<'_, '_
     }
 }
 
-impl <Props: Any, ViewData: VViewData> VComponentConstructState<Props, ViewData> {
+impl <Props: Any, ViewData: VViewData + ?Sized> VComponentConstructState<Props, ViewData> {
     pub fn new(path: VComponentPath) -> Self {
         VComponentConstructState {
             local_contexts: HashMap::new(),
@@ -641,7 +641,7 @@ impl ContextPendingUpdates {
         }
     }
 
-    pub(crate) fn pending_update<ViewData: VViewData>(&mut self, details: UpdateDetails, renderer: Weak<dyn VComponentRoot<ViewData=ViewData>>) {
+    pub(crate) fn pending_update<ViewData: VViewData + ?Sized>(&mut self, details: UpdateDetails, renderer: Weak<dyn VComponentRoot<ViewData=ViewData>>) {
         if let Some(update_details) = &mut self.update_details { // is_being_updated
             update_details.push(details);
         } else {
@@ -660,7 +660,7 @@ impl ContextPendingUpdates {
     }
 }
 
-impl <Props: Any, ViewData: VViewData> VComponentEffects<Props, ViewData> {
+impl <Props: Any, ViewData: VViewData + ?Sized> VComponentEffects<Props, ViewData> {
     pub fn new() -> Self {
         Self {
             effects: Vec::new()
@@ -668,7 +668,7 @@ impl <Props: Any, ViewData: VViewData> VComponentEffects<Props, ViewData> {
     }
 }
 
-impl <Props: Any, ViewData: VViewData> VComponentDestructors<Props, ViewData> {
+impl <Props: Any, ViewData: VViewData + ?Sized> VComponentDestructors<Props, ViewData> {
     pub fn new() -> Self {
         Self {
             update_destructors: Vec::new(),
@@ -680,7 +680,7 @@ impl <Props: Any, ViewData: VViewData> VComponentDestructors<Props, ViewData> {
 // endregion
 
 // region boilerplate Debug impls
-impl <ViewData: VViewData + Debug> Debug for VComponent<ViewData> {
+impl <ViewData: VViewData + ?Sized + Debug> Debug for VComponent<ViewData> {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("VComponent")
             .field("head", &self.head)
@@ -689,7 +689,7 @@ impl <ViewData: VViewData + Debug> Debug for VComponent<ViewData> {
     }
 }
 
-impl <ViewData: VViewData + Debug> Debug for VComponentHead<ViewData> {
+impl <ViewData: VViewData + ?Sized + Debug> Debug for VComponentHead<ViewData> {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("VComponentHead")
             .field("id", &self.id)
@@ -703,7 +703,7 @@ impl <ViewData: VViewData + Debug> Debug for VComponentHead<ViewData> {
     }
 }
 
-impl <Props: Any, ViewData: VViewData, F: Fn(VComponentContext2<'_, '_, Props, ViewData>) -> VNode<ViewData> + 'static> Debug for VComponentConstructImpl<Props, ViewData, F> {
+impl <Props: Any, ViewData: VViewData + ?Sized, F: Fn(VComponentContext2<'_, '_, Props, ViewData>) -> VNode<ViewData> + 'static> Debug for VComponentConstructImpl<Props, ViewData, F> {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("VComponentConstructImpl")
             .field("s", &self.s)
@@ -711,7 +711,7 @@ impl <Props: Any, ViewData: VViewData, F: Fn(VComponentContext2<'_, '_, Props, V
     }
 }
 
-impl <Props: Any, ViewData: VViewData> Debug for VComponentConstructState<Props, ViewData> {
+impl <Props: Any, ViewData: VViewData + ?Sized> Debug for VComponentConstructState<Props, ViewData> {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("VComponentConstructImpl")
             .field("#contexts", &self.local_contexts.len())
@@ -721,7 +721,7 @@ impl <Props: Any, ViewData: VViewData> Debug for VComponentConstructState<Props,
     }
 }
 
-impl <Props: Any, ViewData: VViewData> Debug for VComponentEffects<Props, ViewData> {
+impl <Props: Any, ViewData: VViewData + ?Sized> Debug for VComponentEffects<Props, ViewData> {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("VComponentEffects")
             .field("#effects", &self.effects.len())
@@ -729,7 +729,7 @@ impl <Props: Any, ViewData: VViewData> Debug for VComponentEffects<Props, ViewDa
     }
 }
 
-impl <Props: Any, ViewData: VViewData> Debug for VComponentDestructors<Props, ViewData> {
+impl <Props: Any, ViewData: VViewData + ?Sized> Debug for VComponentDestructors<Props, ViewData> {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("VComponentDestructors")
             .field("#update_destructors", &self.update_destructors.len())

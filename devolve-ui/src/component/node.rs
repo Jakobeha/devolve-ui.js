@@ -23,13 +23,13 @@ impl Display for NodeId {
 
 #[derive(Debug, Clone)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-pub enum VNode<ViewData: VViewData> {
+pub enum VNode<ViewData: VViewData + ?Sized> {
     Component { id: NodeId, key: VComponentKey },
     View(Box<VView<ViewData>>)
 }
 
 #[derive(Debug)]
-enum VNodeResolvedHead<'c, 'v, ViewData: VViewData> {
+enum VNodeResolvedHead<'c, 'v, ViewData: VViewData + ?Sized> {
     Component(&'c VComponentHead<ViewData>),
     View(&'v Box<VView<ViewData>>)
 }
@@ -56,7 +56,7 @@ impl NodeId {
     }
 }
 
-impl <ViewData: VViewData> VNode<ViewData> {
+impl <ViewData: VViewData + ?Sized> VNode<ViewData> {
     pub fn id(&self) -> NodeId {
         match self {
             VNode::Component { id, key: _key} => *id,

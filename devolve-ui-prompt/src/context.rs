@@ -21,7 +21,7 @@ use crate::resume::{PromptResume, RawPromptResume};
 ///
 /// **Note:** this type may exist longer than the actual [VPrompt] it was created from. Once the [VPrompt] is destroyed,
 /// the context will simply block forever the next time you try to yield anything.
-pub struct VPromptContext<Props: Any, ViewData: VViewData>(*mut PromptContextData<Props, ViewData>);
+pub struct VPromptContext<Props: Any, ViewData: VViewData + ?Sized>(*mut PromptContextData<Props, ViewData>);
 
 pub type VPromptComponentContext<'a, 'a0, Props, ViewData, R> = (VComponentContext1<'a, 'a0, Props, ViewData>, PromptResume<'a, R>, &'a Props);
 pub type VPromptContext2<Props, ViewData, PromptProps> = (VPromptContext<Props, ViewData>, PromptProps);
@@ -29,7 +29,7 @@ type VRawPromptComponentContext<'a, 'a0, Props, ViewData> = (VComponentContext1<
 
 pub(super) struct PromptContextData<
     Props: Any,
-    ViewData: VViewData
+    ViewData: VViewData + ?Sized
 > {
     pub(super) current: Option<Box<dyn FnMut(VRawPromptComponentContext<'_, '_, Props, ViewData>) -> VNode<ViewData>>>,
     pub(super) current_ref: Option<VComponentRef<ViewData>>,
@@ -43,7 +43,7 @@ enum WhichPartOfThePromptContextDiedFirst {
     ContextPtrWrapper
 }
 
-impl<Props: Any, ViewData: VViewData> PromptContextData<Props, ViewData> {
+impl<Props: Any, ViewData: VViewData + ?Sized> PromptContextData<Props, ViewData> {
     pub fn yield_<'a, R>(
         self: Pin<&'a mut Self>,
         mut render: impl FnMut(VPromptComponentContext<'_, '_, Props, ViewData, R>) -> VNode<ViewData> + 'static
@@ -81,10 +81,10 @@ impl<Props: Any, ViewData: VViewData> PromptContextData<Props, ViewData> {
 }
 
 // Absolutely nothing here is thread-safe
-impl<Props: Any, ViewData: VViewData> !Sync for PromptContextData<Props, ViewData> {}
-impl<Props: Any, ViewData: VViewData> !Send for PromptContextData<Props, ViewData> {}
+impl<Props: Any, ViewData: VViewData + ?Sized> !Sync for PromptContextData<Props, ViewData> {}
+impl<Props: Any, ViewData: VViewData + ?Sized> !Send for PromptContextData<Props, ViewData> {}
 
-impl<Props: Any, ViewData: VViewData> VPromptContext<Props, ViewData> {
+impl<Props: Any, ViewData: VViewData + ?Sized> VPromptContext<Props, ViewData> {
     pub(super) fn new(context_data: *mut PromptContextData<Props, ViewData>) -> Self {
         VPromptContext(context_data)
     }
@@ -167,7 +167,7 @@ thread_local! {
     static DEAD_PROMPT_CONTEXTS: RefCell<HashMap<*const (), WhichPartOfThePromptContextDiedFirst>> = RefCell::new(HashMap::new());
 }
 
-impl<Props: Any, ViewData: VViewData> Drop for VPromptContext<Props, ViewData> {
+impl<Props: Any, ViewData: VViewData + ?Sized> Drop for VPromptContext<Props, ViewData> {
     fn drop(&mut self) {
         if !self.is_dead() {
             let data_ptr = self.data_ptr();
@@ -188,7 +188,7 @@ impl<Props: Any, ViewData: VViewData> Drop for VPromptContext<Props, ViewData> {
     }
 }
 
-impl<Props: Any, ViewData: VViewData> Drop for PromptContextData<Props, ViewData> {
+impl<Props: Any, ViewData: VViewData + ?Sized> Drop for PromptContextData<Props, ViewData> {
     fn drop(&mut self) {
         let this_ptr = self as *mut _ as *const _ as *const ();
         DEAD_PROMPT_CONTEXTS.with_borrow_mut(|map| {
@@ -207,7 +207,7 @@ impl<Props: Any, ViewData: VViewData> Drop for PromptContextData<Props, ViewData
     }
 }
 
-impl<Props: Any, ViewData: VViewData> Debug for PromptContextData<Props, ViewData> {
+impl<Props: Any, ViewData: VViewData + ?Sized> Debug for PromptContextData<Props, ViewData> {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("PromptPinned")
             .field("current.is_some()", &self.current.is_some())

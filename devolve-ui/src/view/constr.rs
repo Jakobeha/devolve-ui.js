@@ -152,7 +152,7 @@ pub macro _make_view(
         }
     )?
 
-    $vis fn $name<ViewData: VViewData + From<$ViewData>>(
+    $vis fn $name<ViewData: VViewData + ?Sized + From<$ViewData>>(
         view_args: VViewConstrArgs
         $( ,
             #[allow(unused_variables)]

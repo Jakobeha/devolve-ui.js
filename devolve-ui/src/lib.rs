@@ -11,6 +11,8 @@
 #![feature(decl_macro)]
 #![feature(negative_impls)]
 #![feature(downcast_unchecked)]
+#![feature(new_uninit)]
+#![feature(ptr_metadata)]
 #![cfg_attr(not(version("1.63")), feature(explicit_generic_args_with_impl_trait))]
 #![cfg_attr(feature = "backtrace", feature(backtrace))]
 

@@ -23,7 +23,7 @@ use crate::hooks::state_internal::NonUpdatingStateHook;
 use crate::renderer::listeners::RendererListenerId;
 use crate::view::view::VViewData;
 
-fn _use_event_listener<'a, 'a0: 'a, Props: Any, Event: 'static, ViewData: VViewData + 'static>(
+fn _use_event_listener<'a, 'a0: 'a, Props: Any, Event: 'static, ViewData: VViewData + ?Sized + 'static>(
     c: &mut VComponentContext1<'a, 'a0, Props, ViewData>,
     rerun: UseEffectRerun<NoDependencies>,
     register_listener: impl Fn(VEffectContext2<'_, '_, Props, ViewData>, Rc<dyn VComponentRoot<ViewData=ViewData>>) -> RendererListenerId<Event> + 'static,
@@ -55,7 +55,7 @@ fn _use_event_listener<'a, 'a0: 'a, Props: Any, Event: 'static, ViewData: VViewD
 /// Register a function which will be called every time there is a tick event.
 /// The duration is subject to delta-time diff, so use absolute intervals if you want precise time.
 #[cfg(feature = "time")]
-fn _use_tick_listener2<'a, 'a0: 'a, Props: Any, ViewData: VViewData + 'static>(
+fn _use_tick_listener2<'a, 'a0: 'a, Props: Any, ViewData: VViewData + ?Sized + 'static>(
     c: &mut VComponentContext1<'a, 'a0, Props, ViewData>,
     rerun: UseEffectRerun<NoDependencies>,
     listener: impl Fn(VPlainContext2<'_, '_, Props, ViewData>, &Duration) + 'static
@@ -78,7 +78,7 @@ fn _use_tick_listener2<'a, 'a0: 'a, Props: Any, ViewData: VViewData + 'static>(
 /// Register a function which will be called every time there is a tick event.
 /// The duration is subject to delta-time diff, so use absolute intervals if you want precise time.
 #[cfg(feature = "time")]
-pub(super) fn _use_tick_listener<'a, 'a0: 'a, Props: Any, ViewData: VViewData + 'static>(
+pub(super) fn _use_tick_listener<'a, 'a0: 'a, Props: Any, ViewData: VViewData + ?Sized + 'static>(
     c: &mut VComponentContext1<'a, 'a0, Props, ViewData>,
     listener: impl Fn(VPlainContext2<'_, '_, Props, ViewData>, &Duration) + 'static
 ) {
@@ -88,7 +88,7 @@ pub(super) fn _use_tick_listener<'a, 'a0: 'a, Props: Any, ViewData: VViewData + 
 /// Register a function which will be called every time there is a tick event.
 /// The duration is subject to delta-time diff, so use absolute intervals if you want precise time.
 #[cfg(feature = "time")]
-pub(super) fn _use_tick_listener_when<'a, 'a0: 'a, Props: Any, ViewData: VViewData + 'static>(
+pub(super) fn _use_tick_listener_when<'a, 'a0: 'a, Props: Any, ViewData: VViewData + ?Sized + 'static>(
     c: &mut VComponentContext1<'a, 'a0, Props, ViewData>,
     predicate: bool,
     listener: impl Fn(VPlainContext2<'_, '_, Props, ViewData>, &Duration) + 'static
@@ -98,7 +98,7 @@ pub(super) fn _use_tick_listener_when<'a, 'a0: 'a, Props: Any, ViewData: VViewDa
 
 /// Register a function which will be called every time there is a key event (see `KeyEvent` for event types).
 #[cfg(feature = "input")]
-fn _use_key_listener2<'a, 'a0: 'a, Props: Any, ViewData: VViewData + 'static>(
+fn _use_key_listener2<'a, 'a0: 'a, Props: Any, ViewData: VViewData + ?Sized + 'static>(
     c: &mut VComponentContext1<'a, 'a0, Props, ViewData>,
     rerun: UseEffectRerun<NoDependencies>,
     listener: impl Fn(VPlainContext2<'_, '_, Props, ViewData>, &KeyEvent) + 'static
@@ -120,7 +120,7 @@ fn _use_key_listener2<'a, 'a0: 'a, Props: Any, ViewData: VViewData + 'static>(
 
 /// Register a function which will be called every time there is a key event (see `KeyEvent` for event types).
 #[cfg(feature = "input")]
-pub(super) fn _use_key_listener<'a, 'a0: 'a, Props: Any, ViewData: VViewData + 'static>(
+pub(super) fn _use_key_listener<'a, 'a0: 'a, Props: Any, ViewData: VViewData + ?Sized + 'static>(
     c: &mut VComponentContext1<'a, 'a0, Props, ViewData>,
     listener: impl Fn(VPlainContext2<'_, '_, Props, ViewData>, &KeyEvent) + 'static
 ) {
@@ -129,7 +129,7 @@ pub(super) fn _use_key_listener<'a, 'a0: 'a, Props: Any, ViewData: VViewData + '
 
 /// Register a function which will be called every time there is a key event (see `KeyEvent` for event types).
 #[cfg(feature = "input")]
-pub(super) fn _use_key_listener_when<'a, 'a0: 'a, Props: Any, ViewData: VViewData + 'static>(
+pub(super) fn _use_key_listener_when<'a, 'a0: 'a, Props: Any, ViewData: VViewData + ?Sized + 'static>(
     c: &mut VComponentContext1<'a, 'a0, Props, ViewData>,
     predicate: bool,
     listener: impl Fn(VPlainContext2<'_, '_, Props, ViewData>, &KeyEvent) + 'static
@@ -139,7 +139,7 @@ pub(super) fn _use_key_listener_when<'a, 'a0: 'a, Props: Any, ViewData: VViewDat
 
 /// Register a function which will be called every time there is a mouse event (see `MouseEvent` for event types).
 #[cfg(feature = "input")]
-fn _use_mouse_listener2<'a, 'a0: 'a, Props: Any, ViewData: VViewData + 'static>(
+fn _use_mouse_listener2<'a, 'a0: 'a, Props: Any, ViewData: VViewData + ?Sized + 'static>(
     c: &mut VComponentContext1<'a, 'a0, Props, ViewData>,
     rerun: UseEffectRerun<NoDependencies>,
     listener: impl Fn(VPlainContext2<'_, '_, Props, ViewData>, &MouseEvent) + 'static
@@ -161,7 +161,7 @@ fn _use_mouse_listener2<'a, 'a0: 'a, Props: Any, ViewData: VViewData + 'static>(
 
 /// Register a function which will be called every time there is a mouse event (see `MouseEvent` for event types).
 #[cfg(feature = "input")]
-pub(super) fn _use_mouse_listener<'a, 'a0: 'a, Props: Any, ViewData: VViewData + 'static>(
+pub(super) fn _use_mouse_listener<'a, 'a0: 'a, Props: Any, ViewData: VViewData + ?Sized + 'static>(
     c: &mut VComponentContext1<'a, 'a0, Props, ViewData>,
     listener: impl Fn(VPlainContext2<'_, '_, Props, ViewData>, &MouseEvent) + 'static
 ) {
@@ -170,7 +170,7 @@ pub(super) fn _use_mouse_listener<'a, 'a0: 'a, Props: Any, ViewData: VViewData +
 
 /// Register a function which will be called every time there is a mouse event (see `MouseEvent` for event types).
 #[cfg(feature = "input")]
-pub(super) fn _use_mouse_listener_when<'a, 'a0: 'a, Props: Any, ViewData: VViewData + 'static>(
+pub(super) fn _use_mouse_listener_when<'a, 'a0: 'a, Props: Any, ViewData: VViewData + ?Sized + 'static>(
     c: &mut VComponentContext1<'a, 'a0, Props, ViewData>,
     predicate: bool,
     listener: impl Fn(VPlainContext2<'_, '_, Props, ViewData>, &MouseEvent) + 'static
@@ -180,7 +180,7 @@ pub(super) fn _use_mouse_listener_when<'a, 'a0: 'a, Props: Any, ViewData: VViewD
 
 /// Register a function which will be called every time there is a resize (window or column) event (see `ResizeEvent` for event types).
 #[cfg(feature = "input")]
-fn _use_resize_listener2<'a, 'a0: 'a, Props: Any, ViewData: VViewData + 'static>(
+fn _use_resize_listener2<'a, 'a0: 'a, Props: Any, ViewData: VViewData + ?Sized + 'static>(
     c: &mut VComponentContext1<'a, 'a0, Props, ViewData>,
     rerun: UseEffectRerun<NoDependencies>,
     listener: impl Fn(VPlainContext2<'_, '_, Props, ViewData>, &ResizeEvent) + 'static
@@ -203,7 +203,7 @@ fn _use_resize_listener2<'a, 'a0: 'a, Props: Any, ViewData: VViewData + 'static>
 
 /// Register a function which will be called every time there is a resize (window or column) event (see `ResizeEvent` for event types).
 #[cfg(feature = "input")]
-pub(super) fn _use_resize_listener<'a, 'a0: 'a, Props: Any, ViewData: VViewData + 'static>(
+pub(super) fn _use_resize_listener<'a, 'a0: 'a, Props: Any, ViewData: VViewData + ?Sized + 'static>(
     c: &mut VComponentContext1<'a, 'a0, Props, ViewData>,
     listener: impl Fn(VPlainContext2<'_, '_, Props, ViewData>, &ResizeEvent) + 'static
 ) {
@@ -212,7 +212,7 @@ pub(super) fn _use_resize_listener<'a, 'a0: 'a, Props: Any, ViewData: VViewData 
 
 /// Register a function which will be called every time there is a resize (window or column) event (see `ResizeEvent` for event types).
 #[cfg(feature = "input")]
-pub(super) fn _use_resize_listener_when<'a, 'a0: 'a, Props: Any, ViewData: VViewData + 'static>(
+pub(super) fn _use_resize_listener_when<'a, 'a0: 'a, Props: Any, ViewData: VViewData + ?Sized + 'static>(
     c: &mut VComponentContext1<'a, 'a0, Props, ViewData>,
     predicate: bool,
     listener: impl Fn(VPlainContext2<'_, '_, Props, ViewData>, &ResizeEvent) + 'static
@@ -230,7 +230,7 @@ pub enum CallFirst {
 /// Note that the function can't be called exactly on the interval because the ticks may not line up,
 /// but it will be called as soon as possible when or after the tick and will not drift.
 #[cfg(feature = "time")]
-pub(super) fn _use_interval<'a, 'a0: 'a, Props: Any, ViewData: VViewData + 'static>(
+pub(super) fn _use_interval<'a, 'a0: 'a, Props: Any, ViewData: VViewData + ?Sized + 'static>(
     c: &mut VComponentContext1<'a, 'a0, Props, ViewData>,
     interval: Duration,
     call_first: CallFirst,
@@ -263,7 +263,7 @@ pub(super) fn _use_interval<'a, 'a0: 'a, Props: Any, ViewData: VViewData + 'stat
 /// Note that the function can't be called exactly on the interval because the ticks may not line up,
 /// but it will be called as soon as possible when or after the tick.
 #[cfg(feature = "time")]
-pub(super) fn _use_delay<'a, 'a0: 'a, Props: Any, ViewData: VViewData + 'static>(
+pub(super) fn _use_delay<'a, 'a0: 'a, Props: Any, ViewData: VViewData + ?Sized + 'static>(
     c: &mut VComponentContext1<'a, 'a0, Props, ViewData>,
     delay: Duration,
     listener: impl FnOnce(VPlainContext2<'_, '_, Props, ViewData>) + 'static

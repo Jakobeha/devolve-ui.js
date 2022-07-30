@@ -31,6 +31,7 @@ cargo-args = ["-Zunstable-options", "-Zrustdoc-scrape-examples=examples"]
 
 [dependencies]
 devolve-ui-derive = { path = "../devolve-ui-derive" }
+dyn_struct2 = { path = "../dyn_struct" }
 derivative = "2.2.0"
 arrayvec = "0.7.2"
 replace_with = "0.1.7"

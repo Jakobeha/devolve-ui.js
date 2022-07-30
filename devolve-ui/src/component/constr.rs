@@ -17,7 +17,7 @@ use crate::view::view::VViewData;
 pub fn make_component<
     'a,
     'a0: 'a,
-    ViewData: VViewData + 'static,
+    ViewData: VViewData + ?Sized + 'static,
     Str: TryInto<VComponentKey>,
     Props: 'static,
     Context: VComponentContext<'a, 'a0, ViewData=ViewData>,

@@ -18,7 +18,7 @@ use crate::renderer::stale_data::{NeedsUpdateFlag, NeedsUpdateNotifier};
 use crate::view::view::VViewData;
 
 pub(crate) trait VComponentRoot {
-    type ViewData: VViewData;
+    type ViewData: VViewData + ?Sized;
 
     /// Marks the given path needs to be updated
     fn queue_needs_update(self: Rc<Self>, path: &VComponentPath, details: UpdateDetails);
@@ -60,7 +60,7 @@ pub(crate) trait VComponentRoot {
     fn _with_update_logger(self: Rc<Self>) -> *mut Option<UpdateLogger<Self::ViewData>>;
 }
 
-impl <ViewData: VViewData> dyn VComponentRoot<ViewData = ViewData> {
+impl <ViewData: VViewData + ?Sized> dyn VComponentRoot<ViewData = ViewData> {
     /// Do something with the component at the given path. It will be called with `None` if there is
     /// no component at the given path.
     pub fn with_component(self: Rc<Self>, path: &VComponentPath, fun: impl FnOnce(Option<VComponentRefResolved<'_, ViewData>>)) {

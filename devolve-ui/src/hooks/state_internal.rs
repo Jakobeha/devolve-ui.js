@@ -10,22 +10,22 @@ use crate::component::context::{VComponentContext, VContext, VContextIndex};
 use crate::view::view::VViewData;
 
 #[derive(Debug)]
-pub struct NonUpdatingState<T: Any, ViewData: VViewData> {
+pub struct NonUpdatingState<T: Any, ViewData: VViewData + ?Sized> {
     pub(super) index: usize,
     phantom: PhantomData<(T, ViewData)>
 }
 
-pub trait NonUpdatingStateHook<'a, 'a0: 'a, ViewData: VViewData + 'a> {
+pub trait NonUpdatingStateHook<'a, 'a0: 'a, ViewData: VViewData + ?Sized + 'a> {
     fn use_non_updating_state<T: Any>(&mut self, get_initial: impl FnOnce(&mut Self) -> T) -> NonUpdatingState<T, ViewData>;
 }
 
-impl <'a, 'a0: 'a, ViewData: VViewData + 'a, Context: VComponentContext<'a, 'a0, ViewData=ViewData>> NonUpdatingStateHook<'a, 'a0, ViewData> for Context {
+impl <'a, 'a0: 'a, ViewData: VViewData + ?Sized + 'a, Context: VComponentContext<'a, 'a0, ViewData=ViewData>> NonUpdatingStateHook<'a, 'a0, ViewData> for Context {
     fn use_non_updating_state<T: Any>(&mut self, get_initial: impl FnOnce(&mut Self) -> T) -> NonUpdatingState<T, ViewData> {
         _use_non_updating_state(self, get_initial)
     }
 }
 
-fn _use_non_updating_state<'a, 'a0: 'a, T: Any, ViewData: VViewData + 'a, Ctx: VComponentContext<'a, 'a0, ViewData=ViewData>>(
+fn _use_non_updating_state<'a, 'a0: 'a, T: Any, ViewData: VViewData + ?Sized + 'a, Ctx: VComponentContext<'a, 'a0, ViewData=ViewData>>(
     c: &mut Ctx,
     get_initial: impl FnOnce(&mut Ctx) -> T
 ) -> NonUpdatingState<T, ViewData> {
@@ -50,7 +50,7 @@ fn _use_non_updating_state<'a, 'a0: 'a, T: Any, ViewData: VViewData + 'a, Ctx: V
     }
 }
 
-impl <T: Any, ViewData: VViewData> NonUpdatingState<T, ViewData> {
+impl <T: Any, ViewData: VViewData + ?Sized> NonUpdatingState<T, ViewData> {
     pub fn _get_mut<'a>(&self, c_state: &'a mut Vec<Box<dyn Any>>) -> &'a mut T {
         c_state
             .get_mut(self.index).expect("unaligned hooks: state index out of bounds")
@@ -58,7 +58,7 @@ impl <T: Any, ViewData: VViewData> NonUpdatingState<T, ViewData> {
     }
 }
 
-impl <T: Any, ViewData: VViewData> VContextIndex<ViewData> for NonUpdatingState<T, ViewData> {
+impl <T: Any, ViewData: VViewData + ?Sized> VContextIndex<ViewData> for NonUpdatingState<T, ViewData> {
     type T = T;
 
     fn get<'a: 'b, 'b>(&self, c: &'b impl VContext<'a, ViewData=ViewData>) -> &'b T where ViewData: 'b {
@@ -72,7 +72,7 @@ impl <T: Any, ViewData: VViewData> VContextIndex<ViewData> for NonUpdatingState<
     }
 }
 
-impl <T: Any, ViewData: VViewData> Clone for NonUpdatingState<T, ViewData> {
+impl <T: Any, ViewData: VViewData + ?Sized> Clone for NonUpdatingState<T, ViewData> {
     fn clone(&self) -> Self {
         Self {
             index: self.index,
@@ -87,4 +87,4 @@ impl <T: Any, ViewData: VViewData> Clone for NonUpdatingState<T, ViewData> {
     }
 }
 
-impl <T: Any, ViewData: VViewData> Copy for NonUpdatingState<T, ViewData> {}
+impl <T: Any, ViewData: VViewData + ?Sized> Copy for NonUpdatingState<T, ViewData> {}

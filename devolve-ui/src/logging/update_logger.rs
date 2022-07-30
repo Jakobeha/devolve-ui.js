@@ -14,12 +14,12 @@ pub enum UpdateLogEntry {
     Update(VComponentPath, UpdateStack),
 }
 
-pub struct UpdateLogger<ViewData: VViewData> {
+pub struct UpdateLogger<ViewData: VViewData + ?Sized> {
     logger: GenericLogger<UpdateLogEntry>,
     phantom: PhantomData<ViewData>
 }
 
-impl <ViewData: VViewData> UpdateLogger<ViewData> {
+impl <ViewData: VViewData + ?Sized> UpdateLogger<ViewData> {
     pub(crate) fn try_new(args: &LogStart) -> io::Result<Self> {
         Ok(UpdateLogger {
             logger: GenericLogger::new(args, "updates")?,

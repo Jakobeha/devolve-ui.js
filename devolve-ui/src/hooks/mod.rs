@@ -37,7 +37,7 @@ pub mod event;
 /// Non-updating state which doesn't trigger updates
 pub mod state_internal;
 
-pub trait BuiltinHooks <'a, 'a0: 'a, Props: Any, ViewData: VViewData + 'static> {
+pub trait BuiltinHooks <'a, 'a0: 'a, Props: Any, ViewData: VViewData + ?Sized + 'static> {
     fn use_state<T: Any>(&mut self, get_initial: impl FnOnce(&mut Self) -> T) -> State<T, ViewData>;
     fn use_provide<T: Any>(&mut self, id: ProviderId<T>, get_initial: impl FnOnce(&mut Self) -> Box<T>) -> ProvidedState<T, ViewData>;
     fn use_consume<T: Any>(&mut self, id: ProviderId<T>) -> ProvidedState<T, ViewData>;
@@ -98,7 +98,7 @@ pub trait BuiltinHooks <'a, 'a0: 'a, Props: Any, ViewData: VViewData + 'static> 
     fn use_delay(&mut self, delay: Duration, listener: impl FnOnce(VPlainContext2<'_, '_, Props, ViewData>) + 'static);
 }
 
-impl <'a, 'a0: 'a, Props: Any, ViewData: VViewData + 'static> BuiltinHooks<'a, 'a0, Props, ViewData> for VComponentContext1<'a, 'a0, Props, ViewData> {
+impl <'a, 'a0: 'a, Props: Any, ViewData: VViewData + ?Sized + 'static> BuiltinHooks<'a, 'a0, Props, ViewData> for VComponentContext1<'a, 'a0, Props, ViewData> {
     fn use_state<T: Any>(&mut self, get_initial: impl FnOnce(&mut Self) -> T) -> State<T, ViewData> {
         _use_state(self, get_initial)
     }

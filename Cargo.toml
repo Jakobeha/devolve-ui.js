@@ -5,7 +5,8 @@ members = [
     "devolve-ui-prompt",
     "devolve-ui-tui",
     "devolve-ui-tui-forms",
-    "mini-rx"
+    "mini-rx",
+    "dyn_struct"
 ]
 default-members = [
     "devolve-ui",
@@ -13,5 +14,6 @@ default-members = [
     "devolve-ui-prompt",
     "devolve-ui-tui",
     "devolve-ui-tui-forms",
-    "mini-rx"
+    "mini-rx",
+    "dyn_struct"
 ]

@@ -1,0 +1,3 @@
+[submodule "dyn_struct"]
+	path = dyn_struct
+	url = git@github.com:Jakobeha/dyn_struct.git

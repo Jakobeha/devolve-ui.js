@@ -11,10 +11,13 @@ use crate::view::layout::bounds::Bounds;
 use crate::view::layout::parent_bounds::SubLayout;
 #[cfg(feature = "logging")]
 use serde::{Serialize, Deserialize};
+use dyn_struct2::dyn_arg::DynArg;
+use dyn_struct2::DynStruct;
 
+#[repr(C)]
 #[derive(Debug, Clone)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-pub struct VView<ViewData: VViewData> {
+pub struct VView<ViewData: VViewData + ?Sized> {
     id: NodeId,
     pub bounds: Bounds,
     pub is_visible: bool,
@@ -36,7 +39,7 @@ impl Display for VViewType {
     }
 }
 
-pub trait VViewData: Sized {
+pub trait VViewData {
     type Children<'a>: Iterator<Item=&'a VNode<Self>> where Self: 'a;
     type ChildrenMut<'a>: Iterator<Item=&'a mut VNode<Self>> where Self: 'a;
 
@@ -45,14 +48,22 @@ pub trait VViewData: Sized {
     fn children_mut(&mut self) -> Option<(Self::ChildrenMut<'_>, SubLayout)>;
 }
 
-impl <ViewData: VViewData> VView<ViewData> {
-    pub fn new(bounds: Bounds, is_visible: bool, d: ViewData) -> VView<ViewData> {
+impl <ViewData: VViewData + ?Sized> VView<ViewData> {
+    pub fn new(bounds: Bounds, is_visible: bool, d: ViewData) -> VView<ViewData> where ViewData: Sized {
         VView {
             id: NodeId::next(),
             bounds,
             is_visible,
             d
         }
+    }
+
+    pub fn new_unsized(bounds: Bounds, is_visible: bool, d: DynArg<ViewData>) -> Box<VView<ViewData>> {
+        let dyn_struct = DynStruct::<(NodeId, Bounds, bool), ViewData>::new(
+            (NodeId::next(), bounds, is_visible), d
+        );
+
+        unsafe { dyn_struct.more_unsafe_transmute() }
     }
 
     pub fn id(&self) -> NodeId {

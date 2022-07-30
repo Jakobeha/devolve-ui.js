@@ -22,7 +22,7 @@ use crate::hooks::provider::UntypedProviderId;
 use crate::view::view::VViewData;
 
 #[derive(Debug)]
-pub struct VComponentContext1<'a, 'a0: 'a, Props: Any, ViewData: VViewData> {
+pub struct VComponentContext1<'a, 'a0: 'a, Props: Any, ViewData: VViewData + ?Sized> {
     pub(crate) component: &'a mut VComponentHead<ViewData>,
     pub(crate) contexts: &'a mut VComponentContexts<'a0>,
     pub(crate) effects: &'a mut VComponentEffects<Props, ViewData>,
@@ -37,7 +37,7 @@ pub struct VComponentContextUnsafe {
     pub effects: *mut (),
 }
 
-impl<'a, 'a0: 'a, Props: Any, ViewData: VViewData> VComponentContext1<'a, 'a0, Props, ViewData> {
+impl<'a, 'a0: 'a, Props: Any, ViewData: VViewData + ?Sized> VComponentContext1<'a, 'a0, Props, ViewData> {
     pub unsafe fn from_unsafe(ptr: VComponentContextUnsafe) -> Self {
         VComponentContext1 {
             component: &mut *(ptr.component as *mut VComponentHead<ViewData>),
@@ -56,7 +56,7 @@ impl<'a, 'a0: 'a, Props: Any, ViewData: VViewData> VComponentContext1<'a, 'a0, P
     }
 }
 
-pub struct VEffectContext1<'a, 'a0: 'a, Props: Any, ViewData: VViewData> {
+pub struct VEffectContext1<'a, 'a0: 'a, Props: Any, ViewData: VViewData + ?Sized> {
     pub(crate) component: &'a mut VComponentHead<ViewData>,
     pub(crate) contexts: &'a mut VComponentContexts<'a0>,
     pub(crate) destructors: &'a mut VComponentDestructors<Props, ViewData>,
@@ -65,7 +65,7 @@ pub struct VEffectContext1<'a, 'a0: 'a, Props: Any, ViewData: VViewData> {
 }
 
 #[derive(Debug)]
-pub struct VDestructorContext1<'a, 'a0: 'a, Props: Any, ViewData: VViewData> {
+pub struct VDestructorContext1<'a, 'a0: 'a, Props: Any, ViewData: VViewData + ?Sized> {
     pub component: &'a mut VComponentHead<ViewData>,
     pub(crate) contexts: &'a mut VComponentContexts<'a0>,
     // This needs to be private so users can't construct this even though all other fields are public
@@ -73,7 +73,7 @@ pub struct VDestructorContext1<'a, 'a0: 'a, Props: Any, ViewData: VViewData> {
 }
 
 #[derive(Debug)]
-pub struct VPlainContext1<'a, 'a0: 'a, Props: Any, ViewData: VViewData> {
+pub struct VPlainContext1<'a, 'a0: 'a, Props: Any, ViewData: VViewData + ?Sized> {
     pub(super) component: &'a mut VComponentHead<ViewData>,
     pub(super) contexts: &'a mut VComponentContexts<'a0>,
     // This just needs to be PhantomData for Props
@@ -81,7 +81,7 @@ pub struct VPlainContext1<'a, 'a0: 'a, Props: Any, ViewData: VViewData> {
 }
 
 #[derive(Debug, Clone)]
-pub struct VEffectContextRef<Props: Any, ViewData: VViewData> {
+pub struct VEffectContextRef<Props: Any, ViewData: VViewData + ?Sized> {
     component: VComponentRef<ViewData>,
     phantom: PhantomData<Props>
 }
@@ -95,7 +95,7 @@ pub type VDestructorContext2<'a, 'a0, Props, ViewData> = (VDestructorContext1<'a
 pub type VPlainContext2<'a, 'a0, Props, ViewData> = (VPlainContext1<'a, 'a0, Props, ViewData>, &'a Props);
 
 pub trait VContext<'a> {
-    type ViewData: VViewData;
+    type ViewData: VViewData + ?Sized;
 
     fn component_imm<'b>(&'b self) -> &'b VComponentHead<Self::ViewData> where 'a: 'b;
     fn component<'b>(&'b mut self) -> &'b mut VComponentHead<Self::ViewData> where 'a: 'b;
@@ -108,7 +108,7 @@ pub trait VComponentContext<'a, 'a0> : VContext<'a> {
     fn local_contexts<'b>(&'b mut self) -> &'b mut VComponentLocalContexts where 'a: 'b;
 }
 
-impl <'a, 'a0: 'a, Props: Any, ViewData: VViewData> VContext<'a> for VComponentContext1<'a, 'a0, Props, ViewData> {
+impl <'a, 'a0: 'a, Props: Any, ViewData: VViewData + ?Sized> VContext<'a> for VComponentContext1<'a, 'a0, Props, ViewData> {
     type ViewData = ViewData;
 
     fn component_imm<'b>(&'b self) -> &'b VComponentHead<Self::ViewData> where 'a: 'b {
@@ -128,7 +128,7 @@ impl <'a, 'a0: 'a, Props: Any, ViewData: VViewData> VContext<'a> for VComponentC
     }
 }
 
-impl <'a, 'a0: 'a, Props: Any, ViewData: VViewData> VComponentContext<'a, 'a0> for VComponentContext1<'a, 'a0, Props, ViewData> {
+impl <'a, 'a0: 'a, Props: Any, ViewData: VViewData + ?Sized> VComponentContext<'a, 'a0> for VComponentContext1<'a, 'a0, Props, ViewData> {
     fn component_and_contexts<'b>(&'b mut self) -> (&'b mut VComponentHead<Self::ViewData>, &'b mut VComponentContexts<'a0>) where 'a: 'b {
         (self.component, self.contexts)
     }
@@ -138,7 +138,7 @@ impl <'a, 'a0: 'a, Props: Any, ViewData: VViewData> VComponentContext<'a, 'a0> f
     }
 }
 
-impl <'a, 'a0: 'a, Props: Any, ViewData: VViewData> VContext<'a> for VEffectContext1<'a, 'a0, Props, ViewData> {
+impl <'a, 'a0: 'a, Props: Any, ViewData: VViewData + ?Sized> VContext<'a> for VEffectContext1<'a, 'a0, Props, ViewData> {
     type ViewData = ViewData;
 
     fn component_imm<'b>(&'b self) -> &'b VComponentHead<Self::ViewData> where 'a: 'b {
@@ -158,7 +158,7 @@ impl <'a, 'a0: 'a, Props: Any, ViewData: VViewData> VContext<'a> for VEffectCont
     }
 }
 
-impl <'a, 'a0: 'a, Props: Any, ViewData: VViewData> VEffectContext1<'a, 'a0, Props, ViewData> {
+impl <'a, 'a0: 'a, Props: Any, ViewData: VViewData + ?Sized> VEffectContext1<'a, 'a0, Props, ViewData> {
     pub(crate) fn component_and_destructors<'b>(&'b mut self) -> (&'b mut VComponentHead<ViewData>, &'b mut VComponentDestructors<Props, ViewData>) where 'a: 'b {
         (self.component, self.destructors)
     }
@@ -191,7 +191,7 @@ impl <'a, 'a0: 'a, Props: Any, ViewData: VViewData> VEffectContext1<'a, 'a0, Pro
     }
 }
 
-impl <Props: Any, ViewData: VViewData + 'static> VEffectContextRef<Props, ViewData> {
+impl <Props: Any, ViewData: VViewData + ?Sized + 'static> VEffectContextRef<Props, ViewData> {
     pub fn with<R>(&self, fun: impl FnOnce(Option<VPlainContext2<'_, '_, Props, ViewData>>) -> R) -> R {
         self.component.with(|component| {
             match component {
@@ -220,7 +220,7 @@ impl <Props: Any, ViewData: VViewData + 'static> VEffectContextRef<Props, ViewDa
     }
 }
 
-impl <'a, 'a0: 'a, Props: Any, ViewData: VViewData> VContext<'a> for VDestructorContext1<'a, 'a0, Props, ViewData> {
+impl <'a, 'a0: 'a, Props: Any, ViewData: VViewData + ?Sized> VContext<'a> for VDestructorContext1<'a, 'a0, Props, ViewData> {
     type ViewData = ViewData;
 
     fn component_imm<'b>(&'b self) -> &'b VComponentHead<Self::ViewData> where 'a: 'b {
@@ -240,7 +240,7 @@ impl <'a, 'a0: 'a, Props: Any, ViewData: VViewData> VContext<'a> for VDestructor
     }
 }
 
-impl <'a, 'a0: 'a, Props: Any, ViewData: VViewData> VDestructorContext1<'a, 'a0, Props, ViewData> {
+impl <'a, 'a0: 'a, Props: Any, ViewData: VViewData + ?Sized> VDestructorContext1<'a, 'a0, Props, ViewData> {
     pub fn with<'b, R>(&'b mut self, fun: impl FnOnce(VDestructorContext1<'b, 'a0, Props, ViewData>) -> R) -> R {
         fun(VDestructorContext1 {
             component: self.component,
@@ -250,7 +250,7 @@ impl <'a, 'a0: 'a, Props: Any, ViewData: VViewData> VDestructorContext1<'a, 'a0,
     }
 }
 
-impl <'a, 'a0: 'a, Props: Any, ViewData: VViewData> VContext<'a> for VPlainContext1<'a, 'a0, Props, ViewData> {
+impl <'a, 'a0: 'a, Props: Any, ViewData: VViewData + ?Sized> VContext<'a> for VPlainContext1<'a, 'a0, Props, ViewData> {
     type ViewData = ViewData;
 
     fn component_imm<'b>(&'b self) -> &'b VComponentHead<Self::ViewData> where 'a: 'b {
@@ -270,7 +270,7 @@ impl <'a, 'a0: 'a, Props: Any, ViewData: VViewData> VContext<'a> for VPlainConte
     }
 }
 
-impl <'a, 'a0: 'a, Props: Any, ViewData: VViewData> VPlainContext1<'a, 'a0, Props, ViewData> {
+impl <'a, 'a0: 'a, Props: Any, ViewData: VViewData + ?Sized> VPlainContext1<'a, 'a0, Props, ViewData> {
     pub fn with<'b, R>(&'b mut self, fun: impl FnOnce(VPlainContext1<'b, 'a0, Props, ViewData>) -> R) -> R {
         fun(VPlainContext1 {
             component: self.component,
@@ -280,7 +280,7 @@ impl <'a, 'a0: 'a, Props: Any, ViewData: VViewData> VPlainContext1<'a, 'a0, Prop
     }
 }
 
-pub fn with_destructor_context<'a, 'a0: 'a, Props: Any, ViewData: VViewData, R>(
+pub fn with_destructor_context<'a, 'a0: 'a, Props: Any, ViewData: VViewData + ?Sized, R>(
     (c, props): (&mut VEffectContext1<'a, 'a0, Props, ViewData>, &'a Props),
     fun: impl FnOnce(VDestructorContext2<'_, '_, Props, ViewData>) -> R
 ) -> R {
@@ -291,7 +291,7 @@ pub fn with_destructor_context<'a, 'a0: 'a, Props: Any, ViewData: VViewData, R>(
     }, props))
 }
 
-pub fn with_plain_context<'a, 'a0: 'a, Props: Any, ViewData: VViewData, R>(
+pub fn with_plain_context<'a, 'a0: 'a, Props: Any, ViewData: VViewData + ?Sized, R>(
     (c, props): (&mut VEffectContext1<'a, 'a0, Props, ViewData>, &'a Props),
     fun: impl FnOnce(VPlainContext2<'_, '_, Props, ViewData>) -> R
 ) -> R {
@@ -303,14 +303,14 @@ pub fn with_plain_context<'a, 'a0: 'a, Props: Any, ViewData: VViewData, R>(
 }
 
 // region index states
-pub trait VContextIndex<ViewData: VViewData> {
+pub trait VContextIndex<ViewData: VViewData + ?Sized> {
     type T: Any;
 
     fn get<'a: 'b, 'b>(&self, c: &'b impl VContext<'a, ViewData=ViewData>) -> &'b Self::T where ViewData: 'b;
     fn get_mut<'a: 'b, 'b>(&self, c: &'b mut impl VContext<'a, ViewData=ViewData>) -> &'b mut Self::T where ViewData: 'b;
 }
 
-impl <'a, 'a0: 'a, Props: Any, ViewData: VViewData, I: VContextIndex<ViewData>> Index<I> for VComponentContext1<'a, 'a0, Props, ViewData> {
+impl <'a, 'a0: 'a, Props: Any, ViewData: VViewData + ?Sized, I: VContextIndex<ViewData>> Index<I> for VComponentContext1<'a, 'a0, Props, ViewData> {
     type Output = I::T;
 
     fn index(&self, index: I) -> &Self::Output {
@@ -318,7 +318,7 @@ impl <'a, 'a0: 'a, Props: Any, ViewData: VViewData, I: VContextIndex<ViewData>> 
     }
 }
 
-impl <'a, 'a0: 'a, Props: Any, ViewData: VViewData, I: VContextIndex<ViewData>> Index<I> for VEffectContext1<'a, 'a0, Props, ViewData> {
+impl <'a, 'a0: 'a, Props: Any, ViewData: VViewData + ?Sized, I: VContextIndex<ViewData>> Index<I> for VEffectContext1<'a, 'a0, Props, ViewData> {
     type Output = I::T;
 
     fn index(&self, index: I) -> &Self::Output {
@@ -326,7 +326,7 @@ impl <'a, 'a0: 'a, Props: Any, ViewData: VViewData, I: VContextIndex<ViewData>> 
     }
 }
 
-impl <'a, 'a0: 'a, Props: Any, ViewData: VViewData, I: VContextIndex<ViewData>> Index<I> for VDestructorContext1<'a, 'a0, Props, ViewData> {
+impl <'a, 'a0: 'a, Props: Any, ViewData: VViewData + ?Sized, I: VContextIndex<ViewData>> Index<I> for VDestructorContext1<'a, 'a0, Props, ViewData> {
     type Output = I::T;
 
     fn index(&self, index: I) -> &Self::Output {
@@ -334,7 +334,7 @@ impl <'a, 'a0: 'a, Props: Any, ViewData: VViewData, I: VContextIndex<ViewData>> 
     }
 }
 
-impl <'a, 'a0: 'a, Props: Any, ViewData: VViewData, I: VContextIndex<ViewData>> Index<I> for VPlainContext1<'a, 'a0, Props, ViewData> {
+impl <'a, 'a0: 'a, Props: Any, ViewData: VViewData + ?Sized, I: VContextIndex<ViewData>> Index<I> for VPlainContext1<'a, 'a0, Props, ViewData> {
     type Output = I::T;
 
     fn index(&self, index: I) -> &Self::Output {
@@ -342,25 +342,25 @@ impl <'a, 'a0: 'a, Props: Any, ViewData: VViewData, I: VContextIndex<ViewData>> 
     }
 }
 
-impl <'a, 'a0: 'a, Props: Any, ViewData: VViewData, I: VContextIndex<ViewData>> IndexMut<I> for VComponentContext1<'a, 'a0, Props, ViewData> {
+impl <'a, 'a0: 'a, Props: Any, ViewData: VViewData + ?Sized, I: VContextIndex<ViewData>> IndexMut<I> for VComponentContext1<'a, 'a0, Props, ViewData> {
     fn index_mut(&mut self, index: I) -> &mut Self::Output {
         index.get_mut(self)
     }
 }
 
-impl <'a, 'a0: 'a, Props: Any, ViewData: VViewData, I: VContextIndex<ViewData>> IndexMut<I> for VEffectContext1<'a, 'a0, Props, ViewData> {
+impl <'a, 'a0: 'a, Props: Any, ViewData: VViewData + ?Sized, I: VContextIndex<ViewData>> IndexMut<I> for VEffectContext1<'a, 'a0, Props, ViewData> {
     fn index_mut(&mut self, index: I) -> &mut Self::Output {
         index.get_mut(self)
     }
 }
 
-impl <'a, 'a0: 'a, Props: Any, ViewData: VViewData, I: VContextIndex<ViewData>> IndexMut<I> for VDestructorContext1<'a, 'a0, Props, ViewData> {
+impl <'a, 'a0: 'a, Props: Any, ViewData: VViewData + ?Sized, I: VContextIndex<ViewData>> IndexMut<I> for VDestructorContext1<'a, 'a0, Props, ViewData> {
     fn index_mut(&mut self, index: I) -> &mut Self::Output {
         index.get_mut(self)
     }
 }
 
-impl <'a, 'a0: 'a, Props: Any, ViewData: VViewData, I: VContextIndex<ViewData>> IndexMut<I> for VPlainContext1<'a, 'a0, Props, ViewData> {
+impl <'a, 'a0: 'a, Props: Any, ViewData: VViewData + ?Sized, I: VContextIndex<ViewData>> IndexMut<I> for VPlainContext1<'a, 'a0, Props, ViewData> {
     fn index_mut(&mut self, index: I) -> &mut Self::Output {
         index.get_mut(self)
     }

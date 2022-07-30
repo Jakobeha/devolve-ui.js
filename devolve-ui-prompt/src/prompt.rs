@@ -16,7 +16,7 @@ use crate::context::{PromptContextData, VPromptContext, VPromptContext2};
 use crate::misc::assert_is_unpin;
 use crate::resume::RawPromptResume;
 
-pub fn prompt_fn_into_component_fn<PromptProps, Props: Any, ViewData: VViewData + 'static, F: Future<Output=()> + 'static>(
+pub fn prompt_fn_into_component_fn<PromptProps, Props: Any, ViewData: VViewData + ?Sized + 'static, F: Future<Output=()> + 'static>(
     prompt_fn: impl Fn(VPromptContext2<Props, ViewData, PromptProps>) -> F + 'static,
     get_prompt_props: impl Fn() -> PromptProps + 'static
 ) -> impl Fn(VComponentContext2<Props, ViewData>) -> VNode<ViewData> + 'static {
@@ -38,13 +38,13 @@ pub fn prompt_fn_into_component_fn<PromptProps, Props: Any, ViewData: VViewData 
 
 pub struct VPrompt<
     Props: Any,
-    ViewData: VViewData,
+    ViewData: VViewData + ?Sized,
     F: Future<Output=()>
 >(Pin<Box<PromptPinned<Props, ViewData, F>>>);
 
 pub struct PromptPinned<
     Props: Any,
-    ViewData: VViewData,
+    ViewData: VViewData + ?Sized,
     F: Future<Output=()>
 > {
     pub(super) poll_future: Box<dyn Fn()>,
@@ -54,7 +54,7 @@ pub struct PromptPinned<
 
 impl<
     Props: Any,
-    ViewData: VViewData + 'static,
+    ViewData: VViewData + ?Sized + 'static,
     F: Future<Output=()> + 'static
 > VPrompt<Props, ViewData, F> {
     pub fn new<PromptProps>(prompt_fn: impl FnOnce(VPromptContext2<Props, ViewData, PromptProps>) -> F, prompt_props: PromptProps) -> Self {
@@ -96,7 +96,7 @@ impl<
 
 impl<
     Props: Any,
-    ViewData: VViewData,
+    ViewData: VViewData + ?Sized,
     F: Future<Output=()>
 > VPrompt<Props, ViewData, F> {
     fn set_component_ref(&mut self, component_ref: VComponentRef<ViewData>) {
@@ -115,7 +115,7 @@ impl<
 
 impl<
     Props: Any,
-    ViewData: VViewData,
+    ViewData: VViewData + ?Sized,
     F: Future<Output=()>
 > IntoFuture for VPrompt<Props, ViewData, F> {
     type Output = ();
@@ -132,7 +132,7 @@ impl<
 
 impl<
     Props: Any,
-    ViewData: VViewData,
+    ViewData: VViewData + ?Sized,
     F: Future<Output=()>
 > Debug for PromptPinned<Props, ViewData, F> {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {

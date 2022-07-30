@@ -24,6 +24,9 @@
       <sourceFolder url="file://$MODULE_DIR$/devolve-ui-tui/tests" isTestSource="true" />
       <sourceFolder url="file://$MODULE_DIR$/devolve-ui-wasm/js" type="java-resource" />
       <sourceFolder url="file://$MODULE_DIR$/devolve-ui-wasm/tests" isTestSource="true" />
+      <sourceFolder url="file://$MODULE_DIR$/dyn_struct/derive/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/dyn_struct/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/dyn_struct/tests" isTestSource="true" />
       <excludeFolder url="file://$MODULE_DIR$/target" />
     </content>
     <orderEntry type="inheritedJdk" />

@@ -41,12 +41,12 @@ impl <T: Any> From<*const ProviderIdSource<T>> for UntypedProviderId {
 }
 
 #[derive(Debug)]
-pub struct ProvidedState<T: Any, ViewData: VViewData> {
+pub struct ProvidedState<T: Any, ViewData: VViewData + ?Sized> {
     id: ProviderId<T>,
     phantom: PhantomData<ViewData>
 }
 
-pub(super) fn _use_provide<'a, 'a0: 'a, T: Any, ViewData: VViewData + 'a, Ctx: VComponentContext<'a, 'a0, ViewData=ViewData>>(
+pub(super) fn _use_provide<'a, 'a0: 'a, T: Any, ViewData: VViewData + ?Sized + 'a, Ctx: VComponentContext<'a, 'a0, ViewData=ViewData>>(
     c: &mut Ctx,
     id: ProviderId<T>,
     get_initial: impl FnOnce(&mut Ctx) -> Box<T>
@@ -63,7 +63,7 @@ pub(super) fn _use_provide<'a, 'a0: 'a, T: Any, ViewData: VViewData + 'a, Ctx: V
     }
 }
 
-pub(super) fn _use_consume<'a, 'a0: 'a, T: Any, ViewData: VViewData + 'a>(
+pub(super) fn _use_consume<'a, 'a0: 'a, T: Any, ViewData: VViewData + ?Sized + 'a>(
     c: &mut impl VComponentContext<'a, 'a0, ViewData=ViewData>,
     id: ProviderId<T>
 ) -> ProvidedState<T, ViewData> {
@@ -75,7 +75,7 @@ pub(super) fn _use_consume<'a, 'a0: 'a, T: Any, ViewData: VViewData + 'a>(
     }
 }
 
-impl <T: Any, ViewData: VViewData> VContextIndex<ViewData> for ProvidedState<T, ViewData> {
+impl <T: Any, ViewData: VViewData + ?Sized> VContextIndex<ViewData> for ProvidedState<T, ViewData> {
     type T = T;
 
     fn get<'a: 'b, 'b>(&self, c: &'b impl VContext<'a, ViewData=ViewData>) -> &'b T where ViewData: 'b {
@@ -104,7 +104,7 @@ impl <T: Any, ViewData: VViewData> VContextIndex<ViewData> for ProvidedState<T, 
     }
 }
 
-impl <T: Any, ViewData: VViewData> Clone for ProvidedState<T, ViewData> {
+impl <T: Any, ViewData: VViewData + ?Sized> Clone for ProvidedState<T, ViewData> {
     fn clone(&self) -> Self {
         Self {
             id: self.id,
@@ -113,4 +113,4 @@ impl <T: Any, ViewData: VViewData> Clone for ProvidedState<T, ViewData> {
     }
 }
 
-impl <T: Any, ViewData: VViewData> Copy for ProvidedState<T, ViewData> {}
+impl <T: Any, ViewData: VViewData + ?Sized> Copy for ProvidedState<T, ViewData> {}

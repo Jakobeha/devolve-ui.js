@@ -28,12 +28,12 @@ use crate::misc::map_lock_result::MappableLockResult;
 use crate::view::view::VViewData;
 
 #[derive(Debug)]
-pub struct TreeRefState<T: ObsRefableRoot<VContextSubCtx<ViewData>>, ViewData: VViewData + 'static>(Arc<Mutex<T::ObsRefImpl>>, PhantomData<ViewData>);
+pub struct TreeRefState<T: ObsRefableRoot<VContextSubCtx<ViewData>>, ViewData: VViewData + ?Sized + 'static>(Arc<Mutex<T::ObsRefImpl>>, PhantomData<ViewData>);
 
 #[derive(Debug)]
-pub struct TreeAccess<'a, T: ObsRefableRoot<VContextSubCtx<ViewData>>, ViewData: VViewData + 'static>(MutexGuard<'a, T::ObsRefImpl>, PhantomData<ViewData>);
+pub struct TreeAccess<'a, T: ObsRefableRoot<VContextSubCtx<ViewData>>, ViewData: VViewData + ?Sized + 'static>(MutexGuard<'a, T::ObsRefImpl>, PhantomData<ViewData>);
 
-pub(super) fn _use_tree_ref_state<'a, 'a0: 'a, T: ObsRefableRoot<VContextSubCtx<ViewData>> + 'static, ViewData: VViewData + 'static, Ctx: VComponentContext<'a, 'a0, ViewData=ViewData>>(
+pub(super) fn _use_tree_ref_state<'a, 'a0: 'a, T: ObsRefableRoot<VContextSubCtx<ViewData>> + 'static, ViewData: VViewData + ?Sized + 'static, Ctx: VComponentContext<'a, 'a0, ViewData=ViewData>>(
     c: &mut Ctx,
     get_initial: impl FnOnce(&mut Ctx) -> T
 ) -> TreeRefState<T, ViewData> {
@@ -65,7 +65,7 @@ pub(super) fn _use_tree_ref_state<'a, 'a0: 'a, T: ObsRefableRoot<VContextSubCtx<
     )
 }
 
-impl <T: ObsRefableRoot<VContextSubCtx<ViewData>> + 'static, ViewData: VViewData + 'static> TreeRefState<T, ViewData> {
+impl <T: ObsRefableRoot<VContextSubCtx<ViewData>> + 'static, ViewData: VViewData + ?Sized + 'static> TreeRefState<T, ViewData> {
     pub fn get(&self) -> LockResult<TreeAccess<'_, T, ViewData>> {
         self.0.lock().map2(TreeAccess::new)
     }
@@ -75,13 +75,13 @@ impl <T: ObsRefableRoot<VContextSubCtx<ViewData>> + 'static, ViewData: VViewData
     }
 }
 
-impl <'a, T: ObsRefableRoot<VContextSubCtx<ViewData>>, ViewData: VViewData + 'static> TreeAccess<'a, T, ViewData> {
+impl <'a, T: ObsRefableRoot<VContextSubCtx<ViewData>>, ViewData: VViewData + ?Sized + 'static> TreeAccess<'a, T, ViewData> {
     fn new(inner: MutexGuard<'a, T::ObsRefImpl>) -> TreeAccess<'a, T, ViewData> {
         TreeAccess(inner, PhantomData)
     }
 }
 
-impl <'a, T: ObsRefableRoot<VContextSubCtx<ViewData>>, ViewData: VViewData + 'static> Deref for TreeAccess<'a, T, ViewData> {
+impl <'a, T: ObsRefableRoot<VContextSubCtx<ViewData>>, ViewData: VViewData + ?Sized + 'static> Deref for TreeAccess<'a, T, ViewData> {
     type Target = <MutexGuard<'a, T::ObsRefImpl> as Deref>::Target;
 
     fn deref(&self) -> &Self::Target {
@@ -89,13 +89,13 @@ impl <'a, T: ObsRefableRoot<VContextSubCtx<ViewData>>, ViewData: VViewData + 'st
     }
 }
 
-impl <'a, T: ObsRefableRoot<VContextSubCtx<ViewData>>, ViewData: VViewData + 'static> DerefMut for TreeAccess<'a, T, ViewData> {
+impl <'a, T: ObsRefableRoot<VContextSubCtx<ViewData>>, ViewData: VViewData + ?Sized + 'static> DerefMut for TreeAccess<'a, T, ViewData> {
     fn deref_mut(&mut self) -> &mut Self::Target {
         self.0.deref_mut()
     }
 }
 
-impl <T: ObsRefableRoot<VContextSubCtx<ViewData>>, ViewData: VViewData + 'static> Clone for TreeRefState<T, ViewData> {
+impl <T: ObsRefableRoot<VContextSubCtx<ViewData>>, ViewData: VViewData + ?Sized + 'static> Clone for TreeRefState<T, ViewData> {
     fn clone(&self) -> Self {
         Self(self.0.clone(), self.1)
     }
@@ -107,9 +107,9 @@ impl <T: ObsRefableRoot<VContextSubCtx<ViewData>>, ViewData: VViewData + 'static
     }
 }
 
-pub struct VContextSubCtx<ViewData: VViewData + 'static>(PhantomData<ViewData>);
+pub struct VContextSubCtx<ViewData: VViewData + ?Sized + 'static>(PhantomData<ViewData>);
 
-impl <ViewData: VViewData + 'static> SubCtx for VContextSubCtx<ViewData> {
+impl <ViewData: VViewData + ?Sized + 'static> SubCtx for VContextSubCtx<ViewData> {
     type Input<'a> = &'a dyn VContext<'a, ViewData=ViewData>;
     type Key = VComponentPath;
 

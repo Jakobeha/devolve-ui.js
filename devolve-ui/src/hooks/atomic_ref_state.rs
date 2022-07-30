@@ -24,7 +24,7 @@ use crate::misc::map_lock_result::MappableLockResult;
 use crate::view::view::VViewData;
 
 #[derive(Debug)]
-pub struct AtomicRefState<T: Any, ViewData: VViewData> {
+pub struct AtomicRefState<T: Any, ViewData: VViewData + ?Sized> {
     data: Arc<Mutex<T>>,
     index: usize,
     flag: NeedsUpdateFlag,
@@ -32,20 +32,20 @@ pub struct AtomicRefState<T: Any, ViewData: VViewData> {
 }
 
 #[derive(Debug)]
-pub struct AtomicAccess<'a, T: Any, ViewData: VViewData> {
+pub struct AtomicAccess<'a, T: Any, ViewData: VViewData + ?Sized> {
     data: MutexGuard<'a, T>,
     phantom: PhantomData<ViewData>
 }
 
 #[derive(Debug)]
-pub struct AtomicAccessMut<'a, T: Any, ViewData: VViewData> {
+pub struct AtomicAccessMut<'a, T: Any, ViewData: VViewData + ?Sized> {
     data: MutexGuard<'a, T>,
     index: usize,
     flag: NeedsUpdateFlag,
     phantom: PhantomData<ViewData>
 }
 
-pub(super) fn _use_atomic_ref_state<'a, 'a0: 'a, T: Any, ViewData: VViewData + 'a, Ctx: VComponentContext<'a, 'a0, ViewData=ViewData>>(
+pub(super) fn _use_atomic_ref_state<'a, 'a0: 'a, T: Any, ViewData: VViewData + ?Sized + 'a, Ctx: VComponentContext<'a, 'a0, ViewData=ViewData>>(
     c: &mut Ctx,
     get_initial: impl FnOnce(&mut Ctx) -> T
 ) -> AtomicRefState<T, ViewData> {
@@ -59,7 +59,7 @@ pub(super) fn _use_atomic_ref_state<'a, 'a0: 'a, T: Any, ViewData: VViewData + '
     }
 }
 
-impl <T: Any, ViewData: VViewData> AtomicRefState<T, ViewData> {
+impl <T: Any, ViewData: VViewData + ?Sized> AtomicRefState<T, ViewData> {
     pub fn get(&self) -> LockResult<AtomicAccess<'_, T, ViewData>> {
         self.data.lock().map2(AtomicAccess::new)
     }
@@ -77,7 +77,7 @@ impl <T: Any, ViewData: VViewData> AtomicRefState<T, ViewData> {
     }
 }
 
-impl <'a, T: Any, ViewData: VViewData> AtomicAccess<'a, T, ViewData> {
+impl <'a, T: Any, ViewData: VViewData + ?Sized> AtomicAccess<'a, T, ViewData> {
     fn new(inner: MutexGuard<'a, T>) -> AtomicAccess<'a, T, ViewData> {
         AtomicAccess {
             data: inner,
@@ -86,7 +86,7 @@ impl <'a, T: Any, ViewData: VViewData> AtomicAccess<'a, T, ViewData> {
     }
 }
 
-impl <'a, T: Any, ViewData: VViewData> AtomicAccessMut<'a, T, ViewData> {
+impl <'a, T: Any, ViewData: VViewData + ?Sized> AtomicAccessMut<'a, T, ViewData> {
     fn new(inner: MutexGuard<'a, T>, index: usize, flag: NeedsUpdateFlag) -> AtomicAccessMut<'a, T, ViewData> {
         AtomicAccessMut {
             data: inner,
@@ -97,7 +97,7 @@ impl <'a, T: Any, ViewData: VViewData> AtomicAccessMut<'a, T, ViewData> {
     }
 }
 
-impl <'a, T: Any, ViewData: VViewData> Deref for AtomicAccess<'a, T, ViewData> {
+impl <'a, T: Any, ViewData: VViewData + ?Sized> Deref for AtomicAccess<'a, T, ViewData> {
     type Target = <MutexGuard<'a, T> as Deref>::Target;
 
     fn deref(&self) -> &Self::Target {
@@ -106,7 +106,7 @@ impl <'a, T: Any, ViewData: VViewData> Deref for AtomicAccess<'a, T, ViewData> {
 }
 
 
-impl <'a, T: Any, ViewData: VViewData> Deref for AtomicAccessMut<'a, T, ViewData> {
+impl <'a, T: Any, ViewData: VViewData + ?Sized> Deref for AtomicAccessMut<'a, T, ViewData> {
     type Target = <MutexGuard<'a, T> as Deref>::Target;
 
     fn deref(&self) -> &Self::Target {
@@ -114,13 +114,13 @@ impl <'a, T: Any, ViewData: VViewData> Deref for AtomicAccessMut<'a, T, ViewData
     }
 }
 
-impl <'a, T: Any, ViewData: VViewData> DerefMut for AtomicAccessMut<'a, T, ViewData> {
+impl <'a, T: Any, ViewData: VViewData + ?Sized> DerefMut for AtomicAccessMut<'a, T, ViewData> {
     fn deref_mut(&mut self) -> &mut Self::Target {
         self.data.deref_mut()
     }
 }
 
-impl <'a, T: Any, ViewData: VViewData> Drop for AtomicAccessMut<'a, T, ViewData> {
+impl <'a, T: Any, ViewData: VViewData + ?Sized> Drop for AtomicAccessMut<'a, T, ViewData> {
     fn drop(&mut self) {
         let details = UpdateDetails::SetAtomicState {
             index: self.index,
@@ -133,7 +133,7 @@ impl <'a, T: Any, ViewData: VViewData> Drop for AtomicAccessMut<'a, T, ViewData>
     }
 }
 
-impl <T: Any, ViewData: VViewData> Clone for AtomicRefState<T, ViewData> {
+impl <T: Any, ViewData: VViewData + ?Sized> Clone for AtomicRefState<T, ViewData> {
     fn clone(&self) -> Self {
         Self {
             data: self.data.clone(),

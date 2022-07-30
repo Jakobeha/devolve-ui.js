@@ -2,6 +2,7 @@
 <project version="4">
   <component name="VcsDirectoryMappings">
     <mapping directory="" vcs="Git" />
+    <mapping directory="$PROJECT_DIR$/dyn_struct" vcs="Git" />
     <mapping directory="$PROJECT_DIR$/generic-sync" vcs="Git" />
     <mapping directory="$PROJECT_DIR$/mini-rx" vcs="Git" />
   </component>

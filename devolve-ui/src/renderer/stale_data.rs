@@ -126,7 +126,7 @@ impl <const IS_THREAD_SAFE: bool> StaleData<IS_THREAD_SAFE> {
     }
 
     /// Transfer all pending updates to components and clear update queue.
-    pub(super) fn apply_updates<ViewData: VViewData>(&self, root_component: &mut Box<VComponent<ViewData>>) -> StaleDataResult<()> {
+    pub(super) fn apply_updates<ViewData: VViewData + ?Sized>(&self, root_component: &mut Box<VComponent<ViewData>>) -> StaleDataResult<()> {
         let mut local_lock = self.needs_update_lock()?;
         for (path, detailss) in local_lock.drain() {
             // Component may no longer exist so we need to check for some

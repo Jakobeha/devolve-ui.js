@@ -20,16 +20,16 @@ use crate::view::view::VViewData;
 use crate::hooks::state_internal::{NonUpdatingState, NonUpdatingStateHook};
 
 #[derive(Debug)]
-pub struct State<T: Any, ViewData: VViewData>(NonUpdatingState<T, ViewData>);
+pub struct State<T: Any, ViewData: VViewData + ?Sized>(NonUpdatingState<T, ViewData>);
 
-pub(super) fn _use_state<'a, 'a0: 'a, T: Any, ViewData: VViewData + 'a, Ctx: VComponentContext<'a, 'a0, ViewData=ViewData>>(
+pub(super) fn _use_state<'a, 'a0: 'a, T: Any, ViewData: VViewData + ?Sized + 'a, Ctx: VComponentContext<'a, 'a0, ViewData=ViewData>>(
     c: &mut Ctx,
     get_initial: impl FnOnce(&mut Ctx) -> T
 ) -> State<T, ViewData> {
     State(c.use_non_updating_state(get_initial))
 }
 
-impl <T: Any, ViewData: VViewData> VContextIndex<ViewData> for State<T, ViewData> {
+impl <T: Any, ViewData: VViewData + ?Sized> VContextIndex<ViewData> for State<T, ViewData> {
     type T = T;
 
     fn get<'a: 'b, 'b>(&self, c: &'b impl VContext<'a, ViewData=ViewData>) -> &'b T where ViewData: 'b {
@@ -46,7 +46,7 @@ impl <T: Any, ViewData: VViewData> VContextIndex<ViewData> for State<T, ViewData
     }
 }
 
-impl <T: Any, ViewData: VViewData> Clone for State<T, ViewData> {
+impl <T: Any, ViewData: VViewData + ?Sized> Clone for State<T, ViewData> {
     fn clone(&self) -> Self {
         Self(self.0.clone())
     }
@@ -56,4 +56,4 @@ impl <T: Any, ViewData: VViewData> Clone for State<T, ViewData> {
     }
 }
 
-impl <T: Any, ViewData: VViewData> Copy for State<T, ViewData> {}
+impl <T: Any, ViewData: VViewData + ?Sized> Copy for State<T, ViewData> {}
