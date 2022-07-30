@@ -2,7 +2,7 @@
 name = "devolve-ui-wasm"
 version = "0.1.0"
 authors = ["jakobeha <jakobeha@fastmail.com>"]
-description = "TypeScript interface and WebAssembly port of devolve-ui"
+description = "TypeScript interface and WebAssembly build of devolve-ui, so you can use it in node.js and the browser"
 repository = "https://github.com/jakobeha/devolve-ui.rs"
 license = "Apache-2.0"
 keywords = ["ui", "wasm", "typescript"]
@@ -23,6 +23,7 @@ cargo-args = ["-Zunstable-options", "-Zrustdoc-scrape-examples=examples"]
 
 [dependencies]
 devolve-ui = { path = "../devolve-ui", default-features = false }
+arrayvec = "0.7.2"
 wasi = "0.11.0+wasi-snapshot-preview1"
 wasm-bindgen = "0.2.81"
 js-sys = "0.3.58"

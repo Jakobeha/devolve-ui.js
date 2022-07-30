@@ -15,6 +15,16 @@ use serde::{Serialize, Deserialize};
 #[cfg_attr(feature = "serde", serde(transparent))]
 pub struct NodeId(usize);
 
+impl NodeId {
+    pub fn from_usize(id: usize) -> Self {
+        NodeId(id)
+    }
+
+    pub fn into_usize(self) -> usize {
+        self.0
+    }
+}
+
 impl Display for NodeId {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         write!(f, "#{}", self.0)
