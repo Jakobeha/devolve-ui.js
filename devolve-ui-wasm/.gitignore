@@ -1,8 +1,0 @@
-/target
-/Cargo.lock
-
-/node_modules
-/dist
-*.tsbuildinfo
-
-.DS_Store

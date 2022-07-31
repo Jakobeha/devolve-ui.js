@@ -1,21 +1,11 @@
 [workspace]
 members = [
     "devolve-ui",
-    "devolve-ui-derive",
-    "devolve-ui-prompt",
-    "devolve-ui-tui",
-    "devolve-ui-tui-forms",
-    "devolve-ui-wasm",
     "mini-rx",
     "dyn_struct"
 ]
 default-members = [
     "devolve-ui",
-    "devolve-ui-derive",
-    "devolve-ui-prompt",
-    "devolve-ui-tui",
-    "devolve-ui-tui-forms",
-    "devolve-ui-wasm",
     "mini-rx",
     "dyn_struct"
 ]
