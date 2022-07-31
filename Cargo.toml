@@ -1,11 +1,11 @@
 [workspace]
 members = [
-    "devolve-ui",
+    "devolve-ui-core",
     "mini-rx",
     "dyn_struct"
 ]
 default-members = [
-    "devolve-ui",
+    "devolve-ui-core",
     "mini-rx",
     "dyn_struct"
 ]
