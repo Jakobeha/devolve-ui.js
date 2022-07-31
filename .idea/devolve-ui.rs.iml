@@ -27,6 +27,7 @@
       <sourceFolder url="file://$MODULE_DIR$/dyn_struct/derive/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/dyn_struct/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/dyn_struct/tests" isTestSource="true" />
+      <sourceFolder url="file://$MODULE_DIR$/devolve-ui-core/src" isTestSource="false" />
       <excludeFolder url="file://$MODULE_DIR$/target" />
       <excludeFolder url="file://$MODULE_DIR$/devolve-ui-wasm/dist" />
     </content>

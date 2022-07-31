@@ -7,3 +7,6 @@
 [submodule "devolve-ui-core"]
 	path = devolve-ui-core
 	url = git@github.com:Jakobeha/devolve-ui-core.git
+[submodule "devolve-ui-macros"]
+	path = devolve-ui-macros
+	url = git@github.com:Jakobeha/devolve-ui-macros.git

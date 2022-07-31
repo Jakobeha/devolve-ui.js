@@ -2,7 +2,8 @@
 <project version="4">
   <component name="VcsDirectoryMappings">
     <mapping directory="" vcs="Git" />
-    <mapping directory="$PROJECT_DIR$/devolve-ui" vcs="Git" />
+    <mapping directory="$PROJECT_DIR$/devolve-ui-core" vcs="Git" />
+    <mapping directory="$PROJECT_DIR$/devolve-ui-macros" vcs="Git" />
     <mapping directory="$PROJECT_DIR$/dyn_struct" vcs="Git" />
     <mapping directory="$PROJECT_DIR$/mini-rx" vcs="Git" />
   </component>
