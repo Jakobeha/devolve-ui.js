@@ -6,5 +6,6 @@
     <mapping directory="$PROJECT_DIR$/devolve-ui-macros" vcs="Git" />
     <mapping directory="$PROJECT_DIR$/dyn_struct" vcs="Git" />
     <mapping directory="$PROJECT_DIR$/mini-rx" vcs="Git" />
+    <mapping directory="$PROJECT_DIR$/zmq2" vcs="Git" />
   </component>
 </project>

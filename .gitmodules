@@ -10,3 +10,6 @@
 [submodule "devolve-ui-macros"]
 	path = devolve-ui-macros
 	url = git@github.com:Jakobeha/devolve-ui-macros.git
+[submodule "zmq2"]
+	path = zmq2
+	url = git@github.com:Jakobeha/zmq2.git

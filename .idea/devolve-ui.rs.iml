@@ -28,6 +28,11 @@
       <sourceFolder url="file://$MODULE_DIR$/dyn_struct/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/dyn_struct/tests" isTestSource="true" />
       <sourceFolder url="file://$MODULE_DIR$/devolve-ui-core/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/devolve-ui-macros/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/zmq2/examples" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/zmq2/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/zmq2/tests" isTestSource="true" />
+      <sourceFolder url="file://$MODULE_DIR$/zmq2/zmq-sys/src" isTestSource="false" />
       <excludeFolder url="file://$MODULE_DIR$/target" />
       <excludeFolder url="file://$MODULE_DIR$/devolve-ui-wasm/dist" />
     </content>

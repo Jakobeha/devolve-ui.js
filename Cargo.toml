@@ -1,13 +1,16 @@
 [workspace]
+resolver = "2"
 members = [
     "devolve-ui-core",
     "devolve-ui-macros",
     "mini-rx",
-    "dyn_struct"
+    "zmq2",
+    "dyn_struct",
 ]
 default-members = [
     "devolve-ui-core",
     "devolve-ui-macros",
     "mini-rx",
+    "zmq2",
     "dyn_struct"
 ]
