@@ -33,6 +33,9 @@
       <sourceFolder url="file://$MODULE_DIR$/zmq2/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/zmq2/tests" isTestSource="true" />
       <sourceFolder url="file://$MODULE_DIR$/zmq2/zmq-sys/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/derive_more/examples" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/derive_more/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/derive_more/tests" isTestSource="true" />
       <sourceFolder url="file://$MODULE_DIR$/devolve-ui-core/examples" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/devolve-ui-core/test-resources" type="java-resource" />
       <sourceFolder url="file://$MODULE_DIR$/devolve-ui-core/tests" isTestSource="true" />
