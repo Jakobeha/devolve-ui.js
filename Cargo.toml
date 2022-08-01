@@ -3,6 +3,7 @@ resolver = "2"
 members = [
     "devolve-ui-core",
     "devolve-ui-macros",
+    "dui-basic",
     "mini-rx",
     "zmq2",
     "dyn_struct",
@@ -10,6 +11,7 @@ members = [
 default-members = [
     "devolve-ui-core",
     "devolve-ui-macros",
+    "dui-basic",
     "mini-rx",
     "zmq2",
     "dyn_struct"
