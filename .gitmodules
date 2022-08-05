@@ -16,3 +16,6 @@
 [submodule "zmq2"]
 	path = zmq2
 	url = git@github.com:Jakobeha/zmq2.git
+[submodule "typed-arena-any-vec"]
+	path = typed-arena-any-vec
+	url = git@github.com:Jakobeha/typed-arena-any-vec.git

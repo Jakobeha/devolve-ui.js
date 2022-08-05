@@ -7,6 +7,7 @@ members = [
     "mini-rx",
     "zmq2",
     "dyn_struct",
+    "typed-arena-any-vec"
 ]
 default-members = [
     "devolve-ui-core",
@@ -14,5 +15,6 @@ default-members = [
     "dui-basic",
     "mini-rx",
     "zmq2",
-    "dyn_struct"
+    "dyn_struct",
+    "typed-arena-any-vec"
 ]

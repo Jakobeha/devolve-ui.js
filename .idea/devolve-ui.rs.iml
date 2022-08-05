@@ -42,6 +42,8 @@
       <sourceFolder url="file://$MODULE_DIR$/dui-basic/examples" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/dui-basic/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/dui-basic/tests" isTestSource="true" />
+      <sourceFolder url="file://$MODULE_DIR$/typed-arena-any-vec/benches" isTestSource="true" />
+      <sourceFolder url="file://$MODULE_DIR$/typed-arena-any-vec/src" isTestSource="false" />
       <excludeFolder url="file://$MODULE_DIR$/target" />
       <excludeFolder url="file://$MODULE_DIR$/devolve-ui-wasm/dist" />
     </content>
