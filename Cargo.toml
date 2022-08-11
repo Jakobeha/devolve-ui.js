@@ -6,8 +6,6 @@ members = [
     "dui-basic",
     "mini-rx",
     "zmq2",
-    "dyn_struct",
-    "typed-arena-any-vec",
     "winit-modular"
 ]
 default-members = [
@@ -16,7 +14,5 @@ default-members = [
     "dui-basic",
     "mini-rx",
     "zmq2",
-    "dyn_struct",
-    "typed-arena-any-vec",
     "winit-modular"
 ]

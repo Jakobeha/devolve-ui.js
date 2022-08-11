@@ -10,12 +10,6 @@
 [submodule "mini-rx"]
     path = mini-rx
     url = git@github.com:Jakobeha/mini-rx.git
-[submodule "dyn_struct"]
-	path = dyn_struct
-	url = git@github.com:Jakobeha/dyn_struct.git
 [submodule "zmq2"]
 	path = zmq2
 	url = git@github.com:Jakobeha/zmq2.git
-[submodule "typed-arena-any-vec"]
-	path = typed-arena-any-vec
-	url = git@github.com:Jakobeha/typed-arena-any-vec.git
