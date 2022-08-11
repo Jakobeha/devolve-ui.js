@@ -1,0 +1,43 @@
+# dui-basic
+[interface]
+x = "in:f32"
+y = "in:f32"
+radius = "f32"
+keys = "out=keys"
+
+# common properties inherited by multiple views
+[common.wall]
+type = "rect"
+color = "blue"
+
+# views AKA text, shapes, etc. each view may have a key but doesn't have to, it's only for the user
+[[views]]
+key = "left-wall"
+bounds = [0, 0, 0.1, 1]
+inherits = "wall"
+
+[[views]]
+key = "right-wall"
+bounds = [0.9, 0, 1, 1]
+inherits = "wall"
+
+[[views]]
+key = "top-wall"
+bounds = [0, 0, 1, 0.05]
+inherits = "wall"
+
+[[views]]
+key = "bottom-wall"
+bounds = [0, 0.8, 1, 1]
+inherits = "wall"
+
+[[views]]
+key = "ball"
+type = "circle"
+bounds = ["x - (radius / 2)", "y + (radius / 2)", "x + (radius / 2)", "y - (radius / 2)"]
+color = "red"
+
+[[views]]
+type = "rect"
+bounds = [0.3, 0.7, 0.35, 0.8]
+color = "blue"

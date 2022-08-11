@@ -4,15 +4,17 @@ members = [
     "devolve-ui-core",
     "devolve-ui-macros",
     "dui-basic",
+    "dui-bevy",
     "mini-rx",
-    "zmq2",
-    "winit-modular"
+    "winit-modular",
+    "zmq2"
 ]
 default-members = [
     "devolve-ui-core",
     "devolve-ui-macros",
     "dui-basic",
+    "dui-bevy",
     "mini-rx",
-    "zmq2",
-    "winit-modular"
+    "winit-modular",
+    "zmq2"
 ]

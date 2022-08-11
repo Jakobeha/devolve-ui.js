@@ -49,6 +49,10 @@
       <sourceFolder url="file://$MODULE_DIR$/winit-modular/examples" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/winit-modular/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/dui-basic/winit-tests" isTestSource="true" />
+      <sourceFolder url="file://$MODULE_DIR$/dui-bevy/examples" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/dui-bevy/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/dui-bevy/tests" isTestSource="true" />
+      <sourceFolder url="file://$MODULE_DIR$/dui-bevy/winit-tests" isTestSource="true" />
       <excludeFolder url="file://$MODULE_DIR$/target" />
       <excludeFolder url="file://$MODULE_DIR$/devolve-ui-wasm/dist" />
     </content>
