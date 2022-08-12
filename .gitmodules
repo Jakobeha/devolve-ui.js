@@ -3,7 +3,7 @@
 	url = git@github.com:Jakobeha/devolve-ui-core.git
 [submodule "devolve-ui-macros"]
 	path = devolve-ui-macros
-	url = git@github.com:Jakobeha/devolve-ui-macros.git
+	url = git@github.com:Jakobeha/devolve-ui-macros
 [submodule "dui-basic"]
 	path = dui-basic
 	url = git@github.com:Jakobeha/dui-basic.git
@@ -13,3 +13,6 @@
 [submodule "zmq2"]
 	path = zmq2
 	url = git@github.com:Jakobeha/zmq2.git
+[submodule "winit-modular"]
+	path = winit-modular
+	url = git@github.com:Jakobeha/winit-modular.git
