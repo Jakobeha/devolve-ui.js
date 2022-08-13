@@ -94,7 +94,7 @@ TODO embedded image of this in the editor once it's created
 ```rust
 #[prompt]
 async fn text_input(
-    mut c: DuiContext<'_>,
+    mut c: PromptContext<'_>,
     placeholder: In<str>,
     text: InOut<String>,
     text_modified: OutSend<(Range<usize>, String)>,
