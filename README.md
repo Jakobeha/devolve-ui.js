@@ -99,7 +99,7 @@ async fn text_input(
     text: InOut<String>,
     text_modified: OutSend<(Range<usize>, String)>,
     ok_enabled: In<bool>
-) -> Output<String> {
+) -> String {
     let (enter_key_send, enter_key) = out_channel();
     let (click_ok_send, click_ok) = out_channel();
     let (click_cancel_send, click_cancel) = out_channel();
