@@ -3,10 +3,6 @@
   <component name="VcsDirectoryMappings">
     <mapping directory="" vcs="Git" />
     <mapping directory="$PROJECT_DIR$/devolve-ui-core" vcs="Git" />
-    <mapping directory="$PROJECT_DIR$/devolve-ui-macros" vcs="Git" />
-    <mapping directory="$PROJECT_DIR$/dui-basic" vcs="Git" />
-    <mapping directory="$PROJECT_DIR$/mini-rx" vcs="Git" />
-    <mapping directory="$PROJECT_DIR$/winit-modular" vcs="Git" />
-    <mapping directory="$PROJECT_DIR$/zmq2" vcs="Git" />
+    <mapping directory="$PROJECT_DIR$/dui-graph" vcs="Git" />
   </component>
 </project>

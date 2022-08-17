@@ -1,20 +1,8 @@
 [workspace]
 resolver = "2"
 members = [
-    "devolve-ui-core",
-    "devolve-ui-macros",
-    "dui-basic",
-    "dui-bevy",
-    "mini-rx",
-    "winit-modular",
-    "zmq2"
+    "dui-graph"
 ]
 default-members = [
-    "devolve-ui-core",
-    "devolve-ui-macros",
-    "dui-basic",
-    "dui-bevy",
-    "mini-rx",
-    "winit-modular",
-    "zmq2"
+    "dui-graph"
 ]
