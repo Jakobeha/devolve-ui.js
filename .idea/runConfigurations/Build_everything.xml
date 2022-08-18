@@ -1,6 +1,6 @@
 <component name="ProjectRunConfigurationManager">
   <configuration default="false" name="Build everything" type="CargoCommandRunConfiguration" factoryName="Cargo Command">
-    <option name="command" value="build --all-features" />
+    <option name="command" value="build --all-features --verbose" />
     <option name="workingDirectory" value="file://$PROJECT_DIR$" />
     <option name="channel" value="DEFAULT" />
     <option name="requiredFeatures" value="true" />
