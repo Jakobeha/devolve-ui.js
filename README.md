@@ -7,7 +7,7 @@
 devolve-ui is a UI system based on the following principles:
 
 - A UI element is just a visual editor (inspector) for data
-- A UI scene is just a collection of UI elements + layout
+- An app's UI is just a collection of UI elements + layout
 - Writing UI in a DSL or even WYSIWYG is easier than writing UI natively
 - Some UI can be represented as a function `(Input, InEvents) -> (Render, Output, OutEvents)`. This is easier than writing a UI which synchronizes data but fast enough (immediate-mode UI)
 - Other UI (prompts) can be represented as an async function (e.g. `login() -> Credentials`)
@@ -15,7 +15,7 @@ devolve-ui is a UI system based on the following principles:
 
 devolve-ui strives to be
 
-- **Composable:** UI elements encapsulate themselves. You can swap out data sources in the UI and swap out UI for your data.
+- **Composable:** UI elements encapsulate themselves. UI elements can recursively contain other UI elements. You can swap out data sources in the UI and swap out UI for your data.
 - **Rapidly-iterable:** You can change the look and feel of the UI without rebuilding and re-running your app
 - **Scalable:** Whether you want just a single inspector for your Rust data while debugging your app, to a full-blown application which you show to users
 
