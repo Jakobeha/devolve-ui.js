@@ -16,7 +16,7 @@ devolve-ui UI elements are written in a DSL scripting language ([details](#dui-l
 
 - Can be reloaded without building your project
 - Can be edited by a dedicated IDE with graphical representation and possibly in the future a live-preview.
-- Doesn't have to deal with Rust's verbose syntax / borrow checker (but still, you won't implicitly clone or aliasing un-aliasable data)
+- Doesn't have to deal with Rust's verbose syntax / borrow checker (lang types are all copy-able or references to Rust types)
 - Encourages encapsulation by making it harder to mix UI code and other code
 
 ## How?
