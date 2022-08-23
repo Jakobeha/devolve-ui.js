@@ -1,0 +1,29 @@
+[package]
+name = "dui-prompt"
+version = "0.1.0"
+authors = ["jakobeha <jakobeha@fastmail.com>"]
+description = "prompt-based UI in devolve-ui"
+repository = "https://github.com/jakobeha/dui-prompt"
+license = "Apache-2.0"
+keywords = ["devolve-ui", "prompt", "ui"]
+categories = ["graphics", "rendering", "gui"]
+edition = "2021"
+
+[lib]
+crate-type = ["lib"]
+
+[dependencies]
+# Ours
+dui-graph = { path = "../dui-graph" }
+# Derive (Rust patterns)
+derivative = "2.2.0"
+derive_more = "0.99.17"
+join-lazy-fmt = "0.9.2"
+# Rust patterns
+# Logging
+log = "0.4.17"
+
+[dev-dependencies]
+# Logging
+test-log = "0.2.11"
+env_logger = "0.9.0"

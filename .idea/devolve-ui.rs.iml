@@ -55,6 +55,12 @@
       <sourceFolder url="file://$MODULE_DIR$/dui-bevy/winit-tests" isTestSource="true" />
       <sourceFolder url="file://$MODULE_DIR$/dui-graph/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/dui-graph/tests" isTestSource="true" />
+      <sourceFolder url="file://$MODULE_DIR$/dui-backend-egui/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/dui-backend-egui/tests" isTestSource="true" />
+      <sourceFolder url="file://$MODULE_DIR$/dui-editor/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/dui-editor/tests" isTestSource="true" />
+      <sourceFolder url="file://$MODULE_DIR$/dui-prompt/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/dui-prompt/tests" isTestSource="true" />
       <excludeFolder url="file://$MODULE_DIR$/target" />
       <excludeFolder url="file://$MODULE_DIR$/devolve-ui-wasm/dist" />
     </content>

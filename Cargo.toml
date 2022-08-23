@@ -1,8 +1,14 @@
 [workspace]
 resolver = "2"
 members = [
-    "dui-graph"
+    "dui-graph",
+    "dui-editor",
+    "dui-backend-egui",
+    "dui-prompt"
 ]
 default-members = [
-    "dui-graph"
+    "dui-graph",
+    "dui-editor",
+    "dui-backend-egui",
+    "dui-prompt"
 ]
