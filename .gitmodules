@@ -4,3 +4,12 @@
 [submodule "dui-graph"]
 	path = dui-graph
 	url = git@github.com:Jakobeha/dui-graph.git
+[submodule "dui-editor"]
+	path = dui-editor
+	url = git@github.com:Jakobeha/dui-editor.git
+[submodule "dui-backend-egui"]
+	path = dui-backend-egui
+	url = git@github.com:Jakobeha/dui-backend-egui.git
+[submodule "dui-prompt"]
+	path = dui-prompt
+	url = git@github.com:Jakobeha/dui-prompt.git
