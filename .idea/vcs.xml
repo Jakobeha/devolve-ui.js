@@ -3,7 +3,9 @@
   <component name="VcsDirectoryMappings">
     <mapping directory="" vcs="Git" />
     <mapping directory="$PROJECT_DIR$/devolve-ui-core" vcs="Git" />
+    <mapping directory="$PROJECT_DIR$/dui-backend-egui" vcs="Git" />
     <mapping directory="$PROJECT_DIR$/dui-editor" vcs="Git" />
     <mapping directory="$PROJECT_DIR$/dui-graph" vcs="Git" />
+    <mapping directory="$PROJECT_DIR$/dui-prompt" vcs="Git" />
   </component>
 </project>
