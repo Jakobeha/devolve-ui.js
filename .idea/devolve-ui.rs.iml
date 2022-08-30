@@ -61,6 +61,9 @@
       <sourceFolder url="file://$MODULE_DIR$/dui-editor/tests" isTestSource="true" />
       <sourceFolder url="file://$MODULE_DIR$/dui-prompt/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/dui-prompt/tests" isTestSource="true" />
+      <sourceFolder url="file://$MODULE_DIR$/structural-reflection/derive/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/structural-reflection/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/structural-reflection/tests" isTestSource="true" />
       <excludeFolder url="file://$MODULE_DIR$/target" />
       <excludeFolder url="file://$MODULE_DIR$/devolve-ui-wasm/dist" />
     </content>

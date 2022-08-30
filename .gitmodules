@@ -13,3 +13,6 @@
 [submodule "dui-prompt"]
 	path = dui-prompt
 	url = git@github.com:Jakobeha/dui-prompt.git
+[submodule "structural-reflection"]
+	path = structural-reflection
+	url = git@github.com:Jakobeha/structural-reflection.git

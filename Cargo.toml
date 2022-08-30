@@ -4,11 +4,13 @@ members = [
     "dui-graph",
     "dui-editor",
     "dui-backend-egui",
-    "dui-prompt"
+    "dui-prompt",
+    "structural-reflection"
 ]
 default-members = [
     "dui-graph",
     "dui-editor",
     "dui-backend-egui",
-    "dui-prompt"
+    "dui-prompt",
+    "structural-reflection"
 ]
