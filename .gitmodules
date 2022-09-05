@@ -16,3 +16,6 @@
 [submodule "structural-reflection"]
 	path = structural-reflection
 	url = git@github.com:Jakobeha/structural-reflection.git
+[submodule "type-map"]
+	path = type-map
+	url = git@github.com:Jakobeha/type-map.git
