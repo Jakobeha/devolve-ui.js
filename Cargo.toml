@@ -5,14 +5,12 @@ members = [
     "dui-editor",
     "dui-backend-egui",
     "dui-prompt",
-    "structural-reflection",
-    "type-map"
+    "structural-reflection"
 ]
 default-members = [
     "dui-graph",
     "dui-editor",
     "dui-backend-egui",
     "dui-prompt",
-    "structural-reflection",
-    "type-map"
+    "structural-reflection"
 ]

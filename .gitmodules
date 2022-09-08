@@ -7,15 +7,12 @@
 [submodule "dui-editor"]
 	path = dui-editor
 	url = git@github.com:Jakobeha/dui-editor.git
+[submodule "structural-reflection"]
+	path = structural-reflection
+	url = git@github.com:Jakobeha/structural-reflection.git
 [submodule "dui-backend-egui"]
 	path = dui-backend-egui
 	url = git@github.com:Jakobeha/dui-backend-egui.git
 [submodule "dui-prompt"]
 	path = dui-prompt
 	url = git@github.com:Jakobeha/dui-prompt.git
-[submodule "structural-reflection"]
-	path = structural-reflection
-	url = git@github.com:Jakobeha/structural-reflection.git
-[submodule "type-map"]
-	path = type-map
-	url = git@github.com:Jakobeha/type-map.git
