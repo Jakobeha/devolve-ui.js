@@ -67,6 +67,8 @@
       <sourceFolder url="file://$MODULE_DIR$/structural-reflection/derive/tests" isTestSource="true" />
       <sourceFolder url="file://$MODULE_DIR$/type-map/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/type-map/tests" isTestSource="true" />
+      <sourceFolder url="file://$MODULE_DIR$/dui-graph/macros/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/dui-graph/macros/tests" isTestSource="true" />
       <excludeFolder url="file://$MODULE_DIR$/target" />
       <excludeFolder url="file://$MODULE_DIR$/devolve-ui-wasm/dist" />
     </content>
