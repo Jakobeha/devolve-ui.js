@@ -1,14 +1,16 @@
 [workspace]
 resolver = "2"
 members = [
-    "dui-graph",
+    "devolve",
+    "devolve-ui",
     "dui-editor",
     "dui-backend-egui",
     "dui-prompt",
     "structural-reflection"
 ]
 default-members = [
-    "dui-graph",
+    "devolve",
+    "devolve-ui",
     "dui-editor",
     "dui-backend-egui",
     "dui-prompt",

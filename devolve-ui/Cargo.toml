@@ -1,0 +1,36 @@
+[package]
+name = "devolve-ui"
+version = "0.1.0"
+authors = ["jakobeha <jakobeha@fastmail.com>"]
+description = "rapidly-iterable low-code UI"
+repository = "https://github.com/jakobeha/devolve-ui"
+license = "Apache-2.0"
+keywords = ["devolve-ui", "ui"]
+categories = ["graphics", "rendering", "gui"]
+edition = "2021"
+
+[lib]
+crate-type = ["lib"]
+
+[dependencies]
+# Ours
+devolve = { path = "../devolve", features = ["macros"] }
+structural-reflection = { path = "../structural-reflection", features = ["derive"] }
+# Derive (Rust patterns)
+derivative = "2.2.0"
+derive_more = "0.99.17"
+join-lazy-fmt = "0.9.2"
+# Rust patterns
+slab = "0.4.7"
+lazy_static = "1.4.0"
+smallvec = "1.9.0"
+bimap = "0.6.2"
+# Logging
+log = "0.4.17"
+
+[dev-dependencies]
+# Logging
+test-log = "0.2.11"
+env_logger = "0.9.0"
+# Rust patterns
+ttmap = "0.2.1"

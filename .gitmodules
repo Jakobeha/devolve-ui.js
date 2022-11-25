@@ -1,9 +1,12 @@
 [submodule "devolve-ui-core"]
 	path = devolve-ui-core
 	url = git@github.com:Jakobeha/devolve-ui-core.git
-[submodule "dui-graph"]
-	path = dui-graph
-	url = git@github.com:Jakobeha/dui-graph.git
+[submodule "devolve"]
+	path = devolve
+	url = git@github.com:Jakobeha/devolve.git
+[submodule "devolve-ui"]
+	path = devolve-ui
+	url = git@github.com:Jakobeha/devolve-ui.git
 [submodule "dui-editor"]
 	path = dui-editor
 	url = git@github.com:Jakobeha/dui-editor.git
